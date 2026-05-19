@@ -225,7 +225,8 @@ function submitAdjust() {
   google.script.run
     .withSuccessHandler(res => {
       hideLoading();
-      bootstrap.Modal.getInstance(document.getElementById('adjustModal'))?.hide();
+      var adjModal = bootstrap.Modal.getInstance(document.getElementById('adjustModal'));
+      if (adjModal) adjModal.hide();
       if (res.ok) {
         Swal.fire({ icon:'success', title:'สำเร็จ', text: res.msg, timer:3000, showConfirmButton:false });
         refreshStock();
@@ -310,31 +311,39 @@ function loadPickLists() {
     .getPickLists(status);
 }
 
+function plItemRowHtml(it, pl) {
+  var cls = it.qtyPicked >= it.qtyReq ? 'qty-ok' : 'qty-low';
+  var editCell = pl.status !== 'DONE'
+    ? '<td><input type="number" class="form-control form-control-sm" style="width:65px" value="' + it.qtyPicked + '" min="0" max="' + it.qtyReq + '" onchange="markPicked(\'' + pl.plId + '\',\'' + it.sku + '\',this.value)"></td>'
+    : '';
+  return '<tr><td><code>' + it.sku + '</code></td><td>' + it.name + '</td>'
+    + '<td class="text-end">' + it.qtyReq + '</td>'
+    + '<td class="text-end ' + cls + '">' + it.qtyPicked + '</td>'
+    + editCell + '</tr>';
+}
+
 function renderPickLists(data) {
-  const container = document.getElementById('plListContainer');
+  var container = document.getElementById('plListContainer');
   if (!data.length) { container.innerHTML = '<p class="text-muted text-center py-3">ไม่มีรายการ</p>'; return; }
-  container.innerHTML = data.map(pl => `
-    <div class="pl-card">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <b>${pl.plId}</b>
-        <span class="badge ${pl.status==='DONE' ? 'pl-badge-done' : 'pl-badge-pending'}">${pl.status}</span>
-      </div>
-      <div class="text-muted small mb-2">${pl.whFrom} → ${pl.whTo||'—'} &nbsp;|&nbsp; ${pl.date}</div>
-      <table class="table table-sm mb-2" style="font-size:.82rem">
-        <thead><tr><th>SKU</th><th>ชื่อ</th><th class="text-end">ต้องการ</th><th class="text-end">หยิบแล้ว</th>${pl.status!=='DONE'?'<th></th>':''}</tr></thead>
-        <tbody>
-          ${pl.items.map(it => `
-            <tr>
-              <td><code>${it.sku}</code></td><td>${it.name}</td>
-              <td class="text-end">${it.qtyReq}</td>
-              <td class="text-end ${it.qtyPicked>=it.qtyReq?'qty-ok':'qty-low'}">${it.qtyPicked}</td>
-              ${pl.status!=='DONE'?`<td><input type="number" class="form-control form-control-sm" style="width:65px" value="${it.qtyPicked}" min="0" max="${it.qtyReq}"
-                onchange="markPicked('${pl.plId}','${it.sku}',this.value)"></td>`:''}
-            </tr>`).join('')}
-        </tbody>
-      </table>
-      ${pl.status!=='DONE'?`<button class="btn btn-sm btn-success w-100" onclick="completePl('${pl.plId}')"><i class="bi bi-check-all me-1"></i>ทำเสร็จแล้ว</button>`:''}
-    </div>`).join('');
+  var html = '';
+  data.forEach(function(pl) {
+    var badgeCls = pl.status === 'DONE' ? 'pl-badge-done' : 'pl-badge-pending';
+    var thEdit   = pl.status !== 'DONE' ? '<th></th>' : '';
+    var itemRows = pl.items.map(function(it) { return plItemRowHtml(it, pl); }).join('');
+    var doneBtn  = pl.status !== 'DONE'
+      ? '<button class="btn btn-sm btn-success w-100" onclick="completePl(\'' + pl.plId + '\')"><i class="bi bi-check-all me-1"></i>ทำเสร็จแล้ว</button>'
+      : '';
+    html += '<div class="pl-card">'
+      + '<div class="d-flex justify-content-between align-items-center mb-2">'
+      + '<b>' + pl.plId + '</b>'
+      + '<span class="badge ' + badgeCls + '">' + pl.status + '</span></div>'
+      + '<div class="text-muted small mb-2">' + pl.whFrom + ' → ' + (pl.whTo || '—') + ' | ' + pl.date + '</div>'
+      + '<table class="table table-sm mb-2" style="font-size:.82rem"><thead><tr>'
+      + '<th>SKU</th><th>ชื่อ</th><th class="text-end">ต้องการ</th><th class="text-end">หยิบแล้ว</th>' + thEdit
+      + '</tr></thead><tbody>' + itemRows + '</tbody></table>'
+      + doneBtn + '</div>';
+  });
+  container.innerHTML = html;
 }
 
 function markPicked(plId, sku, qty) {
@@ -371,22 +380,22 @@ function renderRopTable(data) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">ไม่มีข้อมูล — กด "+ เพิ่ม" เพื่อเพิ่มสินค้า</td></tr>';
     return;
   }
-  tbody.innerHTML = data.map((r, i) => `
-    <tr data-i="${i}">
-      <td><input class="form-control form-control-sm rop-input" data-field="sku" value="${r.sku}" placeholder="SKU"></td>
-      <td>
-        <select class="form-select form-select-sm rop-input" data-field="wh">
-          ${_warehouses.map(wh => `<option value="${wh.id}" ${wh.id===r.wh?'selected':''}>${wh.id}</option>`).join('')}
-        </select>
-      </td>
-      <td><input type="number" class="form-control form-control-sm rop-input" data-field="rop" value="${r.rop}" min="0"></td>
-      <td><input type="number" class="form-control form-control-sm rop-input" data-field="roq" value="${r.roq}" min="0"></td>
-      <td><input type="number" class="form-control form-control-sm rop-input" data-field="maxStock" value="${r.maxStock}" min="0"></td>
-      <td class="text-center">
-        <input type="checkbox" class="form-check-input" data-field="active" ${r.active?'checked':''}>
-      </td>
-      <td><button class="btn btn-sm btn-outline-danger p-1" onclick="removeRopRow(this)"><i class="bi bi-trash"></i></button></td>
-    </tr>`).join('');
+  var ropHtml = '';
+  data.forEach(function(r, i) {
+    var whOpts = _warehouses.map(function(wh) {
+      return '<option value="' + wh.id + '"' + (wh.id === r.wh ? ' selected' : '') + '>' + wh.id + '</option>';
+    }).join('');
+    ropHtml += '<tr data-i="' + i + '">'
+      + '<td><input class="form-control form-control-sm rop-input" data-field="sku" value="' + r.sku + '" placeholder="SKU"></td>'
+      + '<td><select class="form-select form-select-sm rop-input" data-field="wh">' + whOpts + '</select></td>'
+      + '<td><input type="number" class="form-control form-control-sm rop-input" data-field="rop" value="' + r.rop + '" min="0"></td>'
+      + '<td><input type="number" class="form-control form-control-sm rop-input" data-field="roq" value="' + r.roq + '" min="0"></td>'
+      + '<td><input type="number" class="form-control form-control-sm rop-input" data-field="maxStock" value="' + r.maxStock + '" min="0"></td>'
+      + '<td class="text-center"><input type="checkbox" class="form-check-input" data-field="active"' + (r.active ? ' checked' : '') + '></td>'
+      + '<td><button class="btn btn-sm btn-outline-danger p-1" onclick="removeRopRow(this)"><i class="bi bi-trash"></i></button></td>'
+      + '</tr>';
+  });
+  tbody.innerHTML = ropHtml;
 }
 
 function addRopRow() {
