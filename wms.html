@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KLH WMS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  :root { --orange: #E65100; --orange-light: #FF8F00; }
+  body { background: #f5f5f5; font-family: 'Segoe UI', sans-serif; }
+
+  /* Header */
+  .app-header {
+    background: linear-gradient(135deg, var(--orange) 0%, var(--orange-light) 100%);
+    color: #fff; padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  .app-header h1 { font-size: 1.25rem; margin: 0; font-weight: 700; }
+  .app-header a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .85rem; }
+  .app-header a:hover { color: #fff; }
+
+  /* Tab nav */
+  .tab-nav {
+    background: #fff; position: sticky; top: 0; z-index: 100;
+    border-bottom: 2px solid #e0e0e0;
+    display: flex; overflow-x: auto; gap: 0;
+    scrollbar-width: none;
+  }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex: 0 0 auto; padding: 12px 18px;
+    border: none; background: none; color: #666;
+    font-size: .9rem; cursor: pointer; white-space: nowrap;
+    border-bottom: 3px solid transparent; transition: .2s;
+  }
+  .tab-btn:hover { color: var(--orange); background: #fff5e6; }
+  .tab-btn.active { color: var(--orange); border-bottom-color: var(--orange); font-weight: 600; }
+
+  /* Panels */
+  .tab-panel { display: none; padding: 20px; }
+  .tab-panel.active { display: block; }
+
+  /* Card */
+  .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .card-header { background: linear-gradient(90deg,var(--orange),var(--orange-light)); color:#fff; border-radius:12px 12px 0 0 !important; font-weight:600; }
+
+  /* Form */
+  .form-label { font-weight: 500; font-size: .88rem; color: #444; }
+  .form-control:focus, .form-select:focus { border-color: var(--orange); box-shadow: 0 0 0 .2rem rgba(230,81,0,.2); }
+  .btn-orange { background: var(--orange); color: #fff; border: none; }
+  .btn-orange:hover { background: var(--orange-light); color: #fff; }
+
+  /* Stock table */
+  .stock-table { font-size: .88rem; }
+  .stock-table th { background: #37474F; color: #fff; }
+  .qty-low { color: #d32f2f; font-weight: 700; }
+  .qty-ok  { color: #2e7d32; }
+
+  /* Pick list */
+  .pl-card { border-left: 4px solid var(--orange); border-radius: 8px; background: #fff; margin-bottom: 10px; padding: 12px 16px; }
+  .pl-badge-pending { background: #FFF3E0; color: #E65100; }
+  .pl-badge-done    { background: #E8F5E9; color: #2e7d32; }
+
+  /* Scan button */
+  .btn-scan { background: #37474F; color: #fff; border: none; padding: 6px 10px; border-radius: 0 4px 4px 0; }
+  .btn-scan:hover { background: #546E7A; color: #fff; }
+
+  /* Loading overlay */
+  #loadingOverlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center; z-index:9999; display:none;
+  }
+  .spinner-box { background:#fff; border-radius:12px; padding:24px 36px; text-align:center; }
+
+  /* Pick item row */
+  .pick-item-row td { vertical-align: middle; }
+  .qty-badge { background: var(--orange); color:#fff; border-radius:20px; padding:2px 10px; font-size:.85rem; }
+
+  /* ROP table */
+  .rop-input { width: 80px; }
+
+  @media(max-width:576px) {
+    .tab-btn { padding: 10px 12px; font-size: .82rem; }
+    .tab-panel { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="app-header">
+  <i class="bi bi-boxes fs-4"></i>
+  <div class="flex-grow-1">
+    <h1>KLH WMS — ระบบคลังสินค้า</h1>
+    <a href="javascript:void(0)" onclick="window.history.back()"><i class="bi bi-arrow-left"></i> กลับหน้าหลัก</a>
+  </div>
+  <button class="btn btn-sm btn-light" onclick="refreshAll()"><i class="bi bi-arrow-clockwise"></i></button>
+</div>
+
+<!-- Tab Nav -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('receive',this)"><i class="bi bi-box-arrow-in-down"></i> รับสินค้า</button>
+  <button class="tab-btn" onclick="switchTab('transfer',this)"><i class="bi bi-arrow-left-right"></i> โอนสินค้า</button>
+  <button class="tab-btn" onclick="switchTab('stock',this)"><i class="bi bi-bar-chart-line"></i> ดูสต็อก</button>
+  <button class="tab-btn" onclick="switchTab('picklist',this)"><i class="bi bi-card-checklist"></i> Pick List</button>
+  <button class="tab-btn" onclick="switchTab('rop',this)"><i class="bi bi-sliders"></i> ตั้งค่า ROP</button>
+</div>
+
+<!-- ======================================================
+     TAB 1: รับสินค้า
+====================================================== -->
+<div id="panel-receive" class="tab-panel active">
+  <div class="card mx-auto" style="max-width:600px">
+    <div class="card-header"><i class="bi bi-box-arrow-in-down me-2"></i>รับสินค้าเข้าคลัง</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">SKU / บาร์โค้ด</label>
+          <div class="input-group">
+            <input type="text" id="rcvSku" class="form-control" placeholder="สแกนหรือพิมพ์ SKU" onchange="lookupSku(this.value,'rcvName','rcvUnit','rcvEntity')">
+            <button class="btn-scan" onclick="openScanner('rcvSku','rcvName','rcvUnit','rcvEntity')"><i class="bi bi-camera"></i></button>
+          </div>
+        </div>
+        <div class="col-8">
+          <label class="form-label">ชื่อสินค้า</label>
+          <input type="text" id="rcvName" class="form-control" placeholder="(auto-fill จาก SKU)">
+        </div>
+        <div class="col-4">
+          <label class="form-label">หน่วย</label>
+          <input type="text" id="rcvUnit" class="form-control" placeholder="ลัง/กล่อง">
+        </div>
+        <div class="col-12">
+          <label class="form-label">คลังปลายทาง</label>
+          <select id="rcvWh" class="form-select"></select>
+        </div>
+        <div class="col-6">
+          <label class="form-label">จำนวน</label>
+          <input type="number" id="rcvQty" class="form-control" placeholder="0" min="1">
+        </div>
+        <div class="col-6">
+          <label class="form-label">ต้นทุน/หน่วย (฿)</label>
+          <input type="number" id="rcvCost" class="form-control" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div class="col-6">
+          <label class="form-label">เลขที่ PO/ใบกำกับ</label>
+          <input type="text" id="rcvRef" class="form-control" placeholder="PO-XXXXXX">
+        </div>
+        <div class="col-6">
+          <label class="form-label">วันที่รับ</label>
+          <input type="date" id="rcvDate" class="form-control">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Entity</label>
+          <input type="text" id="rcvEntity" class="form-control" placeholder="(auto-fill)">
+        </div>
+        <div class="col-12">
+          <label class="form-label">หมายเหตุ</label>
+          <input type="text" id="rcvNote" class="form-control" placeholder="">
+        </div>
+        <div class="col-12 d-grid mt-2">
+          <button class="btn btn-orange btn-lg" onclick="submitReceive()">
+            <i class="bi bi-check-circle me-1"></i>บันทึก รับสินค้า
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 2: โอนสินค้า
+====================================================== -->
+<div id="panel-transfer" class="tab-panel">
+  <div class="card mx-auto" style="max-width:600px">
+    <div class="card-header"><i class="bi bi-arrow-left-right me-2"></i>โอนสินค้าระหว่างคลัง</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">SKU / บาร์โค้ด</label>
+          <div class="input-group">
+            <input type="text" id="trfSku" class="form-control" placeholder="สแกนหรือพิมพ์ SKU" onchange="lookupSku(this.value,'trfName','trfUnit','trfEntity'); loadSkuStock(this.value)">
+            <button class="btn-scan" onclick="openScanner('trfSku','trfName','trfUnit','trfEntity')"><i class="bi bi-camera"></i></button>
+          </div>
+        </div>
+        <div class="col-8">
+          <label class="form-label">ชื่อสินค้า</label>
+          <input type="text" id="trfName" class="form-control" placeholder="(auto-fill)">
+        </div>
+        <div class="col-4">
+          <label class="form-label">หน่วย</label>
+          <input type="text" id="trfUnit" class="form-control">
+        </div>
+        <!-- Stock preview -->
+        <div class="col-12" id="trfStockPreview" style="display:none">
+          <div class="alert alert-info py-2 mb-0 small" id="trfStockInfo"></div>
+        </div>
+        <div class="col-6">
+          <label class="form-label">จากคลัง</label>
+          <select id="trfFrom" class="form-select"></select>
+        </div>
+        <div class="col-6">
+          <label class="form-label">ไปคลัง</label>
+          <select id="trfTo" class="form-select"></select>
+        </div>
+        <div class="col-6">
+          <label class="form-label">จำนวน</label>
+          <input type="number" id="trfQty" class="form-control" placeholder="0" min="1">
+        </div>
+        <div class="col-6">
+          <label class="form-label">เลขอ้างอิง</label>
+          <input type="text" id="trfRef" class="form-control" placeholder="(auto-generate)">
+        </div>
+        <div class="col-12">
+          <label class="form-label">หมายเหตุ</label>
+          <input type="text" id="trfNote" class="form-control">
+        </div>
+        <input type="hidden" id="trfEntity">
+        <div class="col-12 d-grid mt-2">
+          <button class="btn btn-orange btn-lg" onclick="submitTransfer()">
+            <i class="bi bi-arrow-left-right me-1"></i>บันทึก โอนสินค้า
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 3: ดูสต็อก
+====================================================== -->
+<div id="panel-stock" class="tab-panel">
+  <div class="card">
+    <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+      <i class="bi bi-bar-chart-line"></i> สต็อกสินค้า
+      <select id="stockWhFilter" class="form-select form-select-sm ms-2" style="width:140px" onchange="filterStock()">
+        <option value="">ทุกคลัง</option>
+      </select>
+      <input type="text" id="stockSearch" class="form-control form-control-sm" style="width:180px" placeholder="🔍 ค้นหา SKU/ชื่อ" oninput="filterStock()">
+      <button class="btn btn-sm btn-outline-light ms-auto" onclick="openAdjustModal()"><i class="bi bi-pencil-square"></i> ปรับสต็อก</button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover stock-table mb-0">
+          <thead>
+            <tr>
+              <th>SKU</th><th>ชื่อสินค้า</th><th>คลัง</th>
+              <th class="text-end">คงเหลือ</th><th class="text-end">จอง</th>
+              <th class="text-end">ต้นทุนเฉลี่ย</th><th>อัปเดต</th>
+            </tr>
+          </thead>
+          <tbody id="stockTbody">
+            <tr><td colspan="7" class="text-center text-muted py-4">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer text-muted small" id="stockSummary"></div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 4: Pick List
+====================================================== -->
+<div id="panel-picklist" class="tab-panel">
+  <div class="row g-3">
+    <!-- Create -->
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-plus-circle me-1"></i>สร้าง Pick List</div>
+        <div class="card-body">
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label">จากคลัง</label>
+              <select id="plFrom" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">ไปคลัง/ปลายทาง</label>
+              <select id="plTo" class="form-select form-select-sm"><option value="">—</option></select>
+            </div>
+          </div>
+          <!-- Add item row -->
+          <div class="input-group input-group-sm mb-2">
+            <input type="text" id="plItemSku" class="form-control" placeholder="SKU">
+            <input type="number" id="plItemQty" class="form-control" style="max-width:80px" placeholder="Qty" min="1">
+            <button class="btn btn-sm btn-orange" onclick="addPlItem()"><i class="bi bi-plus"></i></button>
+          </div>
+          <!-- Items list -->
+          <div id="plItemsList" style="min-height:80px; border:1px dashed #ccc; border-radius:6px; padding:8px; margin-bottom:10px; font-size:.85rem">
+            <span class="text-muted">ยังไม่มีรายการ</span>
+          </div>
+          <div class="mb-2">
+            <input type="text" id="plNote" class="form-control form-control-sm" placeholder="หมายเหตุ">
+          </div>
+          <div class="d-grid">
+            <button class="btn btn-orange btn-sm" onclick="submitPickList()">
+              <i class="bi bi-check2-all me-1"></i>สร้าง Pick List
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- View -->
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header d-flex gap-2 align-items-center">
+          <span><i class="bi bi-list-check me-1"></i>Pick Lists ที่รอดำเนินการ</span>
+          <select id="plStatusFilter" class="form-select form-select-sm ms-auto" style="width:130px" onchange="loadPickLists()">
+            <option value="PENDING">Pending</option>
+            <option value="">ทั้งหมด</option>
+            <option value="DONE">Done</option>
+          </select>
+        </div>
+        <div class="card-body" id="plListContainer" style="max-height:420px;overflow-y:auto">
+          <p class="text-muted text-center py-3">กำลังโหลด...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     TAB 5: ตั้งค่า ROP
+====================================================== -->
+<div id="panel-rop" class="tab-panel">
+  <div class="card">
+    <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+      <i class="bi bi-sliders"></i> ตั้งค่า ROP / ROQ
+      <select id="ropWhFilter" class="form-select form-select-sm ms-2" style="width:140px" onchange="loadRopConfig()">
+        <option value="">ทุกคลัง</option>
+      </select>
+      <button class="btn btn-sm btn-outline-light ms-auto" onclick="addRopRow()"><i class="bi bi-plus"></i> เพิ่ม</button>
+      <button class="btn btn-sm btn-light" onclick="saveAllRop()"><i class="bi bi-save"></i> บันทึก</button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size:.88rem">
+          <thead>
+            <tr style="background:#37474F;color:#fff">
+              <th>SKU</th><th>คลัง</th>
+              <th>ROP <small class="fw-normal">(จุดสั่ง)</small></th>
+              <th>ROQ <small class="fw-normal">(ปริมาณสั่ง)</small></th>
+              <th>Max Stock</th><th>Active</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="ropTbody">
+            <tr><td colspan="7" class="text-center text-muted py-4">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     Modal: Adjust Stock
+====================================================== -->
+<div class="modal fade" id="adjustModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title">ปรับสต็อก</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label">SKU</label>
+        <input type="text" id="adjSku" class="form-control mb-2" placeholder="SKU">
+        <label class="form-label">คลัง</label>
+        <select id="adjWh" class="form-select mb-2"></select>
+        <label class="form-label">จำนวนจริง (Actual Count)</label>
+        <input type="number" id="adjQty" class="form-control mb-2" min="0">
+        <label class="form-label">เหตุผล</label>
+        <input type="text" id="adjReason" class="form-control" placeholder="นับสต็อก / เสียหาย / ...">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+        <button class="btn btn-orange btn-sm" onclick="submitAdjust()">บันทึกปรับ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================
+     Modal: Barcode Scanner
+====================================================== -->
+<div class="modal fade" id="scanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title"><i class="bi bi-camera me-1"></i>สแกนบาร์โค้ด</h6><button type="button" class="btn-close" data-bs-dismiss="modal" onclick="stopScanner()"></button></div>
+      <div class="modal-body p-0">
+        <div id="scanViewport" style="width:100%;height:280px;overflow:hidden;position:relative;background:#000"></div>
+      </div>
+      <div class="modal-footer justify-content-center">
+        <span class="text-muted small" id="scanStatus">กำลังเปิดกล้อง...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loadingOverlay">
+  <div class="spinner-box">
+    <div class="spinner-border text-warning mb-2" style="width:3rem;height:3rem"></div>
+    <div class="text-muted small" id="loadingMsg">กำลังดำเนินการ...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+<?= include('wms_javascript') ?>
+</body>
+</html>

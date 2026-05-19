@@ -1,0 +1,496 @@
+<script>
+// ============================================================
+//  wms_javascript.html — KLH WMS Frontend Logic
+// ============================================================
+
+const _fail = err => { hideLoading(); Swal.fire('Error', String(err), 'error'); };
+
+let _warehouses = [];
+let _stockData  = [];
+let _plItems    = [];   // items pending in pick list form
+let _scanTarget = {};   // { skuId, nameId, unitId, entityId }
+
+// ── Init ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setTodayDate();
+  showLoading('กำลังโหลดข้อมูล...');
+  google.script.run
+    .withSuccessHandler(onWmsDataLoaded)
+    .withFailureHandler(_fail)
+    .getWmsData();
+});
+
+function onWmsDataLoaded(res) {
+  hideLoading();
+  if (!res.ok) { Swal.fire('Error', res.msg, 'error'); return; }
+  _warehouses = res.warehouses || [];
+  _stockData  = res.stock      || [];
+  populateAllWHDropdowns();
+  renderStockTable(_stockData);
+  renderPickLists(res.pickLists || []);
+  loadRopConfig();
+}
+
+function setTodayDate() {
+  const today = new Date().toISOString().slice(0,10);
+  const rcvDate = document.getElementById('rcvDate');
+  if (rcvDate) rcvDate.value = today;
+}
+
+// ── Tabs ────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'stock') filterStock();
+  if (name === 'rop')   loadRopConfig();
+}
+
+// ── Warehouse Dropdowns ─────────────────────────────────────
+function populateAllWHDropdowns() {
+  const ids = ['rcvWh','trfFrom','trfTo','plFrom','plTo','adjWh','stockWhFilter','ropWhFilter'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const addAll = ['stockWhFilter','ropWhFilter'].includes(id);
+    const addNone = ['trfTo','plTo'].includes(id);
+    el.innerHTML = '';
+    if (addAll)  el.add(new Option('ทุกคลัง',''));
+    if (addNone) el.add(new Option('—',''));
+    _warehouses.forEach(wh => el.add(new Option(`${wh.id} — ${wh.name}`, wh.id)));
+  });
+}
+
+// ── Loading ────────────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'กำลังดำเนินการ...';
+  document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+
+// ── SKU Lookup ──────────────────────────────────────────────
+function lookupSku(sku, nameId, unitId, entityId) {
+  if (!sku.trim()) return;
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res) {
+        document.getElementById(nameId).value   = res.name   || '';
+        document.getElementById(unitId).value   = res.unit   || '';
+        document.getElementById(entityId).value = res.entity || '';
+      }
+    })
+    .withFailureHandler(() => {})
+    .lookupSkuForWms(sku.trim());
+}
+
+function loadSkuStock(sku) {
+  if (!sku.trim()) return;
+  google.script.run
+    .withSuccessHandler(rows => {
+      const preview = document.getElementById('trfStockPreview');
+      const info    = document.getElementById('trfStockInfo');
+      if (!rows || !rows.length) { preview.style.display='none'; return; }
+      info.innerHTML = rows.map(r => `<b>${r.wh}</b>: ${r.onHand} ${r.unit||''}`).join(' &nbsp;|&nbsp; ');
+      preview.style.display = 'block';
+    })
+    .withFailureHandler(() => {})
+    .getStockBalance(null);  // we'll filter client side
+}
+
+// ── TAB 1: Receive Goods ────────────────────────────────────
+function submitReceive() {
+  const d = {
+    sku:    v('rcvSku'),
+    whId:   v('rcvWh'),
+    qty:    v('rcvQty'),
+    cost:   v('rcvCost'),
+    ref:    v('rcvRef'),
+    note:   v('rcvNote'),
+    entity: v('rcvEntity'),
+    pName:  v('rcvName'),
+    unit:   v('rcvUnit'),
+    date:   v('rcvDate'),
+  };
+  if (!d.sku) { Swal.fire('แจ้งเตือน','กรุณาระบุ SKU','warning'); return; }
+  if (!d.whId) { Swal.fire('แจ้งเตือน','กรุณาเลือกคลัง','warning'); return; }
+  if (!d.qty || Number(d.qty) <= 0) { Swal.fire('แจ้งเตือน','กรุณาระบุจำนวน','warning'); return; }
+
+  showLoading('กำลังบันทึก...');
+  google.script.run
+    .withSuccessHandler(res => {
+      hideLoading();
+      if (res.ok) {
+        Swal.fire({ icon:'success', title:'สำเร็จ', text: res.msg, timer:2500, showConfirmButton:false });
+        clearForm(['rcvSku','rcvName','rcvUnit','rcvQty','rcvCost','rcvRef','rcvNote','rcvEntity']);
+        refreshStock();
+      } else {
+        Swal.fire('ไม่สำเร็จ', res.msg, 'error');
+      }
+    })
+    .withFailureHandler(_fail)
+    .receiveGoods(d);
+}
+
+// ── TAB 2: Transfer ─────────────────────────────────────────
+function submitTransfer() {
+  const d = {
+    sku:    v('trfSku'),
+    fromWH: v('trfFrom'),
+    toWH:   v('trfTo'),
+    qty:    v('trfQty'),
+    ref:    v('trfRef'),
+    note:   v('trfNote'),
+    pName:  v('trfName'),
+    unit:   v('trfUnit'),
+    entity: v('trfEntity'),
+  };
+  if (!d.sku || !d.fromWH || !d.toWH) { Swal.fire('แจ้งเตือน','กรุณาระบุ SKU และคลัง','warning'); return; }
+  if (!d.qty || Number(d.qty) <= 0)   { Swal.fire('แจ้งเตือน','กรุณาระบุจำนวน','warning'); return; }
+  if (d.fromWH === d.toWH)            { Swal.fire('แจ้งเตือน','คลังต้นทาง/ปลายทางต้องต่างกัน','warning'); return; }
+
+  showLoading('กำลังโอนสินค้า...');
+  google.script.run
+    .withSuccessHandler(res => {
+      hideLoading();
+      if (res.ok) {
+        Swal.fire({ icon:'success', title:'สำเร็จ', html:`${res.msg}<br><small class="text-muted">Ref: ${res.ref||''}</small>`, timer:3000, showConfirmButton:false });
+        clearForm(['trfSku','trfName','trfUnit','trfQty','trfRef','trfNote']);
+        document.getElementById('trfStockPreview').style.display = 'none';
+        refreshStock();
+      } else {
+        Swal.fire('ไม่สำเร็จ', res.msg, 'error');
+      }
+    })
+    .withFailureHandler(_fail)
+    .transferGoods(d);
+}
+
+// ── TAB 3: Stock Table ──────────────────────────────────────
+function renderStockTable(data) {
+  _stockData = data;
+  filterStock();
+}
+
+function filterStock() {
+  const whFilter  = v('stockWhFilter');
+  const txtFilter = v('stockSearch').toLowerCase().trim();
+  const tbody = document.getElementById('stockTbody');
+  const rows = _stockData.filter(r =>
+    (!whFilter  || r.wh === whFilter) &&
+    (!txtFilter || r.sku.toLowerCase().includes(txtFilter) || r.name.toLowerCase().includes(txtFilter))
+  );
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">ไม่พบข้อมูล</td></tr>';
+    document.getElementById('stockSummary').textContent = '';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><code>${r.sku}</code></td>
+      <td>${r.name}</td>
+      <td><span class="badge" style="background:#37474F">${r.wh}</span></td>
+      <td class="text-end ${r.onHand <= 0 ? 'qty-low' : 'qty-ok'}">${r.onHand.toLocaleString()}</td>
+      <td class="text-end text-muted">${r.reserved || 0}</td>
+      <td class="text-end">${Number(r.costAvg).toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
+      <td class="text-muted small">${r.updated}</td>
+    </tr>`).join('');
+  const totalSkus = new Set(rows.map(r => r.sku)).size;
+  document.getElementById('stockSummary').textContent = `${rows.length} รายการ | ${totalSkus} SKU`;
+}
+
+function refreshStock() {
+  google.script.run
+    .withSuccessHandler(data => { renderStockTable(data); })
+    .withFailureHandler(() => {})
+    .getStockBalance('');
+}
+
+// ── Adjust Stock Modal ──────────────────────────────────────
+function openAdjustModal() {
+  populateSelect('adjWh', _warehouses);
+  new bootstrap.Modal(document.getElementById('adjustModal')).show();
+}
+
+function submitAdjust() {
+  const d = {
+    sku:       v('adjSku'),
+    whId:      v('adjWh'),
+    qtyActual: v('adjQty'),
+    reason:    v('adjReason'),
+  };
+  if (!d.sku || !d.whId || d.qtyActual === '') { Swal.fire('แจ้งเตือน','กรุณากรอกข้อมูลให้ครบ','warning'); return; }
+
+  showLoading('กำลังปรับสต็อก...');
+  google.script.run
+    .withSuccessHandler(res => {
+      hideLoading();
+      bootstrap.Modal.getInstance(document.getElementById('adjustModal'))?.hide();
+      if (res.ok) {
+        Swal.fire({ icon:'success', title:'สำเร็จ', text: res.msg, timer:3000, showConfirmButton:false });
+        refreshStock();
+      } else {
+        Swal.fire('ไม่สำเร็จ', res.msg, 'error');
+      }
+    })
+    .withFailureHandler(_fail)
+    .adjustStock(d);
+}
+
+// ── TAB 4: Pick List ────────────────────────────────────────
+function addPlItem() {
+  const sku = v('plItemSku').trim();
+  const qty = Number(v('plItemQty'));
+  if (!sku || qty <= 0) return;
+  // Auto-lookup name
+  google.script.run
+    .withSuccessHandler(prod => {
+      const name = prod ? prod.name : sku;
+      _plItems.push({ sku, qty, name });
+      document.getElementById('plItemSku').value = '';
+      document.getElementById('plItemQty').value = '';
+      renderPlItems();
+    })
+    .withFailureHandler(() => {
+      _plItems.push({ sku, qty, name: sku });
+      renderPlItems();
+    })
+    .lookupSkuForWms(sku);
+}
+
+function renderPlItems() {
+  const el = document.getElementById('plItemsList');
+  if (!_plItems.length) { el.innerHTML = '<span class="text-muted">ยังไม่มีรายการ</span>'; return; }
+  el.innerHTML = _plItems.map((it, i) => `
+    <div class="d-flex align-items-center justify-content-between mb-1">
+      <span><code>${it.sku}</code> — ${it.name}</span>
+      <span>
+        <span class="qty-badge">${it.qty}</span>
+        <button class="btn btn-sm btn-link text-danger p-0 ms-1" onclick="removePlItem(${i})"><i class="bi bi-x-circle"></i></button>
+      </span>
+    </div>`).join('');
+}
+
+function removePlItem(i) {
+  _plItems.splice(i, 1);
+  renderPlItems();
+}
+
+function submitPickList() {
+  if (!_plItems.length) { Swal.fire('แจ้งเตือน','กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ','warning'); return; }
+  const d = {
+    whFrom: v('plFrom'),
+    whTo:   v('plTo'),
+    note:   v('plNote'),
+    items:  _plItems.map(it => ({ sku: it.sku, qty: it.qty, name: it.name })),
+  };
+  showLoading('กำลังสร้าง Pick List...');
+  google.script.run
+    .withSuccessHandler(res => {
+      hideLoading();
+      if (res.ok) {
+        Swal.fire({ icon:'success', title:'สำเร็จ', text: res.msg, timer:2500, showConfirmButton:false });
+        _plItems = [];
+        renderPlItems();
+        document.getElementById('plNote').value = '';
+        loadPickLists();
+      } else {
+        Swal.fire('ไม่สำเร็จ', res.msg, 'error');
+      }
+    })
+    .withFailureHandler(_fail)
+    .createPickList(d);
+}
+
+function loadPickLists() {
+  const status = v('plStatusFilter');
+  google.script.run
+    .withSuccessHandler(renderPickLists)
+    .withFailureHandler(() => {})
+    .getPickLists(status);
+}
+
+function renderPickLists(data) {
+  const container = document.getElementById('plListContainer');
+  if (!data.length) { container.innerHTML = '<p class="text-muted text-center py-3">ไม่มีรายการ</p>'; return; }
+  container.innerHTML = data.map(pl => `
+    <div class="pl-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <b>${pl.plId}</b>
+        <span class="badge ${pl.status==='DONE' ? 'pl-badge-done' : 'pl-badge-pending'}">${pl.status}</span>
+      </div>
+      <div class="text-muted small mb-2">${pl.whFrom} → ${pl.whTo||'—'} &nbsp;|&nbsp; ${pl.date}</div>
+      <table class="table table-sm mb-2" style="font-size:.82rem">
+        <thead><tr><th>SKU</th><th>ชื่อ</th><th class="text-end">ต้องการ</th><th class="text-end">หยิบแล้ว</th>${pl.status!=='DONE'?'<th></th>':''}</tr></thead>
+        <tbody>
+          ${pl.items.map(it => `
+            <tr>
+              <td><code>${it.sku}</code></td><td>${it.name}</td>
+              <td class="text-end">${it.qtyReq}</td>
+              <td class="text-end ${it.qtyPicked>=it.qtyReq?'qty-ok':'qty-low'}">${it.qtyPicked}</td>
+              ${pl.status!=='DONE'?`<td><input type="number" class="form-control form-control-sm" style="width:65px" value="${it.qtyPicked}" min="0" max="${it.qtyReq}"
+                onchange="markPicked('${pl.plId}','${it.sku}',this.value)"></td>`:''}
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      ${pl.status!=='DONE'?`<button class="btn btn-sm btn-success w-100" onclick="completePl('${pl.plId}')"><i class="bi bi-check-all me-1"></i>ทำเสร็จแล้ว</button>`:''}
+    </div>`).join('');
+}
+
+function markPicked(plId, sku, qty) {
+  google.script.run
+    .withSuccessHandler(res => { if (res.allDone) loadPickLists(); })
+    .withFailureHandler(_fail)
+    .updatePickItem(plId, sku, Number(qty));
+}
+
+function completePl(plId) {
+  Swal.fire({ title:'ยืนยัน', text:`ปิด ${plId} ว่าเสร็จสิ้น?`, icon:'question', showCancelButton:true, confirmButtonText:'ยืนยัน', cancelButtonText:'ยกเลิก' })
+    .then(r => {
+      if (!r.isConfirmed) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(() => { hideLoading(); loadPickLists(); })
+        .withFailureHandler(_fail)
+        .completePickList(plId);
+    });
+}
+
+// ── TAB 5: ROP ──────────────────────────────────────────────
+function loadRopConfig() {
+  const whId = v('ropWhFilter');
+  google.script.run
+    .withSuccessHandler(renderRopTable)
+    .withFailureHandler(() => {})
+    .getRopConfig(whId);
+}
+
+function renderRopTable(data) {
+  const tbody = document.getElementById('ropTbody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">ไม่มีข้อมูล — กด "+ เพิ่ม" เพื่อเพิ่มสินค้า</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((r, i) => `
+    <tr data-i="${i}">
+      <td><input class="form-control form-control-sm rop-input" data-field="sku" value="${r.sku}" placeholder="SKU"></td>
+      <td>
+        <select class="form-select form-select-sm rop-input" data-field="wh">
+          ${_warehouses.map(wh => `<option value="${wh.id}" ${wh.id===r.wh?'selected':''}>${wh.id}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" class="form-control form-control-sm rop-input" data-field="rop" value="${r.rop}" min="0"></td>
+      <td><input type="number" class="form-control form-control-sm rop-input" data-field="roq" value="${r.roq}" min="0"></td>
+      <td><input type="number" class="form-control form-control-sm rop-input" data-field="maxStock" value="${r.maxStock}" min="0"></td>
+      <td class="text-center">
+        <input type="checkbox" class="form-check-input" data-field="active" ${r.active?'checked':''}>
+      </td>
+      <td><button class="btn btn-sm btn-outline-danger p-1" onclick="removeRopRow(this)"><i class="bi bi-trash"></i></button></td>
+    </tr>`).join('');
+}
+
+function addRopRow() {
+  const tbody = document.getElementById('ropTbody');
+  if (tbody.querySelector('td[colspan]')) tbody.innerHTML = '';
+  const i = tbody.rows.length;
+  const whOpts = _warehouses.map(wh => `<option value="${wh.id}">${wh.id}</option>`).join('');
+  const tr = document.createElement('tr');
+  tr.setAttribute('data-i', i);
+  tr.innerHTML = `
+    <td><input class="form-control form-control-sm rop-input" data-field="sku" placeholder="SKU"></td>
+    <td><select class="form-select form-select-sm rop-input" data-field="wh">${whOpts}</select></td>
+    <td><input type="number" class="form-control form-control-sm rop-input" data-field="rop" value="0" min="0"></td>
+    <td><input type="number" class="form-control form-control-sm rop-input" data-field="roq" value="0" min="0"></td>
+    <td><input type="number" class="form-control form-control-sm rop-input" data-field="maxStock" value="0" min="0"></td>
+    <td class="text-center"><input type="checkbox" class="form-check-input" data-field="active" checked></td>
+    <td><button class="btn btn-sm btn-outline-danger p-1" onclick="removeRopRow(this)"><i class="bi bi-trash"></i></button></td>`;
+  tbody.appendChild(tr);
+}
+
+function removeRopRow(btn) { btn.closest('tr').remove(); }
+
+function saveAllRop() {
+  const rows = document.querySelectorAll('#ropTbody tr[data-i]');
+  const configs = [];
+  rows.forEach(tr => {
+    const get = field => {
+      const el = tr.querySelector(`[data-field="${field}"]`);
+      if (!el) return '';
+      return el.type === 'checkbox' ? el.checked : el.value;
+    };
+    const sku = get('sku');
+    const wh  = get('wh');
+    if (!sku || !wh) return;
+    configs.push({ sku, wh, rop: Number(get('rop')), roq: Number(get('roq')), maxStock: Number(get('maxStock')), active: get('active') });
+  });
+  if (!configs.length) return;
+  showLoading('กำลังบันทึก ROP...');
+  google.script.run
+    .withSuccessHandler(res => {
+      hideLoading();
+      if (res.ok) Swal.fire({ icon:'success', title:'บันทึกสำเร็จ', text:`${configs.length} รายการ`, timer:2000, showConfirmButton:false });
+      else Swal.fire('Error', res.msg, 'error');
+    })
+    .withFailureHandler(_fail)
+    .saveRopConfigs(configs);
+}
+
+// ── Scanner ─────────────────────────────────────────────────
+function openScanner(skuId, nameId, unitId, entityId) {
+  _scanTarget = { skuId, nameId, unitId, entityId };
+  document.getElementById('scanStatus').textContent = 'กำลังเปิดกล้อง...';
+  new bootstrap.Modal(document.getElementById('scanModal')).show();
+  setTimeout(startScanner, 400);
+}
+
+function startScanner() {
+  if (typeof Quagga === 'undefined') {
+    document.getElementById('scanStatus').textContent = 'ไม่สามารถโหลด Quagga ได้';
+    return;
+  }
+  Quagga.init({
+    inputStream: { type: 'LiveStream', target: document.getElementById('scanViewport'),
+      constraints: { facingMode: 'environment', width: 640, height: 280 } },
+    decoder: { readers: ['ean_reader','code_128_reader','code_39_reader','upc_reader'] },
+    locate: true,
+  }, err => {
+    if (err) { document.getElementById('scanStatus').textContent = 'เปิดกล้องไม่ได้: ' + err; return; }
+    Quagga.start();
+    document.getElementById('scanStatus').textContent = 'กำลังสแกน...';
+  });
+  Quagga.onDetected(result => {
+    const code = result.codeResult.code;
+    stopScanner();
+    bootstrap.Modal.getInstance(document.getElementById('scanModal'))?.hide();
+    const skuEl = document.getElementById(_scanTarget.skuId);
+    if (skuEl) {
+      skuEl.value = code;
+      lookupSku(code, _scanTarget.nameId, _scanTarget.unitId, _scanTarget.entityId);
+    }
+  });
+}
+
+function stopScanner() {
+  try { if (typeof Quagga !== 'undefined') Quagga.stop(); } catch(e) {}
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+function v(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+function clearForm(ids) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; }); }
+
+function populateSelect(id, warehouses) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = '';
+  warehouses.forEach(wh => el.add(new Option(`${wh.id} — ${wh.name}`, wh.id)));
+}
+
+function refreshAll() {
+  showLoading('รีเฟรช...');
+  google.script.run
+    .withSuccessHandler(res => { hideLoading(); if (res.ok) onWmsDataLoaded(res); })
+    .withFailureHandler(_fail)
+    .getWmsData();
+}
+</script>

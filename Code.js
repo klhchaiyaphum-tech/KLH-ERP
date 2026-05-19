@@ -4,11 +4,15 @@
 
 const SHEET_ID = "1ko72nyTpeQZ410eVALhlzZ2EhY7Qk0e340DAdQG8z4U"; // ← FIX #1: uncomment
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
+function doGet(e) {
+  const page = (e && e.parameter && e.parameter.page) || 'index';
+  const pageMap = { index: 'Index', wms: 'wms' };
+  const tpl = pageMap[page] || 'Index';
+  return HtmlService.createTemplateFromFile(tpl)
       .evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
-      .setTitle('KLH V9.1');
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .setTitle(page === 'wms' ? 'KLH WMS' : 'KLH V9.1');
 }
 
 function include(filename) {
