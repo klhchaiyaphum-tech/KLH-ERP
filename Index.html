@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    :root {
+      --main: #FF7E5F; --blue: #0984E3; --success: #00B894;
+      --orange: #E67E22; --danger: #D63031; --bg: #F4F7F9; --dark: #2D3436;
+    }
+    html,body { min-height:100vh; overflow-x:hidden; -webkit-overflow-scrolling:touch;
+      font-family:'Segoe UI',sans-serif; background:var(--bg); margin:0; padding:10px; color:#2D3436; }
+    .card { max-width:500px; margin:auto; background:white; border-radius:20px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.08); padding-bottom:30px; }
+
+    /* ─── HEADER ─── */
+    .header { background:linear-gradient(135deg,#FF7E5F,#FEB47B); color:white;
+      padding:16px 20px; border-radius:20px 20px 0 0; }
+    .header-inner { display:flex; align-items:center; gap:12px; justify-content:center; }
+    #appLogo { width:44px; height:44px; border-radius:10px; object-fit:contain;
+      background:white; padding:3px; display:none; flex-shrink:0; }
+    #appNameHeader { margin:0; font-size:19px; line-height:1.2; }
+    .header-sub { font-size:11px; opacity:.75; margin-top:2px; }
+
+    .section { padding:18px; border-bottom:1px solid #F0F2F5; }
+    .title { font-weight:bold; margin-bottom:12px; display:flex; align-items:center; gap:8px; font-size:15px; }
+    .num { background:var(--main); color:white; width:22px; height:22px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; }
+    label { font-size:11px; color:#636E72; font-weight:bold; margin-bottom:4px; display:block; }
+    input,select { width:100%; padding:12px; border-radius:10px; border:1px solid #E0E0E0;
+      box-sizing:border-box; font-size:14px; transition:.2s; background:white; }
+    input:focus,select:focus { border-color:var(--main); outline:none; background:#FFF9F7; }
+    input[readonly] { background:#F1F2F6; color:#636E72; font-weight:bold;
+      cursor:not-allowed; border:none; }
+    .btn { width:100%; padding:14px; border:none; border-radius:12px; font-weight:bold;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-size:15px; }
+    .btn-calc  { background:var(--orange); color:white; height:45px; margin-top:18px; }
+    .btn-save  { background:var(--success); color:white; margin-top:15px; height:55px; font-size:18px; }
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+    .round-btn { background:#DFE6E9; border:none; width:35px; height:35px; border-radius:8px;
+      font-size:16px; cursor:pointer; color:var(--dark); display:flex;
+      align-items:center; justify-content:center; flex-shrink:0; }
+    .input-icon { position:relative; }
+    .input-icon input { padding-right:30px; }
+    .input-icon span { position:absolute; right:12px; top:38px; color:#636E72; font-weight:bold; }
+    #results { background:white; border-radius:10px; max-height:200px; overflow-y:auto;
+      margin-top:10px; border:1px solid #EEE; display:none; }
+    .res-item { padding:12px; border-bottom:1px solid #F0F2F5; cursor:pointer; }
+    .res-item:hover { background:#FFF9F7; }
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center; }
+    .modal-content { background:white; width:95%; max-width:450px; border-radius:20px;
+      padding:20px; max-height:90vh; overflow-y:auto; }
+    .preview-box { border:2px dashed #ccc; width:80mm; height:40mm; position:relative;
+      margin:10px auto; background:#fff; overflow:hidden; }
+    .control-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px;
+      width:120px; margin:10px auto; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- HEADER + LOGO -->
+  <div class="header">
+    <div class="header-inner">
+      <img id="appLogo" src="" alt="logo">
+      <div>
+        <h2 id="appNameHeader">กำลังโหลด...</h2>
+        <div class="header-sub">Enterprise Survey &amp; Pricing</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: ค้นหา -->
+  <div class="section">
+    <div class="title"><div class="num">1</div> ค้นหาสินค้า</div>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="sInp" placeholder="ชื่อ / บาร์โค้ดชิ้น / บาร์โค้ดลัง..."
+        onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="btn" style="background:var(--dark);color:white;width:55px;padding:0;font-size:20px;"
+        onclick="document.getElementById('sScanInp').click()">📷</button>
+      <input type="file" id="sScanInp" accept="image/*" capture="environment"
+        onchange="handleSearchScan(this)" style="display:none">
+      <button class="btn" style="background:var(--blue);color:white;width:65px;padding:0;"
+        onclick="doSearch()">🔍</button>
+    </div>
+    <div id="results"></div>
+    <button class="btn" style="background:var(--orange);color:white;margin-top:10px;"
+      onclick="prepNew()">➕ เพิ่มสินค้าใหม่</button>
+  </div>
+
+  <!-- SECTION 2: แก้ไข -->
+  <div id="editArea" style="display:none;">
+
+    <!-- 2A: ข้อมูลพื้นฐาน -->
+    <div class="section" style="border-left:4px solid var(--blue);">
+      <div class="title">
+        <div class="num" style="background:var(--blue);">2</div>
+        ข้อมูลพื้นฐาน
+        <span id="tag" style="margin-left:auto;font-size:10px;color:#636E72;"></span>
+      </div>
+
+      <div class="grid-2">
+        <div><label>รหัสกลุ่ม (AE):</label>
+          <input type="text" id="eGroup" placeholder="รวบสินค้าทดแทน"></div>
+        <div>
+          <label>นิติบุคคล (AD):</label>
+          <div style="display:flex;gap:5px;">
+            <select id="eTaxEntity" style="flex:1;border-color:var(--blue);font-weight:bold;">
+              <option value="">-- เลือกร้าน --</option></select>
+            <button class="round-btn" style="background:#81ECEC;"
+              onclick="openListManager('TAB_SHOPS','นิติบุคคล')">⚙️</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div><label>ชื่อสินค้า (B):</label><input type="text" id="eName"></div>
+        <div><label>ขนาด (D):</label><input type="text" id="eSize"></div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>หมวด (C):</label>
+          <div style="display:flex;gap:5px;">
+            <select id="eCat" style="flex:1;"><option value="">-- เลือก --</option></select>
+            <button class="round-btn" style="background:#FFEAA7;"
+              onclick="openListManager('TAB_CATEGORY','หมวดสินค้า')">⚙️</button>
+          </div>
+        </div>
+        <div>
+          <label>ผู้จำหน่าย (G):</label>
+          <div style="display:flex;gap:5px;">
+            <select id="eSupCode" style="flex:1;"><option value="">-- เลือก --</option></select>
+            <button class="round-btn" onclick="openSupModal()">🏢</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>หน่วยบรรจุ (F):</label>
+          <div style="display:flex;gap:5px;">
+            <select id="ePackUnit" style="flex:1;"><option value="">-- เลือก --</option></select>
+            <button class="round-btn" style="background:#B8E994;"
+              onclick="openListManager('TAB_PACKAGE','หน่วยบรรจุ')">⚙️</button>
+          </div>
+        </div>
+        <div><label>ตัวคูณ (E):</label>
+          <input type="number" id="ePackMult" placeholder="เช่น 12"></div>
+      </div>
+    </div>
+
+    <!-- 2B: ต้นทุน & ราคาขาย -->
+    <div class="section" style="background:#FFF9F2;border-left:4px solid var(--orange);">
+      <div class="title">💰 ต้นทุน &amp; ราคาขาย</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">
+        <div><label>ต้นทุนสุทธิ/ชิ้น (R):</label>
+          <input type="text" id="eCostR" readonly
+            style="color:var(--danger);font-size:18px;font-weight:bold;"></div>
+        <button class="btn btn-calc" onclick="openCostModal()">⚙️ คำนวณ</button>
+      </div>
+      <hr style="border:.5px dashed #DDD;margin:15px 0;">
+      <div class="grid-2">
+        <div><label>ขายส่งเก่า (U):</label><input type="number" id="eWholeU"></div>
+        <div>
+          <label>ขายส่งคำนวณ (V): <span id="sLabel" style="color:var(--blue);font-weight:normal;"></span></label>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input type="text" id="eWholeV" readonly style="color:var(--blue);font-weight:bold;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="round-btn" onclick="adjCalcPrice('V',1)">▲</button>
+              <button class="round-btn" onclick="adjCalcPrice('V',-1)">▼</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:10px;">
+        <div><label>ขายปลีกเก่า (W):</label><input type="number" id="eRetailW"></div>
+        <div>
+          <label>ขายปลีกคำนวณ (X): <span id="tLabel" style="color:var(--success);font-weight:normal;"></span></label>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input type="text" id="eRetailX" readonly style="color:var(--success);font-weight:bold;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="round-btn" onclick="adjCalcPrice('X',1)">▲</button>
+              <button class="round-btn" onclick="adjCalcPrice('X',-1)">▼</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2C: รูปภาพ & บาร์โค้ด -->
+    <div class="section" style="border-left:4px solid var(--dark);padding-bottom:30px;">
+      <div class="title"><div class="num" style="background:var(--dark);">3</div> รูปภาพ &amp; บาร์โค้ด</div>
+      <div class="grid-2">
+        <button class="btn" style="background:#636E72;color:white;"
+          onclick="document.getElementById('pInp').click()">📸 ถ่ายรูป</button>
+        <button class="btn" style="background:var(--dark);color:white;"
+          onclick="document.getElementById('bInp').click()">🔍 สแกนบาร์โค้ด</button>
+      </div>
+      <input type="file" id="pInp" accept="image/*" capture="environment"
+        onchange="handleP(this)" style="display:none">
+      <input type="file" id="bInp" accept="image/*" capture="environment"
+        onchange="handleB(this)" style="display:none">
+      <img id="preview" style="width:100%;border-radius:15px;margin-top:10px;display:none;">
+
+      <div class="grid-2" style="margin-top:15px;">
+        <div><label>บาร์โค้ดชิ้น (A):</label>
+          <input type="text" id="bcVal" onkeyup="check()"></div>
+        <div><label>บาร์โค้ดลัง (AB):</label>
+          <input type="text" id="bcBig"></div>
+      </div>
+      <label style="margin-top:10px;">วันที่อัปเดต:</label>
+      <input type="date" id="eDate">
+
+      <button class="btn btn-save" id="saveBtn" onclick="save()" disabled>🚀 บันทึกเข้าระบบ</button>
+      <button class="btn" id="printBtn"
+        style="background:var(--dark);color:white;margin-top:10px;"
+        onclick="printLabel()" disabled>🖨️ ตรวจสอบ &amp; พิมพ์ป้าย</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Cost Calculator ══ -->
+<div id="costModal" class="modal">
+  <div class="modal-content">
+    <h3 style="margin-top:0;color:var(--orange);text-align:center;">🧮 คำนวณต้นทุน/ชิ้น</h3>
+    <div style="background:#FFF5F5;padding:10px;border-radius:10px;margin-bottom:10px;text-align:center;">
+      <label style="color:var(--danger);">รูปแบบการคีย์ราคา:</label>
+      <select id="calcMode" onchange="runCost('ex')" style="margin-top:5px;border-color:var(--danger);">
+        <option value="small">คีย์ราคาต่อ 1 ชิ้น</option>
+        <option value="big">คีย์ราคายกลัง (ระบบหารตัวคูณให้)</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label>การคำนวณภาษี:</label>
+      <select id="mVatType" onchange="runCost()"
+        style="border-color:var(--blue);color:var(--blue);font-weight:bold;">
+        <option value="VAT">มี VAT (คำนวณออโต้)</option>
+        <option value="0">ยกเว้น VAT (0%)</option>
+      </select>
+    </div>
+    <div class="grid-2" style="background:#F0F7FF;padding:10px;border-radius:10px;margin-bottom:8px;">
+      <div><label style="color:var(--blue);">ทุนดิบ / ไม่รวมภาษี</label>
+        <input type="number" id="mI" oninput="runCost('ex')" placeholder="ราคาที่ซื้อ"></div>
+      <div><label style="color:var(--main);">หรือ ทุนรวมภาษีแล้ว</label>
+        <input type="number" id="mI_tax" oninput="runCost('inc')" placeholder="ราคาบิล"></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:8px;">
+      <div><label>ลดเงินสด/หน่วย (H)</label>
+        <input type="number" id="mH" oninput="runCost()" placeholder="0"></div>
+      <div><label>ลด % / หน่วย (J)</label>
+        <input type="number" id="mJ" oninput="runCost()" placeholder="%"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:5px;margin-bottom:8px;">
+      <div><label>ซื้อ (L)</label>
+        <input type="number" id="mL" oninput="runCost()" value="1"></div>
+      <div><label>แถม (M)</label>
+        <input type="number" id="mM" oninput="runCost()" value="0"></div>
+      <div><label>มูลค่าแถม (N)</label>
+        <input type="text" id="mN" readonly style="background:#F8F9FA;"></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:15px;">
+      <div><label>ภาษี 7% (Q)</label>
+        <input type="number" id="mQ" readonly style="background:#F8F9FA;"></div>
+      <div><label>ค่าขนส่ง/หน่วย (O)</label>
+        <input type="number" id="mO" oninput="runCost()"></div>
+    </div>
+    <hr style="border:.5px dashed #DDD;">
+    <div class="grid-2" style="background:#FDF2E9;padding:10px;border-radius:10px;margin-bottom:15px;">
+      <div class="input-icon"><label style="color:var(--orange);">% กำไรส่ง (S)</label>
+        <input type="number" id="mS" oninput="updateSTfromModal()" placeholder="0"><span>%</span></div>
+      <div class="input-icon"><label style="color:var(--success);">% กำไรปลีก (T)</label>
+        <input type="number" id="mT" oninput="updateSTfromModal()" placeholder="0"><span>%</span></div>
+    </div>
+    <div style="text-align:center;background:#FFF5F5;padding:15px;border-radius:15px;">
+      <label>สรุปต้นทุนสุทธิ/ชิ้น (R)</label>
+      <div id="mResR" style="font-size:30px;font-weight:bold;color:var(--danger);">0.00</div>
+    </div>
+    <button class="btn btn-save" onclick="closeCostModal()" style="margin-top:15px;">✅ ยืนยัน</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Print Preview ══ -->
+<div id="printPreviewModal" class="modal">
+  <div class="modal-content" style="max-width:400px;text-align:center;">
+    <h3>📏 ตรวจสอบป้ายราคา</h3>
+    <div class="preview-box" id="pBox">
+      <div id="pvName" style="position:absolute;font-weight:bold;font-size:14px;text-align:left;
+        width:70mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">ชื่อสินค้า</div>
+      <div id="pvPrice" style="position:absolute;font-weight:bold;font-size:24px;">฿0.00</div>
+      <div id="pvBarcode" style="position:absolute;bottom:5px;left:5px;font-size:10px;">[ บาร์โค้ด ]</div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:20px;align-items:center;margin-top:10px;">
+      <div>
+        <label>ขยับชื่อ</label>
+        <div class="control-grid">
+          <div></div><button class="round-btn" onclick="move('pvName','t',-1)">▲</button><div></div>
+          <button class="round-btn" onclick="move('pvName','l',-1)">◀</button><div></div>
+          <button class="round-btn" onclick="move('pvName','l',1)">▶</button>
+          <div></div><button class="round-btn" onclick="move('pvName','t',1)">▼</button><div></div>
+        </div>
+      </div>
+      <div>
+        <label>ขยับราคา</label>
+        <div class="control-grid">
+          <div></div><button class="round-btn" onclick="move('pvPrice','t',-1)">▲</button><div></div>
+          <button class="round-btn" onclick="move('pvPrice','l',-1)">◀</button><div></div>
+          <button class="round-btn" onclick="move('pvPrice','l',1)">▶</button>
+          <div></div><button class="round-btn" onclick="move('pvPrice','t',1)">▼</button><div></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:20px;">
+      <button class="btn" style="background:#E0E0E0;" onclick="closePreview()">ยกเลิก</button>
+      <button class="btn" style="background:var(--dark);color:white;" onclick="finalPrint()">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let imgData  = null;
+  let selected = { row: -1, wholesale_percent: 0, retail_percent: 0 };
+  let globalVatRate = 0.07;
+  let pos = { pvName: { t:5, l:5 }, pvPrice: { t:22, l:55 } };
+
+  const _fail = err => { Swal.close(); Swal.fire('Error', String(err.message||err), 'error'); };
+
+  // ─── INIT ───────────────────────────────────────────────
+  window.onload = () => {
+    Swal.fire({ title:'กำลังโหลดข้อมูล...', allowOutsideClick:false,
+      didOpen:() => Swal.showLoading() });
+    google.script.run
+      .withFailureHandler(_fail)
+      .withSuccessHandler(res => {
+        if (res && res.error) {
+          Swal.fire('พบข้อผิดพลาด', res.error, 'error');
+          document.getElementById('appNameHeader').innerText = "พบปัญหาเชื่อมต่อ";
+          return;
+        }
+        Swal.close();
+        document.getElementById('appNameHeader').innerText = res.companyName || "KLH";
+        // แสดง LOGO ถ้ามี
+        if (res.logoUrl) {
+          const logo = document.getElementById('appLogo');
+          logo.src = res.logoUrl;
+          logo.style.display = 'block';
+        }
+        globalVatRate = res.vatRate || 0.07;
+        populateDropdowns(res);
+      })
+      .getDropdownData();
+  };
+
+  // ─── DROPDOWNS ──────────────────────────────────────────
+  function populateDropdowns(res) {
+    const updateSel = (id, list, def) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = `<option value="">-- ${def} --</option>`;
+      list.forEach(item => { if(item) sel.add(new Option(item,item)); });
+      if (cur) sel.value = cur;
+    };
+    if (res.categories) updateSel('eCat',       res.categories, 'เลือกหมวด');
+    if (res.packages)   updateSel('ePackUnit',   res.packages,   'เลือกหน่วย');
+    if (res.shops)      updateSel('eTaxEntity',  res.shops,      'เลือกร้าน');
+    if (res.suppliers) {
+      const sel = document.getElementById('eSupCode');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">-- เลือกผู้จำหน่าย --</option>';
+      res.suppliers.forEach(s => sel.add(new Option(s.name, s.code)));
+      if (cur) sel.value = cur;
+    }
+  }
+
+  function refreshDropdowns(callback) {
+    google.script.run
+      .withFailureHandler(_fail)
+      .withSuccessHandler(res => {
+        if (res && !res.error) populateDropdowns(res);
+        if (callback) callback();
+      })
+      .getDropdownData();
+  }
+
+  function ensureOption(selId, val) {
+    if (!val) return;
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    if (!Array.from(sel.options).some(o => o.value === val))
+      sel.add(new Option(val, val));
+    sel.value = val;
+  }
+
+  // ─── SEARCH ─────────────────────────────────────────────
+  function doSearch() {
+    const q = document.getElementById('sInp').value.trim();
+    if (!q) return;
+    Swal.fire({ title:'กำลังหา...', didOpen:() => Swal.showLoading() });
+    google.script.run
+      .withFailureHandler(err => { Swal.close(); _fail(err); })
+      .withSuccessHandler(res => {
+        Swal.close();
+        const rDiv = document.getElementById('results');
+        if (!res || !res.length) {
+          rDiv.innerHTML = '<div class="res-item" style="color:red;text-align:center;">ไม่พบข้อมูล</div>';
+        } else {
+          rDiv.innerHTML = res.map(p =>
+            `<div class="res-item" onclick='sel(${JSON.stringify(p).replace(/'/g,"&#39;")})'>
+               <b>${p.name}</b><br>
+               <small>ชิ้น: ${p.barcode} | ลัง: ${p.barcode_big||'-'}</small>
+             </div>`
+          ).join('');
+        }
+        rDiv.style.display = 'block';
+      })
+      .searchProductsFromSheet(q);
+  }
+
+  function handleSearchScan(input) {
+    if (!input.files[0]) return;
+    Swal.fire({ title:'อ่านภาพ...', didOpen:() => Swal.showLoading() });
+    Quagga.decodeSingle(
+      { src: URL.createObjectURL(input.files[0]),
+        decoder: { readers:["ean_reader","code_128_reader"] } },
+      res => {
+        if (res && res.codeResult) {
+          document.getElementById('sInp').value = res.codeResult.code;
+          doSearch();
+        } else { Swal.fire('ผิดพลาด','ไม่พบรหัส','error'); }
+      }
+    );
+  }
+
+  // ─── SELECT PRODUCT ─────────────────────────────────────
+  function sel(p) {
+    selected = p;
+    selected.wholesale_percent = (parseFloat(p.wholesale_percent)||0) * 100;
+    selected.retail_percent    = (parseFloat(p.retail_percent)   ||0) * 100;
+
+    document.getElementById('results').style.display  = 'none';
+    document.getElementById('editArea').style.display = 'block';
+    document.getElementById('tag').innerText = "แก้ไขแถว " + p.row;
+
+    ensureOption('eTaxEntity', p.tax_entity);
+    ensureOption('eCat',       p.category);
+    ensureOption('ePackUnit',  p.packUnit);
+    ensureOption('eSupCode',   p.supCode);
+
+    document.getElementById('eGroup').value    = p.product_group || '';
+    document.getElementById('eName').value     = p.name          || '';
+    document.getElementById('eSize').value     = p.size          || '';
+    document.getElementById('ePackMult').value = p.packMult      || '';
+    document.getElementById('eWholeU').value   = p.wholesale_price|| '';
+    document.getElementById('eRetailW').value  = p.retail_price  || '';
+    document.getElementById('bcVal').value     = p.barcode       || '';
+    document.getElementById('bcBig').value     = p.barcode_big   || '';
+    document.getElementById('eDate').value     = new Date().toISOString().split('T')[0];
+
+    // cost modal fields (สำหรับเปิด modal ทีหลัง)
+    document.getElementById('mI').value       = p.buy_price         || '';
+    document.getElementById('mH').value       = p.discount_cash     || '';
+    document.getElementById('mJ').value       = (parseFloat(p.discount_percent)||0)*100;
+    document.getElementById('mL').value       = p.buy_qty           || 1;
+    document.getElementById('mM').value       = p.free_qty          || 0;
+    document.getElementById('mO').value       = p.freight           || '';
+    document.getElementById('mQ').value       = (parseFloat(p.tax)||0).toFixed(2);
+    document.getElementById('mVatType').value = (parseFloat(p.tax)>0) ? "VAT" : "0";
+
+    // FIX: ใช้ cost_final จาก sheet โดยตรง ไม่ recalculate (กัน overwrite)
+    const stored = (parseFloat(p.cost_final)||0).toFixed(2);
+    document.getElementById('eCostR').value   = stored;
+    document.getElementById('mResR').innerText = stored;
+
+    calcSalesFromPercent();
+    check();
+  }
+
+  function prepNew() {
+    selected = { row:-1, wholesale_percent:0, retail_percent:0 };
+    document.getElementById('editArea').style.display = 'block';
+    document.getElementById('results').style.display  = 'none';
+    document.getElementById('tag').innerText = "เพิ่มใหม่";
+    ['eGroup','eTaxEntity','eName','eSize','eCat','eSupCode','ePackUnit','ePackMult',
+     'eCostR','eWholeU','eWholeV','eRetailW','eRetailX','bcVal','bcBig',
+     'mI','mI_tax','mH','mJ','mQ','mO','mN','mS','mT'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('mVatType').value  = "VAT";
+    document.getElementById('mResR').innerText = '0.00';
+    document.getElementById('mL').value = 1;
+    document.getElementById('mM').value = 0;
+    document.getElementById('eDate').value = new Date().toISOString().split('T')[0];
+    imgData = null;
+    document.getElementById('preview').style.display = 'none';
+    check();
+  }
+
+  // ─── LIST MANAGERS ──────────────────────────────────────
+  function openListManager(configKey, title) {
+    Swal.fire({
+      title: '⚙️ จัดการ' + title,
+      html: `
+        <input id="newItem" class="swal2-input" placeholder="เพิ่มชื่อใหม่">
+        <button class="btn btn-save" style="margin-bottom:10px;"
+          onclick="doManage('${configKey}','add')">➕ เพิ่มเข้าลิสต์</button>
+        <hr style="margin:15px 0;">
+        <input id="oldItem" class="swal2-input" placeholder="ชื่อเดิมที่ต้องการแก้/ลบ">
+        <input id="editItem" class="swal2-input" placeholder="ชื่อใหม่ (กรณีแก้ไข)">
+        <div class="grid-2">
+          <button class="btn" style="background:var(--orange);color:white;"
+            onclick="doManage('${configKey}','edit')">✏️ แก้</button>
+          <button class="btn" style="background:var(--danger);color:white;"
+            onclick="doManage('${configKey}','delete')">🗑️ ลบ</button>
+        </div>`
+    });
+  }
+
+  function doManage(key, mode) {
+    const oldN = document.getElementById('oldItem')  ? document.getElementById('oldItem').value  : '';
+    const newN = mode === 'add'
+      ? (document.getElementById('newItem')  ? document.getElementById('newItem').value  : '')
+      : (document.getElementById('editItem') ? document.getElementById('editItem').value : '');
+    if (!newN && mode !== 'delete') return;
+    Swal.fire({ title:'กำลังบันทึก...', didOpen:() => Swal.showLoading() });
+    google.script.run
+      .withFailureHandler(err => { Swal.close(); _fail(err); })
+      .withSuccessHandler(res => {
+        if (res.includes("Error") || res.includes("ไม่พบ")) {
+          Swal.fire('แจ้งเตือน', res, 'warning');
+        } else {
+          refreshDropdowns(() => Swal.fire('สำเร็จ', res, 'success'));
+        }
+      })
+      .manageListData(key, oldN, newN, mode);
+  }
+
+  // ─── SUPPLIER MANAGER ───────────────────────────────────
+  function openSupModal() {
+    Swal.fire({
+      title:'🏢 เพิ่มผู้จัดจำหน่ายใหม่',
+      showConfirmButton:false, showCloseButton:true,
+      html:`
+        <input id="newSupName"    class="swal2-input" placeholder="ชื่อบริษัท/ร้านค้า">
+        <input id="newSupContact" class="swal2-input" placeholder="ชื่อเซลล์/ผู้ติดต่อ (ถ้ามี)">
+        <input id="newSupTel"     class="swal2-input" placeholder="เบอร์โทรศัพท์ (ถ้ามี)">
+        <button class="btn btn-save" style="margin-top:15px;" onclick="doAddSup()">➕ บันทึก</button>`
+    });
+  }
+
+  function doAddSup() {
+    const name = document.getElementById('newSupName').value;
+    if (!name) return Swal.fire('แจ้งเตือน','กรุณาใส่ชื่อบริษัท','warning');
+    Swal.fire({ title:'กำลังบันทึก...', didOpen:() => Swal.showLoading() });
+    google.script.run
+      .withFailureHandler(err => { Swal.close(); _fail(err); })
+      .withSuccessHandler(res => {
+        if (res.status === 'success') {
+          refreshDropdowns(() => {
+            Swal.fire('สำเร็จ','เพิ่ม '+res.name+' เรียบร้อย','success');
+            document.getElementById('eSupCode').value = res.code;
+          });
+        } else { Swal.fire('Error', res.message, 'error'); }
+      })
+      .addNewSupplier({
+        name:    name,
+        contact: document.getElementById('newSupContact').value,
+        tel:     document.getElementById('newSupTel').value
+      });
+  }
+
+  // ─── COST CALCULATOR ────────────────────────────────────
+  function runCost(mode) {
+    mode = mode || 'ex';
+    const calcMode      = document.getElementById('calcMode').value;
+    const mult          = parseFloat(document.getElementById('ePackMult').value) || 1;
+    const vatRate       = document.getElementById('mVatType').value === "VAT" ? globalVatRate : 0;
+    let inputPrice      = 0;
+
+    if (mode === 'inc') {
+      const inc    = parseFloat(document.getElementById('mI_tax').value) || 0;
+      inputPrice   = inc / (1 + vatRate);
+      if (inputPrice > 0) document.getElementById('mI').value = inputPrice.toFixed(2);
+    } else {
+      inputPrice   = parseFloat(document.getElementById('mI').value) || 0;
+      if (mode === 'ex') {
+        const inc  = inputPrice * (1 + vatRate);
+        document.getElementById('mI_tax').value = inc > 0 ? inc.toFixed(2) : '';
+      }
+    }
+
+    const I = calcMode === 'big' ? inputPrice / mult : inputPrice;
+    const H = parseFloat(document.getElementById('mH').value) || 0;
+    const J = parseFloat(document.getElementById('mJ').value) || 0;
+    const L = parseFloat(document.getElementById('mL').value) || 1;
+    const M = parseFloat(document.getElementById('mM').value) || 0;
+    const O = parseFloat(document.getElementById('mO').value) || 0;
+    const K = I * (J/100);
+    const N = (L+M) > 0 ? I * (M/(L+M)) : 0;
+    document.getElementById('mN').value = N.toFixed(2);
+    const Q = I * vatRate;
+    document.getElementById('mQ').value = Q > 0 ? Q.toFixed(2) : '0';
+    const R = (I - H - K - N) + Q + O;
+    document.getElementById('mResR').innerText = R.toFixed(2);
+    document.getElementById('eCostR').value    = R.toFixed(2);
+    document.getElementById('mS').value        = selected.wholesale_percent.toFixed(2);
+    document.getElementById('mT').value        = selected.retail_percent.toFixed(2);
+    calcSalesFromPercent();
+  }
+
+  function updateSTfromModal() {
+    selected.wholesale_percent = parseFloat(document.getElementById('mS').value)||0;
+    selected.retail_percent    = parseFloat(document.getElementById('mT').value)||0;
+    calcSalesFromPercent();
+  }
+
+  function calcSalesFromPercent() {
+    const R = parseFloat(document.getElementById('eCostR').value)||0;
+    const S = selected.wholesale_percent, T = selected.retail_percent;
+    document.getElementById('eWholeV').value  = (R + R*(S/100)).toFixed(2);
+    document.getElementById('sLabel').innerText = `(${S.toFixed(1)}%)`;
+    document.getElementById('eRetailX').value = (R + R*(T/100)).toFixed(2);
+    document.getElementById('tLabel').innerText = `(${T.toFixed(1)}%)`;
+  }
+
+  function adjCalcPrice(type, val) {
+    const R = parseFloat(document.getElementById('eCostR').value)||0; if (R<=0) return;
+    if (type==='V') {
+      const nv = Math.round(parseFloat(document.getElementById('eWholeV').value)||R) + val;
+      selected.wholesale_percent = ((nv-R)/R)*100;
+      document.getElementById('mS').value = selected.wholesale_percent.toFixed(2);
+    } else {
+      const nx = Math.round(parseFloat(document.getElementById('eRetailX').value)||R) + val;
+      selected.retail_percent = ((nx-R)/R)*100;
+      document.getElementById('mT').value = selected.retail_percent.toFixed(2);
+    }
+    calcSalesFromPercent();
+  }
+
+  function openCostModal()  { document.getElementById('costModal').style.display = 'flex'; }
+  function closeCostModal() { document.getElementById('costModal').style.display = 'none'; }
+
+  // ─── PRINT LABEL ────────────────────────────────────────
+  function move(id, axis, val) {
+    pos[id][axis] += val;
+    document.getElementById(id).style[axis==='t'?'top':'left'] = pos[id][axis]+"mm";
+  }
+
+  function printLabel() {
+    document.getElementById('pvName').innerText  = document.getElementById('eName').value;
+    document.getElementById('pvPrice').innerText = "฿" + document.getElementById('eRetailX').value;
+    document.getElementById('pvName').style.top  = pos.pvName.t+"mm";
+    document.getElementById('pvName').style.left = pos.pvName.l+"mm";
+    document.getElementById('pvPrice').style.top  = pos.pvPrice.t+"mm";
+    document.getElementById('pvPrice').style.left = pos.pvPrice.l+"mm";
+    document.getElementById('printPreviewModal').style.display = 'flex';
+  }
+
+  function finalPrint() {
+    const n  = document.getElementById('eName').value.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const b  = document.getElementById('bcVal').value;
+    const p  = document.getElementById('eRetailX').value;
+    const w  = window.open('','_blank');
+    w.document.write(`<html><head>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+      <style>
+        @page{size:80mm 40mm;margin:0}
+        body{margin:0;width:80mm;height:40mm;position:relative;font-family:sans-serif}
+        .n{position:absolute;top:${pos.pvName.t}mm;left:${pos.pvName.l}mm;font-size:14px;font-weight:bold;width:70mm;overflow:hidden}
+        .p{position:absolute;top:${pos.pvPrice.t}mm;left:${pos.pvPrice.l}mm;font-size:24px;font-weight:bold}
+        .b{position:absolute;bottom:3mm;left:2mm}
+      </style></head><body>
+      <div class="n">${n}</div>
+      <div class="p">฿${p}</div>
+      <div class="b"><svg id="bc"></svg></div>
+      <script>
+        JsBarcode("#bc","${b}",{format:"CODE128",width:1.5,height:35,displayValue:true});
+        window.onload=()=>{setTimeout(()=>{window.print();window.close();},800)};
+      <\/script></body></html>`);
+    w.document.close();
+    closePreview();
+  }
+
+  function closePreview() { document.getElementById('printPreviewModal').style.display = 'none'; }
+  function check() {
+    const ok = !!document.getElementById('bcVal').value;
+    document.getElementById('saveBtn').disabled  = !ok;
+    document.getElementById('printBtn').disabled = !ok;
+  }
+
+  // ─── PHOTO & BARCODE ────────────────────────────────────
+  function handleP(input) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas'), ctx = c.getContext('2d');
+        c.width = 1024; c.height = 1024;
+        ctx.fillStyle = "white"; ctx.fillRect(0,0,1024,1024);
+        const r = Math.min(900/img.width, 900/img.height);
+        ctx.drawImage(img,(1024-img.width*r)/2,(1024-img.height*r)/2,img.width*r,img.height*r);
+        imgData = c.toDataURL('image/jpeg', 0.85);
+        document.getElementById('preview').src = imgData;
+        document.getElementById('preview').style.display = 'block';
+        check();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+
+  function handleB(input) {
+    Swal.fire({ title:'อ่านภาพ...', didOpen:() => Swal.showLoading() });
+    Quagga.decodeSingle(
+      { src: URL.createObjectURL(input.files[0]),
+        decoder: { readers:["ean_reader","code_128_reader"] } },
+      res => {
+        Swal.close();
+        if (res && res.codeResult) {
+          document.getElementById('bcVal').value = res.codeResult.code; check();
+        } else { Swal.fire('ผิดพลาด','ไม่พบรหัส','error'); }
+      }
+    );
+  }
+
+  // ─── SAVE ───────────────────────────────────────────────
+  function save() {
+    Swal.fire({ title:'กำลังบันทึก...', didOpen:() => Swal.showLoading() });
+    let bBig = document.getElementById('bcBig').value;
+    if (!bBig && document.getElementById('bcVal').value)
+      bBig = document.getElementById('bcVal').value + "-B";
+
+    const info = {
+      row:              selected.row,
+      product_group:    document.getElementById('eGroup').value,
+      tax_entity:       document.getElementById('eTaxEntity').value,
+      name:             document.getElementById('eName').value,
+      category:         document.getElementById('eCat').value,
+      size:             document.getElementById('eSize').value,
+      packMult:         document.getElementById('ePackMult').value,
+      packUnit:         document.getElementById('ePackUnit').value,
+      supCode:          document.getElementById('eSupCode').value,
+      discount_cash:    document.getElementById('mH').value,
+      buy_price:        document.getElementById('mI').value,
+      discount_percent: (parseFloat(document.getElementById('mJ').value)||0) / 100,
+      wholesale_percent:(parseFloat(selected.wholesale_percent)||0) / 100,
+      retail_percent:   (parseFloat(selected.retail_percent)   ||0) / 100,
+      buy_qty:          document.getElementById('mL').value,
+      free_qty:         document.getElementById('mM').value,
+      freight:          document.getElementById('mO').value,
+      tax:              document.getElementById('mQ').value,
+      cost_final:       document.getElementById('eCostR').value,
+      wholesale_price:  document.getElementById('eWholeU').value,
+      wholesale_calc:   document.getElementById('eWholeV').value,
+      retail_price:     document.getElementById('eRetailW').value,
+      retail_calc:      document.getElementById('eRetailX').value,
+      barcode_big:      bBig
+    };
+
+    google.script.run
+      .withFailureHandler(err => { Swal.close(); _fail(err); })
+      .withSuccessHandler(() => {
+        Swal.fire('สำเร็จ!','บันทึกข้อมูลเรียบร้อย','success').then(() => {
+          document.getElementById('editArea').style.display = 'none';
+          document.getElementById('results').style.display  = 'none';
+          document.getElementById('sInp').value = '';
+          window.scrollTo(0,0);
+        });
+      })
+      .processAndSaveAll(
+        imgData ? imgData.split(',')[1] : null,
+        document.getElementById('bcVal').value,
+        info
+      );
+  }
+</script>
+</body>
+</html>
