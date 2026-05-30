@@ -6,13 +6,14 @@ const SHEET_ID = "1ko72nyTpeQZ410eVALhlzZ2EhY7Qk0e340DAdQG8z4U"; // ← FIX #1: 
 
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) || 'index';
-  const pageMap = { index: 'Index', wms: 'wms' };
+  const pageMap = { index: 'Index', wms: 'wms', pricelist: 'pricelist' };
   const tpl = pageMap[page] || 'Index';
+  const titles = { wms: 'KLH WMS', pricelist: 'KLH Price List' };
   return HtmlService.createTemplateFromFile(tpl)
       .evaluate()
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .setTitle(page === 'wms' ? 'KLH WMS' : 'KLH V9.1');
+      .setTitle(titles[page] || 'KLH V9.1');
 }
 
 function include(filename) {
@@ -127,28 +128,111 @@ function addNewSupplier(data) {
   } catch(e) { return { status: "error", message: e.toString() }; }
 }
 
+// ── Debug (run this in GAS Editor to diagnose search) ────────
+function debugSearchTest() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  // แสดงชื่อ sheets ทั้งหมด
+  var allSheets = ss.getSheets().map(function(s){ return s.getName(); });
+  Logger.log('All sheets: ' + JSON.stringify(allSheets));
+  // ค่า TAB_SURVEY จาก CONFIG
+  var cfg = getConfig();
+  Logger.log('cfg.TAB_SURVEY = "' + cfg.TAB_SURVEY + '"');
+  // หา KLH DATA
+  var sheet = ss.getSheetByName('KLH DATA');
+  Logger.log('getSheetByName("KLH DATA") = ' + (sheet ? 'FOUND (' + sheet.getLastRow() + ' rows)' : 'NULL'));
+  if (!sheet) return 'NO SHEET';
+  // ลองค้นหา "หมึก"
+  var data = sheet.getDataRange().getValues();
+  var q = 'หมึก';
+  var found = [];
+  for (var i = 1; i < data.length; i++) {
+    var name = String(data[i][1] || '');
+    if (name.toLowerCase().indexOf(q) >= 0) found.push(data[i][0] + ':' + name);
+  }
+  Logger.log('Search "หมึก" found: ' + found.length + ' → ' + found.slice(0,5).join(', '));
+  // Unicode ของสินค้าแถว 5 (ITEM-0004)
+  if (data.length > 4) {
+    var nm = String(data[4][1] || '');
+    var codes = [];
+    for (var j=0;j<nm.length;j++) codes.push(nm.charCodeAt(j));
+    Logger.log('Row5 name="'+nm+'" codes='+codes.join(','));
+    var qcodes = [];
+    for (var k=0;k<q.length;k++) qcodes.push(q.charCodeAt(k));
+    Logger.log('Query "'+q+'" codes='+qcodes.join(','));
+    Logger.log('indexOf result: ' + nm.toLowerCase().indexOf(q));
+  }
+  return 'done — ดู Execution log';
+}
+
 function searchProductsFromSheet(query) {
   const cfg = getConfig();
-  const surveySheet = cfg.TAB_SURVEY ? String(cfg.TAB_SURVEY).trim() : "KLH DATA";
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(surveySheet);
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  const q = String(query).toLowerCase();
+  const ss = SpreadsheetApp.openById(SHEET_ID);
 
-  return data.slice(1).map((r, i) => ({
-    row: i + 2,
-    barcode: String(r[0]), name: r[1], category: r[2], size: r[3],
-    packMult: r[4], packUnit: r[5], supCode: r[6],
-    discount_cash: r[7], buy_price: r[8], discount_percent: r[9],
-    buy_qty: r[11], free_qty: r[12], freight: r[14], tax: r[16],
-    cost_final: r[17], wholesale_percent: r[18], retail_percent: r[19],
-    wholesale_price: r[20], retail_price: r[22],
-    barcode_big: String(r[27]), tax_entity: r[29], product_group: r[30]
-  })).filter(p =>
-    p.barcode.toLowerCase().includes(q) ||
-    p.barcode_big.toLowerCase().includes(q) ||
-    String(p.name).toLowerCase().includes(q)
-  );
+  // หา sheet แบบ case-insensitive (แก้ปัญหา "KLH Data" vs "KLH DATA")
+  const wantName = cfg.TAB_SURVEY ? String(cfg.TAB_SURVEY).trim() : 'KLH DATA';
+  let sheet = ss.getSheetByName(wantName);
+  if (!sheet) {
+    const upper = wantName.toUpperCase();
+    ss.getSheets().forEach(function(s) { if (!sheet && s.getName().toUpperCase() === upper) sheet = s; });
+  }
+  if (!sheet) sheet = ss.getSheetByName('KLH DATA');
+  if (!sheet) return [];
+
+  const data = sheet.getDataRange().getValues();
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  // sv = safe string (แปลง Date/Error → ''), sn = safe number
+  function sv(v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) return '';
+    try { var s = String(v); return (s === 'Error' || s.charAt(0) === '#') ? '' : s; }
+    catch(e) { return ''; }
+  }
+  function sn(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+  return data.slice(1).map(function(r, i) {
+    return {
+      row:               i + 2,
+      barcode:           sv(r[0]),   // A  BARCODE_SMALL
+      name:              sv(r[1]),   // B  PRODUCT_NAME
+      category:          sv(r[2]),   // C  CATEGORY
+      size:              sv(r[3]),   // D  SIZE_MODEL
+      packMult:          sn(r[4]),   // E  MULTIPLIER
+      packUnit:          sv(r[5]),   // F  UNIT_BIG
+      supCode:           sv(r[6]),   // G  SUPPLIER_CODE
+      discount_cash:     sn(r[7]),   // H  DISCOUNT_CASH
+      buy_price:         sn(r[8]),   // I  BUY_PRICE
+      discount_percent:  sn(r[9]),   // J  DISCOUNT_PERCENT
+      dis_per_val:       sn(r[10]),  // K  DIS_PER_VAL
+      buy_qty:           sn(r[11]),  // L  BUY_QTY
+      free_qty:          sn(r[12]),  // M  FREE_QTY
+      free_val:          sn(r[13]),  // N  FREE_VAL
+      freight:           sn(r[14]),  // O  FREIGHT
+      calc_cost:         sn(r[15]),  // P  CALC_COST
+      tax:               sn(r[16]),  // Q  TAX
+      cost_final:        sn(r[17]),  // R  COST_FINAL
+      wholesale_percent: sn(r[18]),  // S  WHOLESALE_PER
+      retail_percent:    sn(r[19]),  // T  RETAIL_PER
+      wholesale_price:   sn(r[20]),  // U  WHOLESALE_OLD
+      wholesale_calc:    sn(r[21]),  // V  WHOLESALE_NEW
+      retail_price:      sn(r[22]),  // W  RETAIL_OLD
+      retail_calc:       sn(r[23]),  // X  RETAIL_NEW
+      update_date:       '',         // Y  (skip Date object)
+      ref_cost_whole:    sn(r[25]),  // Z  REF_COST_WHOLE
+      ref_cost_retail:   sn(r[26]),  // AA REF_COST_RETAIL
+      barcode_big:       sv(r[27]),  // AB BARCODE_BIG
+      image_url:         sv(r[28]),  // AC IMAGE_URL
+      tax_entity:        sv(r[29]),  // AD TAX_ENTITY
+      product_group:     sv(r[30]),  // AE PRODUCT_GROUP
+      supplier_compare:  sv(r[31]),  // AF SUPPLIER_COMPARE
+      best_price_source: sv(r[32])   // AG BEST_PRICE_SOURCE
+    };
+  }).filter(function(p) {
+    return p.barcode.toLowerCase().indexOf(q) >= 0 ||
+           p.barcode_big.toLowerCase().indexOf(q) >= 0 ||
+           p.name.toLowerCase().indexOf(q) >= 0;
+  });
 }
 
 function processImageWithBgRemoval(imgBase64, config) {
@@ -173,7 +257,7 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(surveySheet);
   const row = info.row === -1 ? sheet.getLastRow() + 1 : info.row;
 
-  const rowData = new Array(31).fill("");
+  const rowData = new Array(33).fill("");
   rowData[0]  = barcodeSmall;
   rowData[1]  = info.name;
   rowData[2]  = info.category;
@@ -203,6 +287,8 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
   rowData[27] = info.barcode_big;
   rowData[29] = info.tax_entity;
   rowData[30] = info.product_group;
+  rowData[31] = info.supplier_compare  || '';  // AF: SUPPLIER_COMPARE
+  rowData[32] = info.best_price_source || '';  // AG: BEST_PRICE_SOURCE
 
   // บันทึกรูปภาพ
   if (imgBase64 && cfg.TEMP_FOLDER_ID) {
@@ -216,7 +302,7 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
     } catch(err) { Logger.log("Image save error: " + err); }
   }
 
-  sheet.getRange(row, 1, 1, 31).setValues([rowData]);
+  sheet.getRange(row, 1, 1, 33).setValues([rowData]);
 
   // บันทึก STOCK_LOG
   try {
@@ -258,11 +344,93 @@ function doPost(e) {
 function getLineGroupId() {
   const cfg   = getConfig();
   const token = cfg.LINE_CHANNEL_TOKEN;
-  
-  // ดึงรายการกลุ่มที่ bot อยู่ (ต้องส่งข้อความในกลุ่มก่อน 1 ครั้ง)
   const res = UrlFetchApp.fetch(
-    "https://api.line.me/v2/bot/message/replyToken",  
+    "https://api.line.me/v2/bot/message/replyToken",
     { headers: { "Authorization": "Bearer " + token } }
   );
   Logger.log(res.getContentText());
+}
+
+// ── Price List Data (แยก 2 ฟังก์ชัน: หมวด + สินค้า) ─────────
+function klhDataSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = null;
+  try {
+    var cfg = getConfig();
+    if (cfg && cfg.TAB_SURVEY) sheet = ss.getSheetByName(String(cfg.TAB_SURVEY).trim());
+  } catch(e) {}
+  return sheet || ss.getSheetByName('KLH DATA');
+}
+
+// ① โหลดหมวดหมู่ (เร็ว — return แค่ชื่อหมวด + จำนวน)
+function getPriceListCategories() {
+  try {
+    var ss  = SpreadsheetApp.openById(SHEET_ID);
+
+    // ลำดับจาก PRODUCT_CATEGORY
+    var catOrder = [];
+    var catSheet = ss.getSheetByName('PRODUCT_CATEGORY');
+    if (catSheet && catSheet.getLastRow() > 1) {
+      catSheet.getDataRange().getValues().slice(1).forEach(function(r) {
+        var nm = String(r[1] || r[0] || '').trim();
+        if (nm && catOrder.indexOf(nm) < 0) catOrder.push(nm);
+      });
+    }
+
+    // อ่านเฉพาะ col A (barcode) + col C (category) จาก KLH DATA
+    var klh = klhDataSheet_();
+    if (!klh) return { ok: false, msg: 'ไม่พบ Sheet KLH DATA' };
+    var data = klh.getDataRange().getValues();
+    var count = {};
+    var seen  = [];
+    data.slice(1).forEach(function(r) {
+      if (!String(r[0] || '').trim()) return;
+      var cat = String(r[2] || '').trim() || 'ไม่ระบุหมวด';
+      if (!count[cat]) { count[cat] = 0; seen.push(cat); }
+      count[cat]++;
+    });
+
+    var ordered = [];
+    catOrder.forEach(function(c) { if (count[c]) ordered.push(c); });
+    seen.forEach(function(c)     { if (ordered.indexOf(c) < 0) ordered.push(c); });
+
+    var categories = ordered.map(function(c) { return { name: c, count: count[c] }; });
+    Logger.log('getPriceListCategories: ' + categories.length + ' หมวด, ' + (data.length-1) + ' สินค้า');
+    return { ok: true, categories: categories, sheetName: klh.getName() };
+  } catch(e) {
+    Logger.log('getPriceListCategories ERROR: ' + e);
+    return { ok: false, msg: e.message || String(e) };
+  }
+}
+
+// ② โหลดสินค้าทีละหมวด
+function getPriceListItems(catName) {
+  try {
+    var klh = klhDataSheet_();
+    if (!klh) return { ok: false, msg: 'ไม่พบ Sheet KLH DATA' };
+    var data = klh.getDataRange().getValues();
+    var items = [];
+    data.slice(1).forEach(function(r) {
+      var barcode = String(r[0] || '').trim();
+      if (!barcode) return;
+      var cat = String(r[2] || '').trim() || 'ไม่ระบุหมวด';
+      if (cat !== catName) return;
+      var safeN = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
+      items.push({
+        barcode:   barcode,
+        name:      String(r[1]  || ''),
+        size:      String(r[3]  || ''),
+        mult:      safeN(r[4])  || 1,
+        unit:      String(r[5]  || ''),
+        cost:      safeN(r[17]),
+        retail:    safeN(r[22]),
+        wholesale: safeN(r[20])
+      });
+    });
+    Logger.log('getPriceListItems: ' + catName + ' = ' + items.length + ' รายการ');
+    return { ok: true, items: items };
+  } catch(e) {
+    Logger.log('getPriceListItems ERROR: ' + e);
+    return { ok: false, msg: e.message || String(e) };
+  }
 }

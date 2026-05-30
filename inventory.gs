@@ -77,14 +77,42 @@ function getWarehouses_() {
 }
 
 // ── SKU Lookup ────────────────────────────────────────────────
+// Reads from KLH DATA (primary) falling back to PRODUCTS sheet
 function lookupSkuForWms(sku) {
   try {
-    const s = ss_().getSheetByName('PRODUCTS');
-    if (!s) return null;
-    const rows = s.getDataRange().getValues();
-    for (let i = 1; i < rows.length; i++) {
-      if (String(rows[i][0]).trim() === String(sku).trim())
-        return { sku: rows[i][0], name: rows[i][1], unit: rows[i][2], entity: rows[i][3] };
+    const skuStr = String(sku).trim();
+    const cfg = getConfig();
+    const klhSheet = ss_().getSheetByName(cfg.TAB_SURVEY || 'KLH DATA');
+    if (klhSheet) {
+      const rows = klhSheet.getDataRange().getValues();
+      for (let i = 1; i < rows.length; i++) {
+        const bSmall = String(rows[i][0] || '').trim();   // A: BARCODE_SMALL
+        const bBig   = String(rows[i][27] || '').trim();  // AB: BARCODE_BIG
+        if (bSmall === skuStr || (bBig && bBig === skuStr)) {
+          return {
+            sku:          rows[i][0],
+            name:         rows[i][1],           // B: PRODUCT_NAME
+            unit:         rows[i][5]  || '',    // F: UNIT_BIG (ลัง/แพ็ค)
+            entity:       rows[i][29] || '',    // AD: TAX_ENTITY
+            convRate:     Number(rows[i][4]) || 1,  // E: MULTIPLIER
+            baseUnit:     'ชิ้น',
+            barcodeLarge: bBig
+          };
+        }
+      }
+    }
+    // Fallback: PRODUCTS sheet
+    const ps = ss_().getSheetByName('PRODUCTS');
+    if (!ps) return null;
+    const pRows = ps.getDataRange().getValues();
+    for (let i = 1; i < pRows.length; i++) {
+      if (String(pRows[i][0]).trim() === skuStr)
+        return {
+          sku: pRows[i][0], name: pRows[i][1], unit: pRows[i][2], entity: pRows[i][3],
+          convRate:     Number(pRows[i][4]) || 1,
+          baseUnit:     String(pRows[i][5] || pRows[i][2] || ''),
+          barcodeLarge: String(pRows[i][6] || '')
+        };
     }
     return null;
   } catch(e) { return null; }
@@ -155,16 +183,28 @@ function receiveGoods(d) {
   lock.waitLock(15000);
   try {
     const { sku, whId, qty, cost, ref, note, entity, pName, unit, date } = d;
+    const convRate = Math.max(1, Number(d.convRate) || 1);
+    const baseUnit = d.baseUnit || unit || '';
     const q = Number(qty), c = Number(cost) || 0;
     if (!sku || !whId || q <= 0) return { ok: false, msg: 'ข้อมูลไม่ครบ: SKU / คลัง / จำนวน' };
 
+    // Convert to base unit (pieces) for storage
+    const piecesQty   = q * convRate;
+    const costPerPiece = convRate > 1 ? (c / convRate) : c;  // c = cost per large unit
+    const logNote = convRate > 1
+      ? (q + ' ' + (unit||'') + ' × ' + convRate + ' = ' + piecesQty + ' ' + baseUnit + (note ? ' | ' + note : ''))
+      : (note || '');
+
     const txDate = date ? fmt_(new Date(date), 'yyyy-MM-dd') : fmt_(now_(), 'yyyy-MM-dd');
     sh_(SH_LOG).appendRow([txDate, fmt_(now_(),'HH:mm:ss'),
-      'IN', sku, pName||sku, entity||'', whId, q, unit||'', c, q*c, ref||'', user_(), note||'']);
-    addBatch_(sku, whId, q, c, ref||'');
-    const newQ = updateBal_(sku, pName, whId, q, c);
+      'IN', sku, pName||sku, entity||'', whId,
+      piecesQty, baseUnit, costPerPiece, piecesQty * costPerPiece,
+      ref||'', user_(), logNote]);
+    addBatch_(sku, whId, piecesQty, costPerPiece, ref||'');
+    const newQ = updateBal_(sku, pName, whId, piecesQty, costPerPiece);
     ropAlert_(sku, whId, newQ);
-    return { ok: true, msg: `รับสินค้า ${sku} × ${q} → ${whId} สำเร็จ`, newQty: newQ };
+    const dispQty = convRate > 1 ? (q + ' ' + (unit||'') + ' (' + piecesQty + ' ' + baseUnit + ')') : (q + ' ' + (unit||''));
+    return { ok: true, msg: 'รับสินค้า ' + sku + ' × ' + dispQty + ' → ' + whId + ' สำเร็จ', newQty: newQ };
   } catch(e) { return { ok: false, msg: e.message }; }
   finally { lock.releaseLock(); }
 }
@@ -354,36 +394,44 @@ function seedTestData() {
   let prod = ss.getSheetByName('PRODUCTS');
   if (!prod) {
     prod = ss.insertSheet('PRODUCTS');
-    prod.getRange(1,1,1,4).setValues([['SKU','Product_Name','Unit','Entity']])
-      .setBackground('#1565C0').setFontColor('#fff').setFontWeight('bold');
     prod.setFrozenRows(1);
   }
+  // Always ensure latest 7-col header (SKU / Product_Name / Unit / Entity / Conv_Rate / Base_Unit / Barcode_Large)
+  const prodHdrCheck = prod.getLastRow() > 0 ? prod.getRange(1,1,1,7).getValues()[0] : [];
+  if (prodHdrCheck[4] !== 'Conv_Rate') {
+    prod.getRange(1,1,1,7).setValues([['SKU','Product_Name','Unit','Entity','Conv_Rate','Base_Unit','Barcode_Large']])
+      .setBackground('#1565C0').setFontColor('#fff').setFontWeight('bold');
+    prod.setFrozenRows(1);
+    Logger.log('PRODUCTS: อัปเดต header เป็น 7 คอลัมน์');
+  }
   if (prod.getLastRow() <= 1) {
-    prod.getRange(2,1,8,4).setValues([
-      ['SKU001','น้ำดื่มตรา KLH 600ml (แพ็ก 12)',    'แพ็ก', 'หจก.เค แอล เอช'],
-      ['SKU002','น้ำดื่มตรา KLH 1.5L (แพ็ก 6)',     'แพ็ก', 'หจก.เค แอล เอช'],
-      ['SKU003','น้ำอัดลม 325ml (ลัง 24)',           'ลัง',  'หจก.เค แอล เอช'],
-      ['SKU004','ขนมกรุบกรอบ (ลัง 36 ซอง)',         'ลัง',  'กวงล่งเฮง'],
-      ['SKU005','บะหมี่กึ่งสำเร็จรูป (ลัง 30 ซอง)', 'ลัง',  'หจก.เค แอล เอช'],
-      ['SKU006','ข้าวสารหอมมะลิ 5kg',               'ถุง',  'หจก.เค แอล เอช'],
-      ['SKU007','น้ำตาลทราย 1kg',                   'ถุง',  'เอี่ยมเช็ง'],
-      ['SKU008','น้ำมันพืช 1L',                     'ขวด', 'หจก.เค แอล เอช'],
+    // Unit = large unit (ลัง/แพ็ก), Conv_Rate = pieces per large unit, Base_Unit = piece name
+    prod.getRange(2,1,8,7).setValues([
+      ['SKU001','น้ำดื่มตรา KLH 600ml (แพ็ก 12)',    'แพ็ก', 'หจก.เค แอล เอช', 12, 'ขวด',    ''],
+      ['SKU002','น้ำดื่มตรา KLH 1.5L (แพ็ก 6)',     'แพ็ก', 'หจก.เค แอล เอช',  6, 'ขวด',    ''],
+      ['SKU003','น้ำอัดลม 325ml (ลัง 24)',           'ลัง',  'หจก.เค แอล เอช', 24, 'กระป๋อง',''],
+      ['SKU004','ขนมกรุบกรอบ (ลัง 36 ซอง)',         'ลัง',  'กวงล่งเฮง',       36, 'ซอง',    ''],
+      ['SKU005','บะหมี่กึ่งสำเร็จรูป (ลัง 30 ซอง)', 'ลัง',  'หจก.เค แอล เอช', 30, 'ซอง',    ''],
+      ['SKU006','ข้าวสารหอมมะลิ 5kg',               'ถุง',  'หจก.เค แอล เอช',  1, 'ถุง',    ''],
+      ['SKU007','น้ำตาลทราย 1kg',                   'ถุง',  'เอี่ยมเช็ง',       1, 'ถุง',    ''],
+      ['SKU008','น้ำมันพืช 1L',                     'ขวด', 'หจก.เค แอล เอช',   1, 'ขวด',   ''],
     ]);
     Logger.log('PRODUCTS: สร้าง 8 รายการ');
   } else {
     Logger.log('PRODUCTS: มีข้อมูลอยู่แล้ว ไม่ overwrite');
   }
 
-  // 2) Receive stock into W1 (คลังกลาง) via receiveGoods
+  // 2) Receive stock into W1 — stored as base units (pieces), cost per piece
+  // qty = large units received, convRate = pieces per large unit, cost = cost per large unit
   var testStock = [
-    { sku:'SKU001', pName:'น้ำดื่ม 600ml (แพ็ก 12)',     unit:'แพ็ก', qty:120, cost:45,   entity:'หจก.เค แอล เอช' },
-    { sku:'SKU002', pName:'น้ำดื่ม 1.5L (แพ็ก 6)',       unit:'แพ็ก', qty:80,  cost:65,   entity:'หจก.เค แอล เอช' },
-    { sku:'SKU003', pName:'น้ำอัดลม 325ml (ลัง 24)',     unit:'ลัง',  qty:50,  cost:180,  entity:'หจก.เค แอล เอช' },
-    { sku:'SKU004', pName:'ขนมกรุบกรอบ (ลัง 36)',        unit:'ลัง',  qty:40,  cost:320,  entity:'กวงล่งเฮง' },
-    { sku:'SKU005', pName:'บะหมี่กึ่งสำเร็จรูป (ลัง 30)',unit:'ลัง',  qty:60,  cost:270,  entity:'หจก.เค แอล เอช' },
-    { sku:'SKU006', pName:'ข้าวสารหอมมะลิ 5kg',         unit:'ถุง',  qty:200, cost:185,  entity:'หจก.เค แอล เอช' },
-    { sku:'SKU007', pName:'น้ำตาลทราย 1kg',             unit:'ถุง',  qty:150, cost:22,   entity:'เอี่ยมเช็ง' },
-    { sku:'SKU008', pName:'น้ำมันพืช 1L',               unit:'ขวด', qty:90,  cost:48,   entity:'หจก.เค แอล เอช' },
+    { sku:'SKU001', pName:'น้ำดื่ม 600ml',          unit:'แพ็ก', baseUnit:'ขวด',    qty:120, convRate:12, cost:45,  entity:'หจก.เค แอล เอช' },
+    { sku:'SKU002', pName:'น้ำดื่ม 1.5L',           unit:'แพ็ก', baseUnit:'ขวด',    qty:80,  convRate:6,  cost:65,  entity:'หจก.เค แอล เอช' },
+    { sku:'SKU003', pName:'น้ำอัดลม 325ml',         unit:'ลัง',  baseUnit:'กระป๋อง',qty:50,  convRate:24, cost:180, entity:'หจก.เค แอล เอช' },
+    { sku:'SKU004', pName:'ขนมกรุบกรอบ',            unit:'ลัง',  baseUnit:'ซอง',    qty:40,  convRate:36, cost:320, entity:'กวงล่งเฮง' },
+    { sku:'SKU005', pName:'บะหมี่กึ่งสำเร็จรูป',   unit:'ลัง',  baseUnit:'ซอง',    qty:60,  convRate:30, cost:270, entity:'หจก.เค แอล เอช' },
+    { sku:'SKU006', pName:'ข้าวสารหอมมะลิ 5kg',    unit:'ถุง',  baseUnit:'ถุง',    qty:200, convRate:1,  cost:185, entity:'หจก.เค แอล เอช' },
+    { sku:'SKU007', pName:'น้ำตาลทราย 1kg',        unit:'ถุง',  baseUnit:'ถุง',    qty:150, convRate:1,  cost:22,  entity:'เอี่ยมเช็ง' },
+    { sku:'SKU008', pName:'น้ำมันพืช 1L',          unit:'ขวด', baseUnit:'ขวด',    qty:90,  convRate:1,  cost:48,  entity:'หจก.เค แอล เอช' },
   ];
 
   // Check if STOCK_BALANCE already has data
@@ -394,15 +442,20 @@ function seedTestData() {
     var today = fmt_(now_(), 'yyyy-MM-dd');
     var logSh = sh_(SH_LOG);
     testStock.forEach(function(item) {
-      // Write STOCK_LOG
+      var piecesQty    = item.qty * item.convRate;
+      var costPerPiece = item.cost / item.convRate;
+      var logNote      = item.convRate > 1
+        ? (item.qty + ' ' + item.unit + ' × ' + item.convRate + ' = ' + piecesQty + ' ' + item.baseUnit + ' | SEED')
+        : 'SEED-INIT';
+      // Write STOCK_LOG (quantities in base units)
       logSh.appendRow([today, fmt_(now_(),'HH:mm:ss'),
         'IN', item.sku, item.pName, item.entity, 'W1',
-        item.qty, item.unit, item.cost, item.qty * item.cost,
-        'SEED-INIT', 'system', 'ข้อมูลเริ่มต้นทดสอบ']);
-      // Write FIFO_BATCH
-      addBatch_(item.sku, 'W1', item.qty, item.cost, 'SEED-INIT');
-      // Write STOCK_BALANCE
-      updateBal_(item.sku, item.pName, 'W1', item.qty, item.cost);
+        piecesQty, item.baseUnit, costPerPiece, piecesQty * costPerPiece,
+        'SEED-INIT', 'system', logNote]);
+      // Write FIFO_BATCH (pieces, cost per piece)
+      addBatch_(item.sku, 'W1', piecesQty, costPerPiece, 'SEED-INIT');
+      // Write STOCK_BALANCE (pieces)
+      updateBal_(item.sku, item.pName, 'W1', piecesQty, costPerPiece);
     });
     Logger.log('STOCK_BALANCE: seed ' + testStock.length + ' SKU เข้า W1 สำเร็จ');
   }
