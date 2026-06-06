@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>POS Handheld — แบบ B (รายการเร็ว)</title>
+<link rel="stylesheet" href="pos.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  .stage-solo { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="data.js"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="variants.jsx"></script>
+<script type="text/babel">
+function App() {
+  return (
+    <div className="stage stage-solo">
+      <div className="dev">
+        <div className="dev-screen"><VariantList /></div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="20" fill="#E94E27"/>
+  <rect x="30" y="22" width="40" height="56" rx="6" fill="#fff"/>
+  <rect x="34" y="30" width="9" height="42" rx="2" fill="#FBE3D8"/>
+  <rect x="46" y="32" width="20" height="5" rx="2.5" fill="#221E1A"/>
+  <rect x="46" y="41" width="14" height="4" rx="2" fill="#C73A1B"/>
+  <rect x="46" y="50" width="20" height="5" rx="2.5" fill="#221E1A"/>
+  <rect x="46" y="59" width="14" height="4" rx="2" fill="#C73A1B"/>
+</svg>
+</template>
+</body>
+</html>

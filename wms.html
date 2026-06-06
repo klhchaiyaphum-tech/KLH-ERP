@@ -117,32 +117,42 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-12">
-          <label class="form-label">SKU / บาร์โค้ด</label>
+          <label class="form-label">รหัสสินค้า / บาร์โค้ด</label>
           <div class="input-group">
-            <input type="text" id="rcvSku" class="form-control" placeholder="สแกนหรือพิมพ์ SKU" onchange="lookupSku(this.value,'rcvName','rcvUnit','rcvEntity')">
+            <input type="text" id="rcvSku" class="form-control" placeholder="สแกนหรือพิมพ์รหัสสินค้า" onchange="lookupSkuReceive(this.value)">
             <button class="btn-scan" onclick="openScanner('rcvSku','rcvName','rcvUnit','rcvEntity')"><i class="bi bi-camera"></i></button>
           </div>
         </div>
         <div class="col-8">
           <label class="form-label">ชื่อสินค้า</label>
-          <input type="text" id="rcvName" class="form-control" placeholder="(auto-fill จาก SKU)">
+          <input type="text" id="rcvName" class="form-control" placeholder="(auto-fill จากรหัสสินค้า)">
         </div>
         <div class="col-4">
-          <label class="form-label">หน่วย</label>
-          <input type="text" id="rcvUnit" class="form-control" placeholder="ลัง/กล่อง">
+          <label class="form-label">หน่วยใหญ่</label>
+          <input type="text" id="rcvUnit" class="form-control" placeholder="ลัง/แพ็ก">
         </div>
         <div class="col-12">
           <label class="form-label">คลังปลายทาง</label>
           <select id="rcvWh" class="form-select"></select>
         </div>
         <div class="col-6">
-          <label class="form-label">จำนวน</label>
-          <input type="number" id="rcvQty" class="form-control" placeholder="0" min="1">
+          <label class="form-label">จำนวน (<span id="rcvUnitLabel">หน่วย</span>)</label>
+          <input type="number" id="rcvQty" class="form-control" placeholder="0" min="1" oninput="calcRcvPieces()">
         </div>
         <div class="col-6">
-          <label class="form-label">ต้นทุน/หน่วย (฿)</label>
-          <input type="number" id="rcvCost" class="form-control" placeholder="0.00" min="0" step="0.01">
+          <label class="form-label">ต้นทุน/<span id="rcvUnitLabel2">หน่วย</span> (฿)</label>
+          <input type="number" id="rcvCost" class="form-control" placeholder="0.00" min="0" step="0.01" oninput="calcRcvPieces()">
         </div>
+        <!-- Conversion info row (shown when convRate > 1) -->
+        <div class="col-12" id="rcvConvInfo" style="display:none">
+          <div class="alert alert-info py-2 mb-0 small">
+            รับเข้า: <b id="rcvPiecesTotal">0</b> <span id="rcvBaseUnitLabel">ชิ้น</span>
+            &nbsp;|&nbsp; ต้นทุน/ชิ้น: <b id="rcvCostPerPiece">0.00</b> ฿
+            &nbsp;|&nbsp; รวม: <b id="rcvTotalCost">0.00</b> ฿
+          </div>
+        </div>
+        <input type="hidden" id="rcvConvRate" value="1">
+        <input type="hidden" id="rcvBaseUnit" value="">
         <div class="col-6">
           <label class="form-label">เลขที่ PO/ใบกำกับ</label>
           <input type="text" id="rcvRef" class="form-control" placeholder="PO-XXXXXX">
@@ -178,9 +188,9 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-12">
-          <label class="form-label">SKU / บาร์โค้ด</label>
+          <label class="form-label">รหัสสินค้า / บาร์โค้ด</label>
           <div class="input-group">
-            <input type="text" id="trfSku" class="form-control" placeholder="สแกนหรือพิมพ์ SKU" onchange="lookupSku(this.value,'trfName','trfUnit','trfEntity'); loadSkuStock(this.value)">
+            <input type="text" id="trfSku" class="form-control" placeholder="สแกนหรือพิมพ์รหัสสินค้า" onchange="lookupSku(this.value,'trfName','trfUnit','trfEntity'); loadSkuStock(this.value)">
             <button class="btn-scan" onclick="openScanner('trfSku','trfName','trfUnit','trfEntity')"><i class="bi bi-camera"></i></button>
           </div>
         </div>
@@ -238,7 +248,11 @@
         <option value="">ทุกคลัง</option>
       </select>
       <input type="text" id="stockSearch" class="form-control form-control-sm" style="width:180px" placeholder="🔍 ค้นหา SKU/ชื่อ" oninput="filterStock()">
-      <button class="btn btn-sm btn-outline-light ms-auto" onclick="openAdjustModal()"><i class="bi bi-pencil-square"></i> ปรับสต็อก</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.8rem;cursor:pointer;margin-left:auto">
+        <input type="checkbox" id="showAllToggle" onchange="toggleShowAll(this.checked)">
+        แสดงทุกสินค้า KLH DATA
+      </label>
+      <button class="btn btn-sm btn-outline-light" onclick="openAdjustModal()"><i class="bi bi-pencil-square"></i> ปรับสต็อก</button>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -506,6 +520,44 @@ function lookupSku(sku, nameId, unitId, entityId) {
     .lookupSkuForWms(sku.trim());
 }
 
+function lookupSkuReceive(sku) {
+  if (!sku.trim()) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res) return;
+      document.getElementById('rcvName').value   = res.name   || '';
+      document.getElementById('rcvUnit').value   = res.unit   || '';
+      document.getElementById('rcvEntity').value = res.entity || '';
+      var cr = Number(res.convRate) || 1;
+      var bu = res.baseUnit || res.unit || '';
+      document.getElementById('rcvConvRate').value = cr;
+      document.getElementById('rcvBaseUnit').value  = bu;
+      document.getElementById('rcvUnitLabel').textContent  = res.unit || 'หน่วย';
+      document.getElementById('rcvUnitLabel2').textContent = res.unit || 'หน่วย';
+      document.getElementById('rcvBaseUnitLabel').textContent = bu;
+      calcRcvPieces();
+    })
+    .withFailureHandler(function(){})
+    .lookupSkuForWms(sku.trim());
+}
+
+function calcRcvPieces() {
+  var qty  = Number(document.getElementById('rcvQty').value)  || 0;
+  var cost = Number(document.getElementById('rcvCost').value) || 0;
+  var cr   = Number(document.getElementById('rcvConvRate').value) || 1;
+  var infoEl = document.getElementById('rcvConvInfo');
+  if (cr > 1 && qty > 0) {
+    var pieces    = qty * cr;
+    var perPiece  = cr > 0 ? cost / cr : 0;
+    document.getElementById('rcvPiecesTotal').textContent  = pieces;
+    document.getElementById('rcvCostPerPiece').textContent = perPiece.toFixed(2);
+    document.getElementById('rcvTotalCost').textContent    = (pieces * perPiece).toFixed(2);
+    infoEl.style.display = 'block';
+  } else {
+    infoEl.style.display = 'none';
+  }
+}
+
 function loadSkuStock(sku) {
   if (!sku.trim()) return;
   var skuVal = sku.trim();
@@ -525,13 +577,15 @@ function loadSkuStock(sku) {
 // ── TAB 1: Receive ──────────────────────────────────────────
 function submitReceive() {
   var d = {
-    sku:    v('rcvSku'),   whId:   v('rcvWh'),
-    qty:    v('rcvQty'),   cost:   v('rcvCost'),
-    ref:    v('rcvRef'),   note:   v('rcvNote'),
-    entity: v('rcvEntity'),pName:  v('rcvName'),
-    unit:   v('rcvUnit'),  date:   v('rcvDate'),
+    sku:      v('rcvSku'),    whId:     v('rcvWh'),
+    qty:      v('rcvQty'),    cost:     v('rcvCost'),
+    ref:      v('rcvRef'),    note:     v('rcvNote'),
+    entity:   v('rcvEntity'), pName:    v('rcvName'),
+    unit:     v('rcvUnit'),   date:     v('rcvDate'),
+    convRate: v('rcvConvRate') || '1',
+    baseUnit: v('rcvBaseUnit'),
   };
-  if (!d.sku)  { Swal.fire('แจ้งเตือน','กรุณาระบุ SKU','warning'); return; }
+  if (!d.sku)  { Swal.fire('แจ้งเตือน','กรุณาระบุรหัสสินค้า','warning'); return; }
   if (!d.whId) { Swal.fire('แจ้งเตือน','กรุณาเลือกคลัง','warning'); return; }
   if (!d.qty || Number(d.qty)<=0) { Swal.fire('แจ้งเตือน','กรุณาระบุจำนวน','warning'); return; }
   showLoading('กำลังบันทึก...');
@@ -541,6 +595,11 @@ function submitReceive() {
       if (res.ok) {
         Swal.fire({icon:'success',title:'สำเร็จ',text:res.msg,timer:2500,showConfirmButton:false});
         clearForm(['rcvSku','rcvName','rcvUnit','rcvQty','rcvCost','rcvRef','rcvNote','rcvEntity']);
+        document.getElementById('rcvConvRate').value = '1';
+        document.getElementById('rcvBaseUnit').value = '';
+        document.getElementById('rcvConvInfo').style.display = 'none';
+        document.getElementById('rcvUnitLabel').textContent  = 'หน่วย';
+        document.getElementById('rcvUnitLabel2').textContent = 'หน่วย';
         refreshStock();
       } else { Swal.fire('ไม่สำเร็จ',res.msg,'error'); }
     })
@@ -607,11 +666,18 @@ function filterStock() {
   document.getElementById('stockSummary').textContent = rows.length+' รายการ | '+Object.keys(totalSkus).length+' SKU';
 }
 
+var _showAll = false;
+function toggleShowAll(v) {
+  _showAll = v;
+  refreshStock();
+}
 function refreshStock() {
+  var whFilter = v('stockWhFilter');
+  showLoading('โหลดสต็อก...');
   google.script.run
-    .withSuccessHandler(function(data){ renderStockTable(data); })
-    .withFailureHandler(function(){})
-    .getStockBalance('');
+    .withSuccessHandler(function(data){ hideLoading(); renderStockTable(data||[]); })
+    .withFailureHandler(function(){ hideLoading(); })
+    .getStockBalance(whFilter, _showAll);
 }
 
 function openAdjustModal() {

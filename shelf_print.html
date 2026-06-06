@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>KLH Shelf Label Print</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"IBM Plex Sans Thai",sans-serif;background:#E8E8E8;}
+
+/* Controls bar */
+.ctrl{background:#2C3E50;color:#fff;padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;}
+.cg{display:flex;align-items:center;gap:4px;}
+.cg label{color:rgba(255,255,255,.7);white-space:nowrap;}
+.ci{width:42px;padding:3px 5px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;border-radius:4px;text-align:center;font-size:12px;font-family:inherit;}
+.sep{width:1px;background:rgba(255,255,255,.2);height:20px;}
+.nav{display:flex;align-items:center;gap:6px;margin-left:8px;}
+.nb{background:rgba(255,255,255,.2);color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;}
+.nb:hover{background:rgba(255,255,255,.35);}
+.np{color:#fff;font-size:12px;min-width:40px;text-align:center;}
+.btn-print{background:#E94E27;color:#fff;border:none;padding:7px 18px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;}
+.btn-print:hover{background:#C73A1B;}
+.price-type{display:flex;gap:8px;}
+.pt label{display:flex;align-items:center;gap:3px;cursor:pointer;color:rgba(255,255,255,.85);font-size:12px;}
+
+/* Arrow controls */
+.arrow-bar{background:#1a252f;padding:8px 16px;display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;}
+.arrow-group{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.ag-label{font-size:11px;color:rgba(255,255,255,.65);font-weight:600;}
+.ag-grid{display:grid;grid-template-columns:repeat(3,26px);grid-template-rows:repeat(3,26px);gap:2px;}
+.ab{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;width:26px;height:26px;}
+.ab:hover{background:rgba(255,255,255,.3);}
+.ab:active{background:var(--brand);}
+@media print{.arrow-bar{display:none!important;}}
+
+/* Preview area */
+.preview{display:flex;flex-direction:column;align-items:center;padding:20px;gap:16px;}
+.lw{width:80mm;height:40mm;position:relative;background:#fff;box-shadow:0 3px 12px rgba(0,0,0,.2);overflow:hidden;border:1px solid #ccc;}
+.lbl{position:absolute;cursor:move;user-select:none;line-height:1.2;}
+.lbl:hover{outline:1px dashed rgba(233,78,39,.5);}
+.lbl-name{font-size:14px;font-weight:800;color:#1A1A1A;max-width:74mm;}
+.lbl-price{font-size:24px;font-weight:900;color:#E94E27;}
+.lbl-ws{font-size:13px;font-weight:700;color:#1565C0;}
+.lbl-bc{position:absolute;bottom:2mm;left:2mm;}
+.page-info{font-size:12px;color:#666;text-align:center;}
+.hint{font-size:11px;color:#999;text-align:center;}
+
+@media print{
+  .ctrl,.page-info,.hint{display:none!important;}
+  body{background:none;}
+  .preview{padding:0;gap:0;}
+  .lw{box-shadow:none;border:none;page-break-after:always;}
+}
+</style>
+</head>
+<body>
+
+<div class="ctrl">
+  <!-- Name position -->
+  <div class="cg"><label>ชื่อ T</label><input class="ci" id="nT" type="number" value="4" step="0.5" oninput="upd()"></div>
+  <div class="cg"><label>L</label><input class="ci" id="nL" type="number" value="3" step="0.5" oninput="upd()"></div>
+  <div class="cg"><label>ขนาด</label><input class="ci" id="nS" type="number" value="14" step="0.5" oninput="upd()"></div>
+  <div class="sep"></div>
+  <!-- Price position -->
+  <div class="cg"><label>ราคา T</label><input class="ci" id="pT" type="number" value="15" step="0.5" oninput="upd()"></div>
+  <div class="cg"><label>L</label><input class="ci" id="pL" type="number" value="3" step="0.5" oninput="upd()"></div>
+  <div class="cg"><label>ขนาด</label><input class="ci" id="pS" type="number" value="24" step="0.5" oninput="upd()"></div>
+  <div class="sep"></div>
+  <!-- Price type -->
+  <div class="price-type">
+    <div class="pt"><label><input type="radio" name="pt" value="retail" checked onchange="upd()"> ปลีก</label></div>
+    <div class="pt"><label><input type="radio" name="pt" value="ws" onchange="upd()"> ส่ง</label></div>
+    <div class="pt"><label><input type="radio" name="pt" value="both" onchange="upd()"> ทั้งคู่</label></div>
+  </div>
+  <!-- Navigation -->
+  <div class="nav">
+    <button class="nb" onclick="prev()">◀</button>
+    <span class="np" id="navInfo">1/1</span>
+    <button class="nb" onclick="next()">▶</button>
+  </div>
+  <button class="btn-print" id="btnPrint" onclick="printAll()">🖨️ พิมพ์ (<span id="totalCount">0</span>)</button>
+</div>
+
+<!-- Hidden inputs for ws position -->
+<input type="hidden" id="wT" value="30">
+<input type="hidden" id="wL" value="3">
+<!-- Arrow controls row (like Survey modal) -->
+<div class="arrow-bar" id="arrowBar">
+  <div class="arrow-group">
+    <div class="ag-label">ขยับชื่อ</div>
+    <div class="ag-grid">
+      <div></div><button class="ab" onclick="nudge('n','t',-1)">▲</button><div></div>
+      <button class="ab" onclick="nudge('n','l',-1)">◀</button><div></div><button class="ab" onclick="nudge('n','l',1)">▶</button>
+      <div></div><button class="ab" onclick="nudge('n','t',1)">▼</button><div></div>
+    </div>
+  </div>
+  <div class="arrow-group">
+    <div class="ag-label">ขยับราคา</div>
+    <div class="ag-grid">
+      <div></div><button class="ab" onclick="nudge('p','t',-1)">▲</button><div></div>
+      <button class="ab" onclick="nudge('p','l',-1)">◀</button><div></div><button class="ab" onclick="nudge('p','l',1)">▶</button>
+      <div></div><button class="ab" onclick="nudge('p','t',1)">▼</button><div></div>
+    </div>
+  </div>
+  <div class="arrow-group" id="wsArrow" style="display:none">
+    <div class="ag-label">ขยับราคาส่ง</div>
+    <div class="ag-grid">
+      <div></div><button class="ab" onclick="nudge('w','t',-1)">▲</button><div></div>
+      <button class="ab" onclick="nudge('w','l',-1)">◀</button><div></div><button class="ab" onclick="nudge('w','l',1)">▶</button>
+      <div></div><button class="ab" onclick="nudge('w','t',1)">▼</button><div></div>
+    </div>
+  </div>
+  <div class="arrow-group" style="margin-left:auto">
+    <div class="ag-label">ขนาดราคา</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+      <button class="ab" style="width:28px" onclick="nudgeSize('pS',-1)">−</button>
+      <span id="pSizeVal" style="font-size:11px;color:#fff;min-width:25px;text-align:center"></span>
+      <button class="ab" style="width:28px" onclick="nudgeSize('pS',1)">+</button>
+    </div>
+  </div>
+</div>
+
+<div class="preview" id="previewArea">
+  <div class="lw" id="lw">
+    <div class="lbl lbl-name" id="pvName"></div>
+    <div class="lbl lbl-price" id="pvPrice"></div>
+    <div class="lbl lbl-ws" id="pvWs" style="display:none"></div>
+    <div class="lbl-bc"><svg id="pvBc"></svg></div>
+  </div>
+  <div class="page-info" id="pageInfo"></div>
+  <div class="hint">💡 ลากข้อความในป้ายเพื่อย้ายตำแหน่ง · ปรับตัวเลขด้านบนเพื่อความแม่นยำ</div>
+</div>
+
+<script>
+var _items = [];
+var _cur = 0;
+
+// ── wT/wL inputs (not in ctrl bar — managed via nudge) ──
+var _wT = 30, _wL = 3;
+
+// ── Load data from localStorage ──
+window.onload = function() {
+  var raw = localStorage.getItem('klh_shelf_print');
+  if (!raw) {
+    document.getElementById('previewArea').innerHTML = '<div style="padding:40px;text-align:center;color:#999">ไม่พบข้อมูลสินค้า<br><small>กรุณาเปิดจากหน้า Survey หรือ Label Print</small></div>';
+    return;
+  }
+  try {
+    _items = JSON.parse(raw);
+  } catch(e) {
+    alert('ข้อมูลเสีย'); return;
+  }
+  document.getElementById('totalCount').textContent = _items.length;
+  document.getElementById('pSizeVal').textContent = document.getElementById('pS').value+'px';
+  upd();
+  setupDrag();
+};
+
+// ── Update preview ──
+function getPos() {
+  return {
+    nT: parseFloat(document.getElementById('nT').value)||4,
+    nL: parseFloat(document.getElementById('nL').value)||3,
+    nS: parseFloat(document.getElementById('nS').value)||14,
+    pT: parseFloat(document.getElementById('pT').value)||15,
+    pL: parseFloat(document.getElementById('pL').value)||3,
+    pS: parseFloat(document.getElementById('pS').value)||24
+  };
+}
+
+function getPriceType() {
+  var radios = document.getElementsByName('pt');
+  for (var i=0;i<radios.length;i++) { if(radios[i].checked) return radios[i].value; }
+  return 'retail';
+}
+
+function fmt(n){ return n>0 ? '฿'+Number(n).toLocaleString() : '—'; }
+
+function upd() {
+  if (!_items.length) return;
+  var it = _items[_cur];
+  var pos = getPos();
+  var pt = getPriceType();
+
+  var nameEl = document.getElementById('pvName');
+  nameEl.style.top  = pos.nT+'mm';
+  nameEl.style.left = pos.nL+'mm';
+  nameEl.style.fontSize = pos.nS+'px';
+  nameEl.textContent = it.name || '';
+
+  var priceEl = document.getElementById('pvPrice');
+  priceEl.style.top  = pos.pT+'mm';
+  priceEl.style.left = pos.pL+'mm';
+  priceEl.style.fontSize = pos.pS+'px';
+  priceEl.textContent = pt==='ws' ? fmt(it.ws) : fmt(it.retail);
+
+  var wsEl = document.getElementById('pvWs');
+  var wsArrow = document.getElementById('wsArrow');
+  if (pt === 'both' && it.ws > 0) {
+    wsEl.style.display = 'block';
+    wsEl.style.top  = _wT+'mm';
+    wsEl.style.left = _wL+'mm';
+    wsEl.textContent = 'ส่ง '+fmt(it.ws);
+    if (wsArrow) wsArrow.style.display = 'flex';
+  } else {
+    wsEl.style.display = 'none';
+    if (wsArrow) wsArrow.style.display = 'none';
+  }
+  document.getElementById('pSizeVal').textContent = pos.pS+'px';
+
+  // Barcode
+  try {
+    document.getElementById('pvBc').innerHTML = '';
+    if (it.barcode) {
+      JsBarcode('#pvBc', it.barcode, {width:1.4, height:28, fontSize:8, displayValue:true});
+    }
+  } catch(e) {}
+
+  document.getElementById('navInfo').textContent = (_cur+1)+'/'+_items.length;
+  document.getElementById('pageInfo').textContent = (it.barcode||'')+(it.unit?' · '+it.convRate+'/'+it.unit:'');
+}
+
+// ── Navigation ──
+function prev() { if(_cur>0){_cur--;upd();} }
+function next() { if(_cur<_items.length-1){_cur++;upd();} }
+
+// ── Nudge with arrow buttons ──
+var _step = 0.5; // mm per click
+function nudge(target, axis, dir) {
+  var idMap = {
+    'n': {t:'nT', l:'nL'},
+    'p': {t:'pT', l:'pL'},
+    'w': {t:'wT', l:'wL'}
+  };
+  var inputId = idMap[target][axis];
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  var val = parseFloat(el.value) || 0;
+  el.value = (val + dir * _step).toFixed(1);
+  upd();
+}
+
+function nudgeSize(inputId, dir) {
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  var val = parseFloat(el.value) || 24;
+  el.value = Math.max(8, val + dir);
+  document.getElementById('pSizeVal').textContent = el.value + 'px';
+  upd();
+}
+
+// ── Drag to reposition ──
+function setupDrag() {
+  var els = ['pvName','pvPrice','pvWs'];
+  els.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var startX, startY, startTop, startLeft;
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      var lw = document.getElementById('lw');
+      var lwRect = lw.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startTop  = parseFloat(el.style.top)  || 0;
+      startLeft = parseFloat(el.style.left) || 0;
+      function onMove(e2) {
+        var dx = (e2.clientX - startX) / (lwRect.width / 80);
+        var dy = (e2.clientY - startY) / (lwRect.height / 40);
+        var newTop  = Math.max(0, startTop  + dy);
+        var newLeft = Math.max(0, startLeft + dx);
+        el.style.top  = newTop+'mm';
+        el.style.left = newLeft+'mm';
+        // sync inputs
+        if (id==='pvName')  { document.getElementById('nT').value=newTop.toFixed(1); document.getElementById('nL').value=newLeft.toFixed(1); }
+        if (id==='pvPrice') { document.getElementById('pT').value=newTop.toFixed(1); document.getElementById('pL').value=newLeft.toFixed(1); }
+      }
+      function onUp() {
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
+// ── Print all ──
+function printAll() {
+  var pos = getPos();
+  var pt = getPriceType();
+  var pw = window.open('','_blank');
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>'
+    +'<style>'
+    +'@page{size:80mm 40mm;margin:0}'
+    +'body{margin:0;font-family:"IBM Plex Sans Thai",sans-serif;}'
+    +'</style></head><body>';
+
+  var bcData = [];
+  for (var i=0;i<_items.length;i++) {
+    var it = _items[i];
+    var price = pt==='ws' ? (it.ws||0) : (it.retail||0);
+    var priceStr = price>0 ? '฿'+price.toLocaleString() : '—';
+    html += '<div style="width:80mm;height:40mm;position:relative;page-break-after:always;overflow:hidden;">'
+      +'<div style="position:absolute;top:'+pos.nT+'mm;left:'+pos.nL+'mm;font-size:'+pos.nS+'px;font-weight:800;max-width:74mm;">'+esc(it.name||'')+'</div>'
+      +'<div style="position:absolute;top:'+pos.pT+'mm;left:'+pos.pL+'mm;font-size:'+pos.pS+'px;font-weight:900;color:#E94E27;">'+priceStr+'</div>'
+      +(pt==='both'&&it.ws>0?'<div style="position:absolute;top:'+(pos.pT+pos.pS/3.78+2)+'mm;left:'+pos.pL+'mm;font-size:13px;font-weight:700;color:#1565C0;">ส่ง ฿'+it.ws.toLocaleString()+'</div>':'')
+      +(it.barcode?'<div style="position:absolute;bottom:2mm;left:2mm;"><svg id="bc_'+i+'"></svg></div>':'')
+      +'</div>';
+    if (it.barcode) bcData.push({idx:i, bc:it.barcode});
+  }
+
+  html += '<script>window.onload=function(){';
+  for (var j=0;j<bcData.length;j++) {
+    html += 'try{JsBarcode("#bc_'+bcData[j].idx+'","'+bcData[j].bc+'",{width:1.4,height:28,fontSize:8,displayValue:true});}catch(e){}';
+  }
+  html += 'setTimeout(function(){window.print();},600);};';
+  html += '<\/script></body></html>';
+  pw.document.write(html);
+  pw.document.close();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

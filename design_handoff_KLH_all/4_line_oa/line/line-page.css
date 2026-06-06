@@ -1,0 +1,46 @@
+/* page chrome around the two phones */
+.page{ min-height:100vh; padding:26px 28px 40px; box-sizing:border-box;
+  background:
+    radial-gradient(900px 600px at 12% 4%, #FBDAC6 0%, transparent 56%),
+    radial-gradient(800px 600px at 90% 8%, #F8E7CD 0%, transparent 52%),
+    radial-gradient(1000px 760px at 78% 104%, #F4D2D6 0%, transparent 58%),
+    linear-gradient(160deg,#F4EEE2 0%,#EFE6D7 100%);
+  font-family:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif; color:#241F1B;
+}
+.pg-head{ max-width:980px; margin:0 auto 22px; }
+.pg-brand{ display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+.pg-logo{ width:50px; height:50px; border-radius:15px; overflow:hidden; box-shadow:0 10px 22px -10px rgba(226,80,43,.5); flex:0 0 auto; }
+.pg-logo img{ width:100%; height:100%; object-fit:cover; }
+.pg-brand h1{ margin:0; font-size:21px; font-weight:700; letter-spacing:-.01em; }
+.pg-brand p{ margin:4px 0 0; font-size:13.5px; color:#6B6258; line-height:1.45; }
+
+.pg-jump{ display:flex; flex-wrap:wrap; gap:7px; }
+.jbtn{ padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;
+  background:rgba(255,255,255,.7); color:#6B6258; border:1px solid #E0D8C7; transition:all .14s; }
+.jbtn:hover{ background:#fff; color:#241F1B; }
+.jbtn.on{ background:#F6704C; color:#fff; border-color:#F6704C; box-shadow:0 8px 16px -9px #F6704C; }
+
+.phones{ display:flex; gap:40px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
+.phone-col{ display:flex; flex-direction:column; align-items:center; gap:12px; }
+.phone-label{ font-size:12.5px; font-weight:700; color:#6B6258; letter-spacing:.04em; text-transform:uppercase; }
+
+.pg-foot{ max-width:760px; margin:30px auto 0; text-align:center; font-size:12.5px; color:#8A8074; line-height:1.6; }
+.pg-foot b{ color:#6B6258; }
+
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+@media (max-width:880px){
+  .phones{ gap:28px; }
+  .page{ padding:20px 14px 34px; }
+}
+
+/* ---- print: only the receipt ---- */
+@media print{
+  body{ background:#fff; }
+  .pg-head, .pg-foot, .phone-label, .footbar, .la-head, .la-row .la-btn{ display:none !important; }
+  .page{ padding:0; background:#fff; }
+  .phones{ display:block; }
+  .phone-col:nth-child(2){ display:none; } /* one copy only */
+  .receipt{ box-shadow:none; width:100%; max-width:420px; }
+  .slip-thumb .scan-line{ display:none; }
+}

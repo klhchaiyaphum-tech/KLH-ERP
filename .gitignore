@@ -1,0 +1,11 @@
+# Large design archives (เก็บเฉพาะโฟลเดอร์ที่แตกแล้ว ไม่เอา zip)
+*.zip
+
+# OS / editor junk
+desktop.ini
+.DS_Store
+Thumbs.db
+*.tmp
+
+# clasp credentials (ถ้ามี)
+.clasprc.json

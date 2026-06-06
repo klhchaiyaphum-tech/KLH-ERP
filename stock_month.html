@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH สต๊อกสิ้นเดือน</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun',-apple-system,sans-serif;}
+  body{background:#0E1726;color:#E3E8F0;padding:14px;}
+  .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .back{background:#1E293B;color:#9FB3C8;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;}
+  h1{font-size:20px;color:#fff;}
+  .sub{color:#7A8AA0;font-size:12px;}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#16202F;padding:12px;border-radius:10px;margin-bottom:14px;}
+  .bar label{font-size:13px;color:#9FB3C8;}
+  input[type=month],input[type=number]{background:#0E1726;border:1px solid #2A3A52;color:#fff;padding:8px 10px;border-radius:8px;font-size:14px;}
+  .btn{background:linear-gradient(90deg,#00897B,#26A69A);color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;}
+  .btn.alt{background:linear-gradient(90deg,#5E35B1,#7E57C2);}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px;}
+  .card{background:#16202F;border-radius:10px;padding:14px;border-left:4px solid #26A69A;}
+  .card.klh{border-left-color:#26A69A;}
+  .card.oth{border-left-color:#FF8F00;}
+  .card.sim{border-left-color:#7E57C2;}
+  .card .k{font-size:12px;color:#7A8AA0;}
+  .card .v{font-size:22px;font-weight:700;color:#fff;margin-top:4px;}
+  .card .v small{font-size:13px;color:#9FB3C8;font-weight:400;}
+  .sec{margin-bottom:18px;}
+  .sec h2{font-size:16px;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#16202F;border-radius:8px;overflow:hidden;}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid #243248;}
+  th{background:#1E293B;color:#9FB3C8;font-weight:600;font-size:12px;}
+  td.l,th.l{text-align:left;}
+  tr:hover td{background:#1A2738;}
+  .muted{color:#5E6E85;}
+  .loading{text-align:center;padding:30px;color:#7A8AA0;}
+  .tag{font-size:11px;padding:2px 7px;border-radius:5px;background:#243248;color:#9FB3C8;}
+  .err{background:#3A1A1A;color:#FF8A80;padding:10px;border-radius:8px;}
+  .pos{color:#69F0AE;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <button class="back" onclick="goBack()">← กลับ</button>
+  <div>
+    <h1>📊 สต๊อกสิ้นเดือน KLH</h1>
+    <div class="sub">แยกสต๊อกสินค้า KLH กับร้านอื่น + ขายจำลองจาก statement → สต๊อกคงเหลือ KLH (ข้อ 5)</div>
+  </div>
+</div>
+
+<div class="bar">
+  <label>เดือน (ยอดขายจริง):</label>
+  <input type="month" id="month">
+  <button class="btn" onclick="loadReport()">โหลดรายงาน</button>
+  <span class="sub" id="genAt"></span>
+</div>
+
+<div id="msg"></div>
+
+<div class="cards" id="summary"></div>
+
+<!-- ส่วนขายจำลอง KLH -->
+<div class="sec" id="simSec" style="display:none">
+  <h2><span class="dot" style="background:#7E57C2"></span> สร้างยอดขาย KLH จำลอง (จาก statement)</h2>
+  <div class="bar">
+    <label>ยอดขายเป้าหมาย (บาท):</label>
+    <input type="number" id="target" placeholder="เช่น 50000" style="width:160px">
+    <button class="btn alt" onclick="runSimulate()">คำนวณสต๊อกคงเหลือจำลอง</button>
+    <span class="sub">ระบบจะกระจายยอดขายลงสินค้า KLH ตามน้ำหนักมูลค่าขายปลีก แล้วหักออกจากสต๊อก</span>
+  </div>
+  <div id="simResult"></div>
+</div>
+
+<!-- ตาราง KLH -->
+<div class="sec">
+  <h2><span class="dot" style="background:#26A69A"></span> สินค้า KLH (ห้างหุ้นส่วนจำกัด เคแอลเอช)</h2>
+  <div id="klhTable"><div class="loading">เลือกเดือนแล้วกด "โหลดรายงาน"</div></div>
+</div>
+
+<!-- ตารางร้านอื่น -->
+<div class="sec">
+  <h2><span class="dot" style="background:#FF8F00"></span> สินค้าหน่วยเข้าร้านอื่น</h2>
+  <div id="othTable"></div>
+</div>
+
+<script>
+function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href = u + '?page=index'; }).getExecUrl(); }
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+
+// ตั้งเดือนปัจจุบันเป็นค่าเริ่มต้น
+(function(){
+  var d = new Date();
+  document.getElementById('month').value = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2);
+})();
+
+function loadReport(){
+  var ym = document.getElementById('month').value;
+  document.getElementById('msg').innerHTML = '';
+  document.getElementById('klhTable').innerHTML = '<div class="loading">กำลังโหลด…</div>';
+  document.getElementById('othTable').innerHTML = '';
+  document.getElementById('summary').innerHTML = '';
+  document.getElementById('simSec').style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || !res.ok){
+        document.getElementById('msg').innerHTML = '<div class="err">ผิดพลาด: ' + ((res&&res.error)||'ไม่ทราบสาเหตุ') + '</div>';
+        document.getElementById('klhTable').innerHTML = '';
+        return;
+      }
+      document.getElementById('genAt').textContent = 'อัปเดต ' + res.generatedAt;
+
+      // ── summary cards (inline) ──
+      var kt = res.klh.totals, ot = res.other.totals;
+      var html = ''
+        + '<div class="card klh"><div class="k">สต๊อก KLH (มูลค่าต้นทุน)</div><div class="v">฿' + nf(kt.costVal) + '</div></div>'
+        + '<div class="card klh"><div class="k">จำนวนชิ้น KLH คงเหลือ</div><div class="v">' + nf(kt.qty) + ' <small>ชิ้น</small></div></div>'
+        + '<div class="card klh"><div class="k">ยอดขายจริง KLH (เดือนนี้)</div><div class="v">฿' + nf(kt.soldAmt) + '</div></div>'
+        + '<div class="card oth"><div class="k">สต๊อกร้านอื่น (มูลค่าต้นทุน)</div><div class="v">฿' + nf(ot.costVal) + '</div></div>'
+        + '<div class="card oth"><div class="k">จำนวนชิ้น ร้านอื่น คงเหลือ</div><div class="v">' + nf(ot.qty) + ' <small>ชิ้น</small></div></div>';
+      document.getElementById('summary').innerHTML = html;
+
+      // ── ตาราง KLH (inline) ──
+      var ki = res.klh.items;
+      var t = '<table><tr><th class="l">บาร์โค้ด</th><th class="l">สินค้า</th><th>คงเหลือ</th><th>ทุน/ชิ้น</th><th>มูลค่าทุน</th><th>ขายจริง(ชิ้น)</th><th>ยอดขายจริง</th></tr>';
+      if(!ki.length) t += '<tr><td colspan="7" class="muted" style="text-align:center">ไม่มีสินค้าในชื่อ KLH</td></tr>';
+      for(var i=0;i<ki.length;i++){ var r=ki[i];
+        t += '<tr><td class="l muted">'+r.barcode+'</td><td class="l">'+r.name+'</td><td>'+nf(r.onHand)+'</td><td>'+nf(r.cost)+'</td><td>฿'+nf(r.costVal)+'</td><td>'+nf(r.soldQty)+'</td><td>฿'+nf(r.soldAmt)+'</td></tr>';
+      }
+      t += '<tr style="font-weight:700"><td class="l" colspan="2">รวม KLH</td><td>'+nf(kt.qty)+'</td><td>-</td><td>฿'+nf(kt.costVal)+'</td><td>'+nf(kt.soldQty)+'</td><td>฿'+nf(kt.soldAmt)+'</td></tr>';
+      t += '</table>';
+      document.getElementById('klhTable').innerHTML = t;
+
+      // ── ตารางร้านอื่น (สรุปต่อกิจการ + รายการ) (inline) ──
+      var og = res.other.byEntity || [];
+      var o = '<table><tr><th class="l">กิจการ</th><th>จำนวน SKU</th><th>ชิ้นคงเหลือ</th><th>มูลค่าทุน</th><th>ยอดขายจริง</th></tr>';
+      if(!og.length) o += '<tr><td colspan="5" class="muted" style="text-align:center">ไม่มี</td></tr>';
+      for(var g=0;g<og.length;g++){ var e=og[g];
+        o += '<tr><td class="l">'+e.entity+'</td><td>'+nf(e.count)+'</td><td>'+nf(e.qty)+'</td><td>฿'+nf(e.costVal)+'</td><td>฿'+nf(e.soldAmt)+'</td></tr>';
+      }
+      o += '<tr style="font-weight:700"><td class="l">รวมร้านอื่น</td><td>-</td><td>'+nf(ot.qty)+'</td><td>฿'+nf(ot.costVal)+'</td><td>฿'+nf(ot.soldAmt)+'</td></tr>';
+      o += '</table>';
+      document.getElementById('othTable').innerHTML = o;
+
+      // เปิดส่วนขายจำลอง
+      document.getElementById('simSec').style.display = 'block';
+    })
+    .withFailureHandler(function(err){
+      document.getElementById('msg').innerHTML = '<div class="err">เรียก server ไม่สำเร็จ: ' + err.message + '</div>';
+      document.getElementById('klhTable').innerHTML = '';
+    })
+    .getMonthEndStockByEntity(ym);
+}
+
+function runSimulate(){
+  var ym = document.getElementById('month').value;
+  var target = Number(document.getElementById('target').value) || 0;
+  if(target <= 0){ document.getElementById('simResult').innerHTML = '<div class="err">กรุณาใส่ยอดขายเป้าหมาย</div>'; return; }
+  document.getElementById('simResult').innerHTML = '<div class="loading">กำลังคำนวณ…</div>';
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || !res.ok){
+        document.getElementById('simResult').innerHTML = '<div class="err">ผิดพลาด: '+((res&&res.error)||'')+'</div>';
+        return;
+      }
+      var tt = res.totals;
+      var h = '<div class="cards">'
+        + '<div class="card sim"><div class="k">ยอดขายจำลองรวม</div><div class="v pos">฿'+nf(tt.simSoldAmt)+'</div></div>'
+        + '<div class="card sim"><div class="k">ชิ้นที่ขายจำลอง</div><div class="v">'+nf(tt.simSoldQty)+' <small>ชิ้น</small></div></div>'
+        + '<div class="card sim"><div class="k">สต๊อก KLH คงเหลือ (ทุน)</div><div class="v">฿'+nf(tt.remainCost)+'</div></div>'
+        + '<div class="card sim"><div class="k">ชิ้นคงเหลือ KLH</div><div class="v">'+nf(tt.remainQty)+' <small>ชิ้น</small></div></div>'
+        + '</div>';
+      if(tt.unmatched > 0.5){
+        h += '<div class="err">⚠️ สต๊อกไม่พอจำลองขายได้ครบเป้า ขายจำลองได้ไม่หมด ฿'+nf(tt.unmatched)+'</div>';
+      }
+      var it = res.items;
+      h += '<table><tr><th class="l">บาร์โค้ด</th><th class="l">สินค้า</th><th>เริ่มมี</th><th>ขายจำลอง</th><th>ยอดขายจำลอง</th><th>คงเหลือ</th><th>มูลค่าคงเหลือ(ทุน)</th></tr>';
+      for(var i=0;i<it.length;i++){ var r=it[i];
+        h += '<tr><td class="l muted">'+r.barcode+'</td><td class="l">'+r.name+'</td><td>'+nf(r.onHand)+'</td><td>'+nf(r.simSoldQty)+'</td><td>฿'+nf(r.simSoldAmt)+'</td><td>'+nf(r.remainQty)+'</td><td>฿'+nf(r.remainCost)+'</td></tr>';
+      }
+      h += '<tr style="font-weight:700"><td class="l" colspan="3">รวม</td><td>'+nf(tt.simSoldQty)+'</td><td>฿'+nf(tt.simSoldAmt)+'</td><td>'+nf(tt.remainQty)+'</td><td>฿'+nf(tt.remainCost)+'</td></tr>';
+      h += '</table>';
+      document.getElementById('simResult').innerHTML = h;
+    })
+    .withFailureHandler(function(err){
+      document.getElementById('simResult').innerHTML = '<div class="err">เรียก server ไม่สำเร็จ: '+err.message+'</div>';
+    })
+    .simulateKlhStock(ym, target);
+}
+</script>
+</body>
+</html>

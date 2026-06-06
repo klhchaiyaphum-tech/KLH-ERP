@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH Customer & AR</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<style>
+:root{--blue:#1565C0;--orange:#E65100;--dark:#37474F;--red:#c62828;--green:#2E7D32;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#f0f2f5;font-family:'Segoe UI','Sarabun',sans-serif;font-size:14px;}
+.hdr{background:linear-gradient(135deg,var(--blue),#1976D2);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:200;}
+.hdr h1{font-size:1.05rem;font-weight:700;flex:1;}
+.btn-hdr{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:4px;}
+.btn-hdr:hover{background:rgba(255,255,255,.35);}
+.tab-nav{background:#fff;border-bottom:2px solid #e0e0e0;display:flex;}
+.tab-btn{padding:11px 20px;border:none;background:none;font-size:.9rem;cursor:pointer;color:#666;border-bottom:3px solid transparent;}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600;}
+.tab-panel{display:none;padding:16px;} .tab-panel.active{display:block;}
+.toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.search-box{flex:1;min-width:200px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:.88rem;outline:none;}
+.search-box:focus{border-color:var(--blue);}
+.btn{border:none;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:.85rem;font-weight:500;display:inline-flex;align-items:center;gap:5px;}
+.btn-primary{background:var(--blue);color:#fff;}.btn-primary:hover{background:#1976D2;}
+.btn-sm{padding:4px 10px;font-size:.78rem;}
+.btn-edit{background:#E3F2FD;color:var(--blue);border:none;}.btn-edit:hover{background:#BBDEFB;}
+.btn-del{background:#FFEBEE;color:var(--red);border:none;}.btn-del:hover{background:#FFCDD2;}
+.btn-pay{background:#E8F5E9;color:var(--green);border:none;}.btn-pay:hover{background:#C8E6C9;}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.1);overflow:hidden;}
+table{width:100%;border-collapse:collapse;font-size:.86rem;}
+thead tr{background:var(--dark);color:#fff;}
+thead th{padding:9px 12px;text-align:left;white-space:nowrap;}
+thead th.r{text-align:right;}
+tbody tr:nth-child(even){background:rgba(0,0,0,.025);}
+tbody tr:hover{background:#E3F2FD;}
+tbody td{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:middle;}
+tbody td.r{text-align:right;}
+.level-retail{background:#E8F5E9;color:var(--green);border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.level-wholesale{background:#FFF3E0;color:var(--orange);border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.level-vip{background:#EDE7F6;color:#6A1B9A;border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.stat-strip{display:flex;gap:16px;padding:14px 16px;border-bottom:1px solid #eee;background:#fff;flex-wrap:wrap;}
+.stat-item{text-align:center;}
+.stat-item .val{font-size:1.2rem;font-weight:700;}
+.stat-item .lbl{font-size:.75rem;color:#888;}
+.status-unpaid{background:#FFEBEE;color:var(--red);border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.status-partial{background:#FFF3E0;color:var(--orange);border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.status-paid{background:#E8F5E9;color:var(--green);border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.status-overdue{background:#FCE4EC;color:#880E4F;border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.count-bar{padding:7px 14px;font-size:.78rem;color:#888;background:#fafafa;border-top:1px solid #eee;}
+#overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;}
+.spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <i class="bi bi-people-fill fs-5"></i>
+  <h1>Customer & AR — สมาชิกและลูกหนี้</h1>
+  <button class="btn-hdr" onclick="openAddCust()"><i class="bi bi-person-plus"></i> เพิ่มสมาชิก</button>
+  <button class="btn-hdr" onclick="goHome()"><i class="bi bi-arrow-left"></i></button>
+</div>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('customers',this)"><i class="bi bi-people"></i> สมาชิก</button>
+  <button class="tab-btn" onclick="switchTab('ar',this)"><i class="bi bi-cash-stack"></i> ลูกหนี้การค้า (AR)</button>
+</div>
+
+<!-- Tab: Customers -->
+<div id="panel-customers" class="tab-panel active">
+  <div class="toolbar">
+    <input type="text" class="search-box" id="custSearch" placeholder="🔍 ค้นหาชื่อ/เบอร์/รหัส..." oninput="filterCustomers(this.value)">
+    <button class="btn btn-primary" onclick="loadCustomers()"><i class="bi bi-arrow-clockwise"></i></button>
+    <span id="custCount" style="color:#888;font-size:.82rem"></span>
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th style="width:90px">รหัส</th>
+          <th>ชื่อ</th>
+          <th style="width:110px">เบอร์</th>
+          <th style="width:90px">ระดับราคา</th>
+          <th class="r" style="width:90px">วงเงิน</th>
+          <th class="r" style="width:90px">ค้างชำระ</th>
+          <th style="width:80px">เทอม</th>
+          <th style="width:100px">จัดการ</th>
+        </tr></thead>
+        <tbody id="custTbody"><tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="count-bar" id="custBar"></div>
+  </div>
+</div>
+
+<!-- Tab: AR -->
+<div id="panel-ar" class="tab-panel">
+  <div class="stat-strip" id="arStats">
+    <div class="stat-item"><div class="val" id="arTotal">฿0</div><div class="lbl">ยอดลูกหนี้รวม</div></div>
+    <div class="stat-item"><div class="val" style="color:var(--red)" id="arOverdue">฿0</div><div class="lbl">เกินกำหนด</div></div>
+    <div class="stat-item"><div class="val" id="arCount">0</div><div class="lbl">รายการ</div></div>
+  </div>
+  <div class="toolbar" style="margin-top:12px">
+    <input type="text" class="search-box" id="arSearch" placeholder="🔍 ค้นหาลูกหนี้/เลขบิล..." oninput="filterAr(this.value)">
+    <select id="arStatus" onchange="loadAr()" style="padding:7px;border:1px solid #ddd;border-radius:8px;font-size:.85rem">
+      <option value="">ทั้งหมด</option>
+      <option value="UNPAID">ยังไม่ชำระ</option>
+      <option value="PARTIAL">ชำระบางส่วน</option>
+      <option value="OVERDUE">เกินกำหนด</option>
+      <option value="PAID">ชำระแล้ว</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadAr()"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>เลข AR</th><th>เลขบิล</th><th>ลูกค้า</th><th>กิจการ</th>
+          <th>วันที่ออก</th><th>ครบกำหนด</th>
+          <th class="r">ยอด</th><th class="r">ชำระแล้ว</th><th class="r">คงเหลือ</th>
+          <th>สถานะ</th><th>รับเงิน</th>
+        </tr></thead>
+        <tbody id="arTbody"><tr><td colspan="11" style="text-align:center;color:#aaa;padding:24px">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="count-bar" id="arBar"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="overlay">
+  <div class="spinner"></div>
+  <div style="margin-top:12px;color:#666;font-size:.9rem" id="overlayMsg">กำลังโหลด...</div>
+</div>
+
+<script>
+var _execUrl = '';
+var _allCust = [], _allAr = [];
+var _codeMap = {};
+
+window.onload = function() {
+  google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
+  loadCustomers();
+  loadAr();
+};
+function goHome() { if(_execUrl) window.top.location.href=_execUrl; else window.location.href='?page=index'; }
+function switchTab(name,btn) {
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+function showLoad(msg){document.getElementById('overlayMsg').textContent=msg||'...';document.getElementById('overlay').style.display='flex';}
+function hideLoad(){document.getElementById('overlay').style.display='none';}
+
+// ── Customers ──────────────────────────────────────────────────
+function loadCustomers() {
+  showLoad('โหลดสมาชิก...');
+  google.script.run
+    .withSuccessHandler(function(data){ hideLoad(); _allCust=data||[]; renderCustomers(_allCust); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getAllCustomers();
+}
+
+function renderCustomers(rows) {
+  _codeMap = {};
+  rows.forEach(function(r){ _codeMap[r.custId]=r; });
+  var tb = document.getElementById('custTbody');
+  if (!rows.length) { tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">ไม่มีข้อมูล</td></tr>'; return; }
+  tb.innerHTML = rows.map(function(r) {
+    var lvl = r.priceLevel==='wholesale'?'<span class="level-wholesale">ราคาส่ง</span>'
+             :r.priceLevel==='vip'?'<span class="level-vip">VIP</span>'
+             :'<span class="level-retail">ราคาปลีก</span>';
+    var ovCls = r.outstanding > 0 ? 'color:var(--red);font-weight:600' : 'color:#aaa';
+    return '<tr>'
+      +'<td><code style="font-size:.78rem;color:var(--blue)">'+r.custId+'</code></td>'
+      +'<td style="font-weight:500">'+r.name+'</td>'
+      +'<td>'+r.phone+'</td>'
+      +'<td>'+lvl+'</td>'
+      +'<td class="r">'+(r.creditLimit>0?'฿'+r.creditLimit.toLocaleString('th-TH'):'—')+'</td>'
+      +'<td class="r" style="'+ovCls+'">'+(r.outstanding>0?'฿'+r.outstanding.toLocaleString('th-TH'):'—')+'</td>'
+      +'<td>'+(r.creditDays||0)+' วัน</td>'
+      +'<td style="white-space:nowrap">'
+      +  '<button class="btn btn-sm btn-edit" onclick="openEditCust(\''+r.custId+'\')"><i class="bi bi-pencil"></i></button> '
+      +  '<button class="btn btn-sm btn-pay" onclick="viewCustAr(\''+r.custId+'\')" title="ดู AR"><i class="bi bi-cash-stack"></i></button>'
+      +'</td></tr>';
+  }).join('');
+  document.getElementById('custBar').textContent = rows.length+' รายการ';
+  document.getElementById('custCount').textContent = _allCust.length+' สมาชิก';
+}
+
+function filterCustomers(q) {
+  var ql=q.trim().toLowerCase();
+  renderCustomers(ql ? _allCust.filter(function(r){ return (r.custId+r.name+r.phone).toLowerCase().indexOf(ql)>=0; }) : _allCust);
+}
+
+function viewCustAr(custId) {
+  document.querySelector('[onclick="switchTab(\'ar\',this)"]').click();
+  document.getElementById('arSearch').value = custId;
+  filterAr(custId);
+}
+
+// ── Add/Edit Customer ──────────────────────────────────────────
+function custFormHtml(r) {
+  r = r || {};
+  return '<div style="text-align:left">'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
+    +'<div><label style="font-size:.78rem">ชื่อ *</label><input id="cf-name" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.name||'')+'"></div>'
+    +'<div><label style="font-size:.78rem">เบอร์โทร</label><input id="cf-phone" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.phone||'')+'"></div>'
+    +'<div><label style="font-size:.78rem">เลขผู้เสียภาษี</label><input id="cf-tax" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.taxId||'')+'"></div>'
+    +'<div><label style="font-size:.78rem">ระดับราคา</label><select id="cf-level" class="swal2-input" style="margin:2px 0;width:100%">'
+    +'<option value="retail"'+(r.priceLevel==='retail'?' selected':'')+'>ราคาปลีก</option>'
+    +'<option value="wholesale"'+(r.priceLevel==='wholesale'?' selected':'')+'>ราคาส่ง</option>'
+    +'<option value="vip"'+(r.priceLevel==='vip'?' selected':'')+'>VIP</option>'
+    +'</select></div>'
+    +'<div><label style="font-size:.78rem">วงเงินเครดิต (฿)</label><input id="cf-limit" type="number" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.creditLimit||0)+'"></div>'
+    +'<div><label style="font-size:.78rem">เทอมเครดิต (วัน)</label><input id="cf-days" type="number" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.creditDays||30)+'"></div>'
+    +'</div>'
+    +'<div style="margin-top:6px"><label style="font-size:.78rem">ที่อยู่</label><input id="cf-address" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.address||'')+'"></div>'
+    +'<div><label style="font-size:.78rem">หมายเหตุ</label><input id="cf-note" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.note||'')+'"></div>'
+    +'</div>';
+}
+
+function getCustFormData() {
+  return {
+    name:        document.getElementById('cf-name').value.trim(),
+    phone:       document.getElementById('cf-phone').value.trim(),
+    taxId:       document.getElementById('cf-tax').value.trim(),
+    priceLevel:  document.getElementById('cf-level').value,
+    creditLimit: Number(document.getElementById('cf-limit').value)||0,
+    creditDays:  Number(document.getElementById('cf-days').value)||30,
+    address:     document.getElementById('cf-address').value.trim(),
+    note:        document.getElementById('cf-note').value.trim()
+  };
+}
+
+function openAddCust() {
+  Swal.fire({ title:'เพิ่มสมาชิกใหม่', html:custFormHtml(), showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', width:560 })
+    .then(function(r){ if(!r.isConfirmed) return;
+      var d = getCustFormData();
+      if (!d.name) { Swal.fire('แจ้งเตือน','กรุณากรอกชื่อ','warning'); return; }
+      showLoad('กำลังบันทึก...');
+      google.script.run
+        .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ Swal.fire({icon:'success',title:res.msg,timer:2000,showConfirmButton:false}); loadCustomers(); } else Swal.fire('Error',res.msg,'error'); })
+        .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+        .addCustomer(d);
+    });
+}
+
+function openEditCust(custId) {
+  var r = _codeMap[custId] || {};
+  Swal.fire({ title:'แก้ไข '+custId, html:custFormHtml(r), showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', width:560 })
+    .then(function(r2){ if(!r2.isConfirmed) return;
+      showLoad('กำลังอัปเดต...');
+      google.script.run
+        .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ Swal.fire({icon:'success',title:res.msg,timer:2000,showConfirmButton:false}); loadCustomers(); } else Swal.fire('Error',res.msg,'error'); })
+        .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+        .updateCustomer(custId, getCustFormData());
+    });
+}
+
+// ── AR Ledger ──────────────────────────────────────────────────
+function loadAr() {
+  showLoad('โหลด AR...');
+  var status = document.getElementById('arStatus').value;
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ _allAr=res.items||[]; renderAr(_allAr); } })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getArByCustomer('', status);
+  // Load summary
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(res.ok){
+        document.getElementById('arTotal').textContent = '฿'+res.total.toLocaleString('th-TH');
+        document.getElementById('arOverdue').textContent = '฿'+res.overdue.toLocaleString('th-TH');
+        document.getElementById('arCount').textContent = res.count;
+      }
+    }).withFailureHandler(function(){}).getArSummary('','');
+}
+
+function renderAr(rows) {
+  var tb = document.getElementById('arTbody');
+  if (!rows.length) { tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:#aaa;padding:24px">ไม่มีข้อมูล</td></tr>'; return; }
+  var today = new Date().toISOString().slice(0,10);
+  tb.innerHTML = rows.map(function(r) {
+    var status = r.status;
+    if (status==='UNPAID' && String(r.dueDate) < today) status='OVERDUE';
+    var statusBadge = '<span class="status-'+status.toLowerCase()+'">'+
+      {UNPAID:'ยังไม่ชำระ',PARTIAL:'ชำระบางส่วน',PAID:'ชำระแล้ว',OVERDUE:'เกินกำหนด'}[status]+'</span>';
+    var payBtn = status!=='PAID'
+      ? '<button class="btn btn-sm btn-pay" onclick="payAr(\''+r.arId+'\','+r.balance+')"><i class="bi bi-cash"></i> รับเงิน</button>' : '';
+    return '<tr>'
+      +'<td><code style="font-size:.78rem">'+r.arId+'</code></td>'
+      +'<td><code style="font-size:.78rem;color:#555">'+r.saleId+'</code></td>'
+      +'<td style="font-weight:500">'+r.custName+'</td>'
+      +'<td style="font-size:.78rem;color:#666">'+r.entity+'</td>'
+      +'<td>'+r.invDate+'</td>'
+      +'<td style="color:'+(status==='OVERDUE'?'var(--red)':'inherit')+'">'+r.dueDate+'</td>'
+      +'<td class="r">฿'+r.amount.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'
+      +'<td class="r" style="color:var(--green)">฿'+r.paidAmt.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'
+      +'<td class="r" style="font-weight:600">฿'+r.balance.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'
+      +'<td>'+statusBadge+'</td>'
+      +'<td>'+payBtn+'</td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('arBar').textContent = rows.length+' รายการ';
+}
+
+function filterAr(q) {
+  var ql = q.trim().toLowerCase();
+  renderAr(ql ? _allAr.filter(function(r){ return (r.arId+r.saleId+r.custName+r.custId).toLowerCase().indexOf(ql)>=0; }) : _allAr);
+}
+
+function payAr(arId, balance) {
+  Swal.fire({
+    title: 'รับชำระเงิน', text: 'AR: '+arId+' | คงเหลือ ฿'+balance.toLocaleString('th-TH'),
+    input: 'number', inputValue: balance.toFixed(2), inputPlaceholder: 'จำนวนเงินที่รับ',
+    showCancelButton: true, confirmButtonText: 'บันทึกรับเงิน', cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: 'var(--green)'
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    var amount = parseFloat(r.value) || 0;
+    if (amount <= 0) return;
+    showLoad('กำลังบันทึก...');
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ Swal.fire({icon:'success',title:res.msg,timer:2000,showConfirmButton:false}); loadAr(); loadCustomers(); } else Swal.fire('Error',res.msg,'error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .payArEntry(arId, amount);
+  });
+}
+</script>
+</body>
+</html>

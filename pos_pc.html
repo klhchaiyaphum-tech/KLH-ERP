@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH POS PC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<style>
+/* ── Design tokens (handoff: pos.css + desktop.css) ── */
+:root{
+  --bg:#F3F1EC;--surface:#FFFFFF;--surface-2:#FAF8F4;--surface-3:#F4F1EA;
+  --ink:#221E1A;--ink-2:#6E665D;--ink-3:#A39A8E;
+  --line:#ECE8E0;--line-2:#E0DAD0;
+  --brand:#E94E27;--brand-2:#C73A1B;--brand-soft:#FCEDE6;--brand-tint:#FBE3D8;
+  --ok:#3E8E4F;--warn:#D98A0B;
+  --r-sm:9px;--r:13px;--r-lg:18px;
+  --sh-1:0 1px 2px rgba(40,28,16,.06),0 1px 1px rgba(40,28,16,.04);
+  --sh-2:0 2px 6px rgba(40,28,16,.06),0 10px 28px rgba(40,28,16,.08);
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",system-ui,sans-serif;
+  --ff-num:"IBM Plex Sans","IBM Plex Sans Thai",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--ff);color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;}
+.num{font-variant-numeric:tabular-nums;font-family:var(--ff-num);}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+button:active{transform:translateY(.5px);}
+input{font-family:inherit;}
+
+/* ── Full-page layout (no window frame) ── */
+.win{
+  width:100%;height:100%;background:var(--bg);
+  display:flex;flex-direction:column;position:relative;flex:1;
+}
+/* keep .win-os hidden — use topbar only */
+.win-os{display:none;}
+
+/* ── Topbar ── */
+.topbar{
+  flex:0 0 auto;height:56px;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 16px;
+}
+.brandmark{width:38px;height:38px;border-radius:11px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:17px;flex-shrink:0;}
+
+/* ── Order tabs ── */
+.otab{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px 10px 0 0;
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:1px solid transparent;border-bottom:none;color:var(--ink-2);white-space:nowrap;
+}
+.otab.on{background:var(--bg);color:var(--ink);border-color:var(--line-2);font-weight:600;}
+.otab .od{width:7px;height:7px;border-radius:999px;background:var(--brand);}
+
+/* ── Device chip ── */
+.devchip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:600;background:#EAF5EC;color:var(--ok);border:1px solid #CBE6D1;flex-shrink:0;}
+.devchip .ld{width:7px;height:7px;border-radius:999px;background:var(--ok);}
+
+/* ── Body 3-column ── */
+.body{flex:1;display:flex;min-height:0;overflow:hidden;}
+
+/* Left: category rail 176px */
+.cat-col{width:176px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);overflow-y:auto;}
+.cat-col::-webkit-scrollbar{width:0;}
+.dcat{
+  width:100%;text-align:left;padding:12px 16px;cursor:pointer;
+  font-size:14.5px;color:var(--ink-2);display:flex;align-items:center;gap:11px;
+  border-left:3px solid transparent;background:transparent;transition:background .12s;
+}
+.dcat:hover{background:var(--surface-2);}
+.dcat.on{background:var(--surface-2);color:var(--brand-2);font-weight:700;border-left-color:var(--brand);}
+.dcdot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+
+/* Middle: search + grid */
+.mid-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+.search-bar{
+  padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.search-field{
+  display:flex;align-items:center;gap:10px;background:var(--surface);
+  border:1px solid var(--line-2);border-radius:11px;padding:10px 13px;
+}
+.search-field input{border:none;outline:none;background:transparent;font-family:var(--ff);font-size:14.5px;width:100%;color:var(--ink);}
+.grid-area{flex:1;overflow-y:auto;padding:14px;}
+.grid-area::-webkit-scrollbar{width:8px;}
+.grid-area::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:9px;border:2px solid var(--bg);}
+.prod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
+
+/* Product card */
+.pcard{
+  background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:11px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:8px;
+  position:relative;min-height:88px;transition:border-color .12s,box-shadow .12s,transform .08s;
+}
+.pcard:hover{border-color:var(--brand);box-shadow:0 8px 20px -12px var(--brand);}
+.pcard:active{transform:translateY(1px);}
+.pcard .pn{font-size:13.5px;font-weight:500;line-height:1.3;color:var(--ink);flex:1;}
+.pcard .pp{font-size:16px;font-weight:700;color:var(--brand-2);}
+.pcard .pu{font-size:11px;color:var(--ink-3);}
+.pcard .pqty{
+  position:absolute;top:8px;right:8px;min-width:22px;height:22px;padding:0 6px;
+  border-radius:999px;background:var(--brand);color:#fff;font-size:12px;font-weight:700;
+  display:grid;place-items:center;
+}
+.empty-grid{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:60px 0;font-size:14px;}
+
+/* Right: Order panel 376px */
+.ord-col{width:376px;flex-shrink:0;border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;}
+.ord-head{flex-shrink:0;padding:13px 16px 10px;border-bottom:1px solid var(--line);}
+.ord-items{flex:1;overflow-y:auto;padding:0 16px;}
+.ord-items::-webkit-scrollbar{width:6px;}
+.ord-items::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:6px;}
+.ord-row{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);}
+.ord-row .on{flex:1;min-width:0;}
+.ord-row .on .nm{font-size:13.5px;font-weight:500;line-height:1.25;}
+.ord-row .on .up{font-size:12px;color:var(--ink-3);margin-top:2px;}
+.ord-row .ot{width:58px;text-align:right;font-weight:700;font-size:13.5px;flex-shrink:0;}
+.ord-empty{text-align:center;color:var(--ink-3);padding:48px 0;font-size:14px;line-height:1.8;}
+.ord-foot{flex-shrink:0;padding:12px 16px 16px;border-top:1px solid var(--line);background:var(--surface-2);}
+
+/* Stepper */
+.stepper{display:inline-flex;align-items:center;background:var(--surface-3);border-radius:999px;padding:3px;gap:2px;flex-shrink:0;}
+.stepper button{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:var(--surface);color:var(--ink);box-shadow:var(--sh-1);font-size:17px;line-height:1;}
+.stepper button.minus{color:var(--brand-2);}
+.stepper .q{min-width:22px;text-align:center;font-weight:600;font-size:14px;}
+
+/* Big buttons */
+.dbtn{display:flex;align-items:center;justify-content:center;gap:9px;padding:15px;border-radius:13px;font-size:15px;font-weight:700;cursor:pointer;}
+.dbtn.primary{background:var(--brand);color:#fff;box-shadow:0 8px 18px -8px var(--brand);}
+.dbtn.ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line-2);}
+.dbtn.dark{background:var(--ink);color:#fff;}
+.dbtn:disabled{opacity:.4;box-shadow:none;cursor:default;}
+
+/* Member row */
+.member-row{
+  display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;
+  border-radius:11px;text-align:left;cursor:pointer;transition:background .12s;
+}
+.member-row.empty{border:1.5px dashed var(--line-2);color:var(--ink-2);justify-content:center;}
+.member-row.filled{background:var(--brand-soft);border:1px solid var(--brand-tint);}
+.member-avatar{width:32px;height:32px;border-radius:999px;background:#C8932A;color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px;flex-shrink:0;}
+
+/* ── Payment overlay ── */
+.ovl{position:absolute;inset:0;z-index:40;background:rgba(20,15,10,.5);display:flex;align-items:center;justify-content:center;}
+.pay-modal{
+  width:760px;max-width:96%;background:var(--bg);border-radius:20px;overflow:hidden;
+  box-shadow:0 8px 18px rgba(40,28,16,.10),0 24px 60px rgba(40,28,16,.16);
+  display:flex;max-height:90vh;
+}
+.pay-left{width:300px;flex-shrink:0;background:var(--ink);color:#fff;padding:22px 18px;display:flex;flex-direction:column;}
+.pay-right{flex:1;min-width:0;display:flex;flex-direction:column;}
+.ptab{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 8px;
+  border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;
+  border:1.5px solid var(--line-2);background:var(--surface);color:var(--ink-2);transition:.12s;
+}
+.ptab.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-2);}
+.kkey{
+  padding:16px 0;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);
+  font-size:21px;font-weight:600;cursor:pointer;font-family:var(--ff-num);color:var(--ink);
+  transition:background .1s;
+}
+.kkey:hover{background:var(--surface-2);}
+.kkey:active{transform:translateY(1px);}
+.qcash{
+  padding:11px 0;border-radius:10px;background:var(--surface);border:1.5px solid var(--line-2);
+  font-size:15px;font-weight:700;cursor:pointer;font-family:var(--ff-num);transition:.12s;
+}
+.qcash:hover{border-color:var(--brand);color:var(--brand-2);}
+.devrow{display:flex;align-items:center;gap:10px;font-size:12.5px;}
+.devrow .dicon{color:rgba(255,255,255,.7);}
+.devrow .dlabel{flex:1;color:rgba(255,255,255,.8);white-space:nowrap;}
+.devrow .dstate{display:flex;align-items:center;gap:6px;font-weight:600;white-space:nowrap;}
+
+/* ── Customer search ── */
+.cust-dd{
+  position:absolute;left:0;right:0;top:100%;z-index:200;background:var(--surface);
+  border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--sh-2);max-height:150px;overflow-y:auto;
+}
+.cust-dd-item{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line);}
+.cust-dd-item:hover{background:var(--brand-soft);}
+
+/* ── Loading ── */
+#overlay{display:none;position:absolute;inset:0;background:rgba(243,241,236,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:12px;border-radius:14px;}
+.spin{width:36px;height:36px;border:4px solid var(--line-2);border-top-color:var(--brand);border-radius:999px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="win" id="win">
+  <!-- OS strip hidden -->
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brandmark" id="brandLetter">ส</div>
+    <div style="flex-shrink:0">
+      <div style="font-size:14.5px;font-weight:700;line-height:1.1" id="storeName">KLH POS</div>
+      <div style="font-size:11.5px;color:var(--ink-3)" id="storeBranch">หน้าร้าน</div>
+    </div>
+    <div style="width:1px;height:30px;background:var(--line);margin:0 4px;flex-shrink:0"></div>
+    <!-- Order tabs -->
+    <div style="display:flex;align-items:flex-end;gap:6px;flex:1;min-width:0;overflow-x:auto;padding-top:6px" id="orderTabs"></div>
+    <!-- Right side -->
+    <div class="devchip"><span class="ld"></span>Tigercashbox</div>
+    <div style="text-align:right;line-height:1.2;flex-shrink:0">
+      <div style="font-size:12.5px;font-weight:600">แคชเชียร์</div>
+      <div class="num" style="font-size:11.5px;color:var(--ink-3)" id="clockLabel">—</div>
+    </div>
+    <button style="padding:5px;color:var(--ink-3);flex-shrink:0" onclick="goHome()" title="กลับหน้าหลัก">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <!-- Body 3-column -->
+  <div class="body">
+
+    <!-- Left: categories -->
+    <div class="cat-col" id="catCol">
+      <div style="padding:20px 16px;color:var(--ink-3);font-size:13px">โหลด...</div>
+    </div>
+
+    <!-- Middle: search + product grid -->
+    <div class="mid-col">
+      <div class="search-bar">
+        <div class="search-field">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+          <input id="searchInput" placeholder="ค้นหาสินค้า / สแกนบาร์โค้ด…"
+            oninput="onSearch(this.value)"
+            onkeydown="onScanEnterPC(event)"
+            autocomplete="off" autocorrect="off">
+          <span class="num" style="font-size:12px;color:var(--ink-3);white-space:nowrap" id="prodCount">—</span>
+          <button onclick="openCamPC()" style="width:30px;height:30px;color:var(--brand);flex-shrink:0" title="เปิดกล้องสแกน">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="grid-area">
+        <div class="prod-grid" id="prodGrid">
+          <div class="empty-grid">กำลังโหลดสินค้า...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: order panel -->
+    <div class="ord-col">
+      <!-- Order header -->
+      <div class="ord-head">
+        <div style="display:flex;align-items:center;margin-bottom:10px">
+          <span style="font-size:15px;font-weight:700">บิลปัจจุบัน</span>
+          <span class="num" style="margin-left:8px;font-size:12.5px;color:var(--ink-3);background:var(--surface-3);padding:2px 8px;border-radius:999px" id="billNoLabel">#1001</span>
+          <span class="num" style="margin-left:auto;font-size:12.5px;color:var(--ink-3)" id="cartCountLabel">0 ชิ้น</span>
+        </div>
+        <!-- Member row -->
+        <div style="position:relative" id="memberWrap">
+          <button class="member-row empty" id="memberBtn" onclick="toggleMemberSearch()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+            เพิ่มสมาชิก / ค้นหาลูกค้า
+          </button>
+          <!-- Member search input (hidden by default) -->
+          <div id="memberSearchWrap" style="display:none;position:relative">
+            <input id="memberSearchInput" oninput="onMemberSearch(this.value)" placeholder="ค้นหาชื่อ/เบอร์..."
+              style="width:100%;padding:8px 12px;border:1.5px solid var(--brand);border-radius:11px;font-size:13.5px;outline:none;font-family:var(--ff);">
+            <div class="cust-dd" id="memberDd" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cart items -->
+      <div class="ord-items" id="ordItems">
+        <div class="ord-empty">ยังไม่มีสินค้า<br><span style="font-size:12.5px">เลือกสินค้าจากรายการด้านซ้าย</span></div>
+      </div>
+
+      <!-- Footer: totals + buttons -->
+      <div class="ord-foot">
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--ink-2)">
+          <span>ยอดรวม</span><span class="num" id="footSubtotal">฿0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ok);margin-top:3px" id="discRow" style="display:none">
+          <span>ส่วนลดสมาชิก</span><span class="num" id="footDisc"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:9px;border-top:1px dashed var(--line-2)">
+          <span style="font-weight:700;font-size:15px">ยอดสุทธิ</span>
+          <span class="num" style="font-size:28px;font-weight:700;color:var(--brand-2)" id="footNet">฿0</span>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="dbtn ghost" style="flex:0 0 auto;padding:15px 16px;font-size:14px" id="btnPark" onclick="parkBill()" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5zM3 14l9 5 9-5M3 11l9 5 9-5"/></svg>
+            พักบิล
+          </button>
+          <button class="dbtn primary" style="flex:1" id="btnPay" onclick="doCreateOrderPC()" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/></svg>
+            สร้างออเดอร์ + พิมพ์ใบ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment overlay -->
+  <div class="ovl" id="payOverlay" style="display:none">
+    <div class="pay-modal">
+      <!-- Left: amount + Tiger devices -->
+      <div class="pay-left">
+        <div style="font-size:13px;color:rgba(255,255,255,.55)">ยอดที่ต้องชำระ</div>
+        <div class="num" style="font-size:42px;font-weight:800;color:#fff;line-height:1.05;margin-top:4px" id="payTotalLabel">฿0</div>
+        <div style="font-size:12.5px;color:rgba(255,255,255,.6);margin-top:6px" id="payBillInfo">บิล #— · — ชิ้น</div>
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:9px">
+          <div class="devchip" style="align-self:flex-start;background:rgba(255,255,255,.08);color:#7FE0A8;border:1px solid rgba(127,224,168,.3);white-space:nowrap">
+            <span class="ld" style="background:#7FE0A8"></span>Tigercashbox · เชื่อมต่อแล้ว
+          </div>
+          <div class="devrow"><svg class="dicon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l2-6h14l2 6M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7M3 11h18M9.5 15h5"/></svg><span class="dlabel">ลิ้นชักเก็บเงิน</span><span class="dstate" id="drawerState"><span style="width:6px;height:6px;border-radius:999px;background:rgba(255,255,255,.35)"></span>ปิด</span></div>
+          <div class="devrow"><svg class="dicon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/></svg><span class="dlabel">เครื่องพิมพ์ใบเสร็จ</span><span class="dstate" style="color:#7FE0A8"><span style="width:6px;height:6px;border-radius:999px;background:#7FE0A8"></span>พร้อม</span></div>
+          <div class="devrow"><svg class="dicon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg><span class="dlabel">เครื่องสแกนบาร์โค้ด</span><span class="dstate" style="color:#7FE0A8"><span style="width:6px;height:6px;border-radius:999px;background:#7FE0A8"></span>พร้อม</span></div>
+          <button onclick="openDrawer()" style="margin-top:4px;padding:11px;border-radius:11px;border:1.5px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;white-space:nowrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l2-6h14l2 6M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7M3 11h18M9.5 15h5"/></svg>
+            เปิดลิ้นชัก
+          </button>
+        </div>
+      </div>
+      <!-- Right: payment methods -->
+      <div class="pay-right">
+        <div style="display:flex;align-items:center;padding:16px 20px 0">
+          <div style="font-size:18px;font-weight:700" id="payRightTitle">รับชำระเงิน</div>
+          <button onclick="closePayment()" style="margin-left:auto;color:var(--ink-3);padding:4px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <!-- Success state -->
+        <div id="paySuccess" style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px">
+          <div style="width:72px;height:72px;border-radius:999px;background:var(--ok);color:#fff;display:grid;place-items:center;box-shadow:0 12px 26px -10px var(--ok)">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19.5 6.5"/></svg>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:20px;font-weight:700">รับชำระสำเร็จ</div>
+            <div style="color:var(--ink-2);margin-top:3px;font-size:13.5px" id="paySuccessLabel">—</div>
+          </div>
+          <div class="devchip" id="drawerOpenedChip" style="display:none"><span class="ld"></span>ลิ้นชักเปิดแล้วผ่าน Tigercashbox</div>
+          <div style="display:flex;gap:10px;margin-top:6px">
+            <button class="dbtn ghost" style="padding:12px 18px;font-size:14px" onclick="printReceipt()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/></svg>
+              พิมพ์ใบเสร็จ
+            </button>
+            <button class="dbtn primary" style="padding:12px 22px;font-size:14px" onclick="finishSale()">เสร็จสิ้น</button>
+          </div>
+        </div>
+        <!-- Payment input state -->
+        <div id="payInput" style="flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 20px 18px">
+          <!-- Method tabs -->
+          <div style="display:flex;gap:9px">
+            <button class="ptab on" id="pt-QR" onclick="selectPayMethod('QR')">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7M14 21h3"/></svg>
+              พร้อมเพย์ QR
+            </button>
+            <button class="ptab" id="pt-CASH" onclick="selectPayMethod('CASH')">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.4"/><path d="M6 9.5v5M18 9.5v5"/></svg>
+              เงินสด
+            </button>
+            <button class="ptab" id="pt-CARD" onclick="selectPayMethod('CARD')">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>
+              บัตร
+            </button>
+          </div>
+          <!-- QR -->
+          <div id="pm-QR" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:8px 0">
+            <div style="background:#fff;padding:10px;border-radius:12px;box-shadow:var(--sh-1)">
+              <svg width="150" height="150" viewBox="0 0 25 25" fill="#1A1714">
+                <rect x="1" y="1" width="7" height="7" rx="1"/><rect x="2" y="2" width="5" height="5" fill="#F3F1EC"/><rect x="3" y="3" width="3" height="3"/>
+                <rect x="17" y="1" width="7" height="7" rx="1"/><rect x="18" y="2" width="5" height="5" fill="#F3F1EC"/><rect x="19" y="3" width="3" height="3"/>
+                <rect x="1" y="17" width="7" height="7" rx="1"/><rect x="2" y="18" width="5" height="5" fill="#F3F1EC"/><rect x="3" y="19" width="3" height="3"/>
+                <rect x="10" y="1" width="1.5" height="1.5"/><rect x="12" y="1" width="1.5" height="1.5"/><rect x="10" y="3" width="3" height="1.5"/><rect x="10" y="5" width="1.5" height="1.5"/><rect x="12.5" y="4" width="2" height="2"/>
+                <rect x="10" y="9" width="3" height="1.5"/><rect x="14" y="9" width="2" height="2"/><rect x="17" y="9" width="1.5" height="3"/><rect x="19" y="10" width="5" height="1.5"/>
+                <rect x="10" y="12" width="2" height="2"/><rect x="13" y="12" width="2" height="3"/><rect x="10" y="15" width="3" height="1.5"/><rect x="14" y="14" width="3" height="2"/><rect x="18" y="13" width="2" height="2"/><rect x="21" y="12" width="3" height="3"/>
+                <rect x="10" y="18" width="2" height="2"/><rect x="13" y="17" width="2" height="3"/><rect x="16" y="17" width="3" height="2"/><rect x="20" y="17" width="4" height="2"/><rect x="21" y="20" width="3" height="4"/>
+              </svg>
+            </div>
+            <div style="text-align:center;font-size:13.5px;color:var(--ink-2);line-height:1.5">ให้ลูกค้าสแกนด้วยแอปธนาคาร / เป๋าตัง<br>ยอด <b class="num" id="qrAmtLabel" style="color:var(--ink)">฿0</b></div>
+            <div class="devchip" style="background:#FFF7EA;color:var(--warn);border:1px solid #F3D9A6;white-space:nowrap">
+              <span class="ld" style="background:var(--warn)"></span>รอ Tigercashbox ยืนยันการชำระ…
+            </div>
+          </div>
+          <!-- Cash -->
+          <div id="pm-CASH" style="flex:1;display:none;gap:16px;padding-top:12px;min-height:0">
+            <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+              <div style="background:var(--surface);border:1px solid var(--line-2);border-radius:12px;padding:12px 14px">
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--ink-2)">
+                  <span>รับเงิน</span>
+                  <span class="num" id="cashRecvDisplay" style="font-weight:700;color:var(--ink);font-size:17px">฿0</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px" id="changeRow">
+                  <span>เงินทอน</span>
+                  <span class="num" id="cashChangeDisplay" style="font-weight:700;font-size:17px;color:var(--ink-3)">—</span>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <button class="qcash" onclick="cashQuick(0)">พอดี</button>
+                <button class="qcash" onclick="cashQuick(100)">100</button>
+                <button class="qcash" onclick="cashQuick(500)">500</button>
+                <button class="qcash" onclick="cashQuick(1000)">1,000</button>
+              </div>
+            </div>
+            <div id="cashKeypad" style="width:210px;flex-shrink:0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-content:start">
+              <!-- filled by JS -->
+            </div>
+          </div>
+          <!-- Card -->
+          <div id="pm-CARD" style="flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+            <div style="width:88px;height:88px;border-radius:999px;background:var(--surface);border:1.5px solid var(--line-2);display:grid;place-items:center;color:var(--brand-2)">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>
+            </div>
+            <div style="text-align:center;font-size:14px;color:var(--ink-2);line-height:1.5">สอด / แตะบัตรที่เครื่อง EDC<br>ยอด <b class="num" id="cardAmtLabel" style="color:var(--ink)">฿0</b></div>
+          </div>
+          <!-- Confirm button -->
+          <button class="dbtn primary" style="margin-top:14px" id="btnConfirmPay" onclick="confirmPayment()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19.5 6.5"/></svg>
+            <span id="confirmPayLabel">ยืนยันรับชำระ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="overlay">
+    <div class="spin"></div>
+    <div style="font-size:13.5px;color:var(--ink-2)" id="ovMsg">กำลังโหลด...</div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  KLH POS PC — rebuilt from design_handoff_pos_desktop
+//  PCPos layout: 3-column + OrderTabs + PaymentOverlay
+// ════════════════════════════════════════════════════
+
+// ── State ─────────────────────────────────────────────
+var _execUrl = '';
+var _s = {
+  cart: {},       // barcode → {barcode,name,qty,unitPrice,lineTotal,sum,unit,cat}
+  member: null,   // {custId,name,priceLevel,creditDays,creditLimit,outstanding}
+  parked: [],     // [{id,billNo,cart,member,total,time}]
+  billNo: 1001,
+  activeCat: 'all',
+  searchQ: '',
+  products: [],
+  allProducts: [],
+  entity: '',
+  whId: 'W1',
+  payMethod: 'QR',
+  cashRecv: 0,
+  drawerOpen: false,
+  payDone: false,
+  lastSaleTotal: 0
+};
+
+var CAT_TINTS = {'เครื่องดื่ม':'#E8612C','ขนม':'#D9A21B','แป้ง':'#C0512E','ของแห้ง':'#C0512E','เครื่องปรุง':'#B5471F','ของใช้':'#7A6A4F','ของสด':'#5E8C3A','กลิ่น':'#8C6DA8'};
+function catTint(name){ for(var k in CAT_TINTS){ if(name && name.indexOf(k)>=0) return CAT_TINTS[k]; } return '#E94E27'; }
+
+// ── Boot ──────────────────────────────────────────────
+window.onload = function() {
+  updateClock(); setInterval(updateClock, 30000);
+  buildKeypad();
+  renderTabs(); renderCart(); updateFooter();
+  google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).getExecUrl();
+  showLoad('กำลังโหลดข้อมูล...');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoad();
+      if (res && res.ok) {
+        if (res.entities && res.entities.length) {
+          _s.entity = res.entities[0];
+          document.getElementById('storeName').textContent = _s.entity;
+        }
+        if (res.warehouses && res.warehouses.length) _s.whId = res.warehouses[0].id;
+      }
+      loadProducts('', 'all');
+    })
+    .withFailureHandler(function(){ hideLoad(); loadProducts('','all'); })
+    .getPosPageData();
+};
+
+function goHome() {
+  if (_execUrl) window.top.location.href = _execUrl;
+  else window.location.href = '?page=index';
+}
+function updateClock() {
+  var d = new Date();
+  var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  var el = document.getElementById('clockLabel');
+  if (el) el.textContent = 'กะเช้า · '+t+' น.';
+}
+
+// ── Barcode Scanner (Physical HID / USB / Camera) ──────
+// ① USB/Physical scanner → Enter key handler
+function onScanEnterPC(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  var val = e.target.value.trim();
+  if (!val) return;
+  clearTimeout(_searchTimer);
+  // Try exact match first → add to cart
+  var exact = null;
+  for (var i=0;i<_s.allProducts.length;i++) {
+    if (_s.allProducts[i].barcode === val) { exact = _s.allProducts[i]; break; }
+  }
+  if (exact) {
+    cartAdd(exact.barcode);
+    e.target.value = '';
+    e.target.style.background = 'rgba(233,78,39,.07)';
+    setTimeout(function(){ e.target.style.background=''; }, 300);
+  } else {
+    loadProducts(val, _s.activeCat);
+  }
+  e.target.focus();
+}
+
+// ② Camera scanner (BarcodeDetector API)
+var _camStream2 = null, _camLoop2 = null;
+
+function openCamPC() {
+  if (!('BarcodeDetector' in window)) {
+    Swal.fire({icon:'info', title:'USB Scanner พร้อมใช้งาน',
+      html:'เสียบ USB Barcode Scanner แล้วคลิกช่องค้นหา<br><small style="color:#888">สแกนเนอร์จะพิมพ์บาร์โค้ด + Enter อัตโนมัติ</small>',
+      confirmButtonText:'ตกลง'}); return;
+  }
+  var modal = document.getElementById('scanModalPC');
+  if (!modal) createScanModalPC();
+  document.getElementById('scanModalPC').style.display = 'flex';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(function(s) {
+      _camStream2 = s;
+      var v = document.getElementById('scanVideoPC');
+      v.srcObject = s; v.play();
+      var det = new BarcodeDetector({ formats:['ean_13','ean_8','code_128','code_39'] });
+      _camLoop2 = setInterval(function(){
+        det.detect(v).then(function(b) {
+          if (!b.length) return;
+          var code = b[0].rawValue;
+          closeCamPC();
+          document.getElementById('searchInput').value = code;
+          var exact = null;
+          for(var i=0;i<_s.allProducts.length;i++) if(_s.allProducts[i].barcode===code){exact=_s.allProducts[i];break;}
+          if(exact){cartAdd(exact.barcode);document.getElementById('searchInput').value='';}
+          else loadProducts(code,_s.activeCat);
+        }).catch(function(){});
+      }, 300);
+    }).catch(function(err){ alert('เปิดกล้องไม่ได้: '+err.message); });
+}
+
+function createScanModalPC() {
+  var d = document.createElement('div');
+  d.id = 'scanModalPC';
+  d.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  d.innerHTML = '<div style="color:#fff;font-size:16px;font-weight:600">📷 สแกนบาร์โค้ด</div>'
+    +'<div style="position:relative;width:300px;height:200px;border-radius:12px;overflow:hidden;border:2px solid #E94E27"><video id="scanVideoPC" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><div style="width:200px;height:60px;border:2px solid rgba(233,78,39,.8);border-radius:4px"></div></div></div>'
+    +'<button onclick="closeCamPC()" style="padding:8px 20px;border-radius:8px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:13px">ปิด</button>';
+  document.getElementById('win').appendChild(d);
+}
+
+function closeCamPC() {
+  clearInterval(_camLoop2); _camLoop2 = null;
+  if (_camStream2) { _camStream2.getTracks().forEach(function(t){t.stop();}); _camStream2=null; }
+  var m = document.getElementById('scanModalPC');
+  if (m) m.style.display = 'none';
+}
+
+// Auto re-focus search input (USB scanner needs focused input)
+document.addEventListener('click', function(e) {
+  if (e.target.id !== 'searchInput' &&
+      !e.target.closest('.stepper') &&
+      !e.target.closest('#payOverlay') &&
+      !e.target.closest('#memberWrap') &&
+      e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT') {
+    setTimeout(function(){ var si=document.getElementById('searchInput'); if(si)si.focus(); }, 50);
+  }
+});
+
+// ── Products ──────────────────────────────────────────
+var _searchTimer = null;
+function onSearch(val) {
+  _s.searchQ = val.trim();
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function(){ loadProducts(_s.searchQ, _s.activeCat); }, 280);
+}
+
+function loadProducts(q, cat) {
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      _s.allProducts = rows || [];
+      buildCatCol(rows);
+      renderProducts(cat === 'all' ? rows : rows.filter(function(p){ return p.category === cat; }));
+      // โหลด categories ที่สะอาดจาก PRODUCT_CATEGORY sheet (override dynamic)
+      if (!q) {
+        google.script.run
+          .withSuccessHandler(function(cats){
+            if(!cats||!cats.length) return;
+            var el=document.getElementById('catCol');
+            if(!el) return;
+            var html='<button class="dcat on" onclick="filterCat(\'all\')" data-cat="all">'
+              +'<span class="dc-dot" style="background:#E94E27"></span><span class="dc-nm">ทั้งหมด</span></button>';
+            for(var i=0;i<cats.length;i++){
+              var nm=String(cats[i].name||'');
+              if(!nm) continue;
+              var tint=catTint(nm);
+              html+='<button class="dcat" onclick="filterCat(\''+nm.replace(/'/g,'')+'\',this)" data-cat="'+nm.replace(/"/g,'')+'">'
+                +'<span class="dc-dot" style="background:'+tint+'"></span>'
+                +'<span class="dc-nm">'+nm+'</span></button>';
+            }
+            el.innerHTML=html;
+            _s.activeCat='all';
+          })
+          .withFailureHandler(function(){})
+          .getPosCategories();
+      }
+    })
+    .withFailureHandler(function(){})
+    .posSearchProducts(q || '', _s.whId);
+}
+
+function buildCatCol(products) {
+  var cats = {}, order = ['all'];
+  products.forEach(function(p){ if(!p.category) return; if(!cats[p.category]){ cats[p.category]=0; order.push(p.category); } cats[p.category]++; });
+  var el = document.getElementById('catCol');
+  el.innerHTML = order.map(function(c) {
+    var isAll = c === 'all';
+    var tint  = isAll ? '#E94E27' : catTint(c);
+    var name  = isAll ? 'ทั้งหมด' : c;
+    var on    = _s.activeCat === c;
+    return '<button class="dcat'+(on?' on':'')+'" onclick="filterCat(\''+esc(c)+'\')" data-cat="'+esc(c)+'">'
+      +'<span class="dcdot" style="background:'+tint+'"></span>'
+      +name
+      +'</button>';
+  }).join('');
+}
+
+function filterCat(cat) {
+  _s.activeCat = cat;
+  document.querySelectorAll('.dcat').forEach(function(b){ b.classList.toggle('on', b.dataset.cat===cat); });
+  // call server พร้อม catFilter เพื่อดึงครบทุก row (ไม่ติดขอบ 200)
+  if (cat === 'all') {
+    renderProducts(_s.allProducts);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(rows){ renderProducts(rows||[]); })
+      .withFailureHandler(function(){})
+      .posSearchProducts(_s.searchQ||'', _s.whId, cat);
+  }
+}
+
+function renderProducts(products) {
+  _s.products = products;
+  var el = document.getElementById('prodGrid');
+  document.getElementById('prodCount').textContent = products.length + ' รายการ';
+  if (!products.length) { el.innerHTML = '<div class="empty-grid">ไม่พบสินค้า</div>'; return; }
+  el.innerHTML = products.map(function(p) {
+    var inCart = _s.cart[p.barcode];
+    var price  = getPrice(p);
+    return '<button class="pcard" onclick="cartAdd(\''+esc(p.barcode)+'\')">'
+      +(inCart ? '<span class="pqty num">'+inCart.qty+'</span>' : '')
+      +'<div class="pn">'+p.name+'</div>'
+      +'<div><span class="pp num">฿'+price.toLocaleString('th-TH')+'</span>'
+      +'<span class="pu"> / '+(p.unitBig||'ชิ้น')+'</span></div>'
+      +'</button>';
+  }).join('');
+}
+
+function getPrice(p) {
+  if (_s.member && _s.member.priceLevel === 'wholesale' && p.wholesalePrice > 0) return p.wholesalePrice;
+  return p.retailPrice || p.wholesalePrice || 0;
+}
+
+function findProduct(barcode) {
+  for (var i=0;i<_s.allProducts.length;i++) if (_s.allProducts[i].barcode === barcode) return _s.allProducts[i];
+  return null;
+}
+
+// ── Cart ──────────────────────────────────────────────
+function cartAdd(barcode) {
+  var p = findProduct(barcode);
+  if (!p) return;
+  var price = getPrice(p);
+  if (_s.cart[barcode]) {
+    _s.cart[barcode].qty++;
+    _s.cart[barcode].lineTotal = _s.cart[barcode].qty * price;
+  } else {
+    _s.cart[barcode] = { barcode:barcode, name:p.name, qty:1, unitPrice:price, lineTotal:price, unit:p.unitBig||'ชิ้น', cat:p.category||'' };
+  }
+  renderCart(); renderProducts(_s.products);
+}
+
+function cartStepper(barcode, delta) {
+  var it = _s.cart[barcode];
+  if (!it) return;
+  var newQ = it.qty + delta;
+  if (newQ <= 0) { delete _s.cart[barcode]; }
+  else { it.qty = newQ; it.lineTotal = newQ * it.unitPrice; }
+  renderCart(); renderProducts(_s.products);
+}
+
+function cartSubtotal() { return Object.values(_s.cart).reduce(function(s,it){ return s+it.lineTotal; }, 0); }
+function cartCount()    { return Object.values(_s.cart).reduce(function(s,it){ return s+it.qty; }, 0); }
+function memberDisc()   { if (!_s.member) return 0; var r = {'wholesale':0.05,'vip':0.08}; return Math.round(cartSubtotal()*(r[_s.member.priceLevel]||0.03)); }
+function netAmount()    { return cartSubtotal() - memberDisc(); }
+
+function renderCart() {
+  var items = Object.values(_s.cart);
+  var count = cartCount();
+  document.getElementById('cartCountLabel').textContent = count + ' ชิ้น';
+  document.getElementById('billNoLabel').textContent = '#' + _s.billNo;
+  var el = document.getElementById('ordItems');
+  if (!items.length) {
+    el.innerHTML = '<div class="ord-empty">ยังไม่มีสินค้า<br><span style="font-size:12.5px">เลือกสินค้าจากรายการด้านซ้าย</span></div>';
+  } else {
+    el.innerHTML = items.map(function(it) {
+      return '<div class="ord-row">'
+        +'<div class="on"><div class="nm">'+it.name+'</div>'
+        +'<div class="up num">฿'+it.unitPrice.toLocaleString('th-TH')+' × '+it.qty+'</div></div>'
+        +'<div class="stepper">'
+        +'<button class="minus" onclick="cartStepper(\''+esc(it.barcode)+'\',-1)">–</button>'
+        +'<span class="q num">'+it.qty+'</span>'
+        +'<button onclick="cartStepper(\''+esc(it.barcode)+'\',1)">+</button>'
+        +'</div>'
+        +'<div class="ot num">฿'+it.lineTotal.toLocaleString('th-TH')+'</div>'
+        +'<button onclick="cartStepper(\''+esc(it.barcode)+'\',-('+it.qty+'))" style="color:var(--ink-3);width:24px;height:24px;display:grid;place-items:center">'
+        +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'
+        +'</button>'
+        +'</div>';
+    }).join('');
+  }
+  updateFooter();
+  document.getElementById('btnPark').disabled = count === 0;
+  document.getElementById('btnPay').disabled  = count === 0;
+}
+
+function updateFooter() {
+  var sub  = cartSubtotal();
+  var disc = memberDisc();
+  var net  = netAmount();
+  document.getElementById('footSubtotal').textContent = '฿'+sub.toLocaleString('th-TH',{minimumFractionDigits:2});
+  var discRow = document.getElementById('discRow');
+  if (disc > 0) {
+    discRow.style.display = 'flex';
+    document.getElementById('footDisc').textContent = '-฿'+disc.toLocaleString('th-TH',{minimumFractionDigits:2});
+  } else { discRow.style.display = 'none'; }
+  document.getElementById('footNet').textContent = '฿'+net.toLocaleString('th-TH',{minimumFractionDigits:2});
+}
+
+// ── Bill tabs ─────────────────────────────────────────
+function renderTabs() {
+  var el = document.getElementById('orderTabs');
+  var tabs = '<div class="otab on"><span class="od"></span>บิล #'+_s.billNo+'</div>';
+  tabs += _s.parked.map(function(p){
+    return '<div class="otab" onclick="resumeBill(\''+p.id+'\')" title="คลิกเพื่อเปิดบิลที่พักไว้">'
+      +'<span class="od" style="background:var(--ink-3)"></span>#'+p.no
+      +'<span class="num" style="color:var(--ink-3);font-size:11.5px">· ฿'+p.total.toLocaleString('th-TH')+'</span>'
+      +'</div>';
+  }).join('');
+  tabs += '<button onclick="newBill()" class="otab" style="color:var(--brand-2);font-weight:700">＋ บิลใหม่</button>';
+  el.innerHTML = tabs;
+}
+
+function parkBill() {
+  if (!cartCount()) return;
+  var snap = { id:'pk'+Date.now(), no:_s.billNo, cart: JSON.parse(JSON.stringify(_s.cart)), member:_s.member, total:netAmount(), time:new Date().toTimeString().slice(0,5) };
+  _s.parked.unshift(snap);
+  _s.billNo++;
+  _s.cart = {};
+  _s.member = null;
+  clearMemberUI();
+  renderTabs(); renderCart(); renderProducts(_s.products);
+}
+
+function resumeBill(id) {
+  var bill = null;
+  for (var i=0;i<_s.parked.length;i++) { if (_s.parked[i].id===id){ bill=_s.parked[i]; _s.parked.splice(i,1); break; } }
+  if (!bill) return;
+  if (cartCount()) parkBill();
+  _s.cart   = JSON.parse(JSON.stringify(bill.cart));
+  _s.member = bill.member;
+  _s.billNo = bill.no;
+  if (bill.member) showMemberChip(bill.member);
+  renderTabs(); renderCart(); renderProducts(_s.products);
+}
+
+function newBill() {
+  if (cartCount()) parkBill();
+  else { _s.billNo++; renderTabs(); }
+}
+
+// ── Member ────────────────────────────────────────────
+var _mTimer = null;
+function toggleMemberSearch() {
+  var w = document.getElementById('memberSearchWrap');
+  var b = document.getElementById('memberBtn');
+  if (w.style.display === 'none') {
+    w.style.display = 'block'; b.style.display = 'none';
+    document.getElementById('memberSearchInput').focus();
+  } else {
+    w.style.display = 'none'; b.style.display = '';
+  }
+}
+
+function onMemberSearch(val) {
+  var dd = document.getElementById('memberDd');
+  if (!val.trim()) { dd.style.display='none'; return; }
+  clearTimeout(_mTimer);
+  _mTimer = setTimeout(function(){
+    google.script.run
+      .withSuccessHandler(function(custs){
+        if (!custs.length){ dd.style.display='none'; return; }
+        dd.innerHTML = custs.map(function(c){
+          return '<div class="cust-dd-item" onclick="selectMember(\''+c.custId+'\',\''+esc(c.name)+'\',\''+c.priceLevel+'\','+c.creditLimit+','+c.creditDays+','+c.outstanding+')">'
+            +'<b>'+c.name+'</b> <span style="color:var(--ink-3);font-size:11px">'+c.phone+'</span>'
+            +(c.outstanding>0?' <span style="color:var(--brand-2);font-size:11px">ค้าง฿'+c.outstanding.toLocaleString('th-TH')+'</span>':'')
+            +'</div>';
+        }).join('');
+        dd.style.display='block';
+      })
+      .withFailureHandler(function(){})
+      .searchCustomers(val.trim());
+  }, 280);
+}
+
+function selectMember(id, name, level, limit, days, outstanding) {
+  _s.member = {custId:id, name:name, priceLevel:level, creditLimit:limit, creditDays:days, outstanding:outstanding};
+  document.getElementById('memberSearchWrap').style.display = 'none';
+  document.getElementById('memberDd').style.display = 'none';
+  showMemberChip(_s.member);
+  renderCart();
+  renderProducts(_s.products);
+}
+
+function showMemberChip(m) {
+  var b = document.getElementById('memberBtn');
+  b.style.display = '';
+  b.className = 'member-row filled';
+  b.innerHTML = '<div class="member-avatar">ส</div>'
+    +'<span style="flex:1;min-width:0">'
+    +'<span style="display:block;font-size:13.5px;font-weight:600">'+m.name+'</span>'
+    +'<span class="num" style="display:block;font-size:11.5px;color:var(--ink-3)">'+m.priceLevel+' · คลิกเพื่อเปลี่ยน</span>'
+    +'</span>';
+  b.onclick = function(){ clearMember(); };
+}
+
+function clearMemberUI() {
+  var b = document.getElementById('memberBtn');
+  b.className = 'member-row empty';
+  b.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>เพิ่มสมาชิก / ค้นหาลูกค้า';
+  b.onclick = toggleMemberSearch;
+}
+
+function clearMember() { _s.member = null; clearMemberUI(); renderCart(); renderProducts(_s.products); }
+
+document.addEventListener('click', function(e){
+  if (!e.target.closest('#memberSearchWrap') && !e.target.closest('#memberBtn')){
+    document.getElementById('memberDd').style.display='none';
+  }
+});
+
+// ── Payment ───────────────────────────────────────────
+// ── Create Order + Print (ไม่รับชำระ — ส่งแคชเชียร์) ──────────
+function doCreateOrderPC() {
+  var entity = _s.entity;
+  if (!entity) entity = 'อึ้งกวงล่งเฮง';  // default entity
+  var items = Object.values(_s.cart).map(function(it){
+    return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.unit,
+             unitPrice:it.unitPrice, discountAmt:0, lineTotal:it.lineTotal,
+             convRate:it.convRate||1, unitBig:it.unitBig||'' };
+  });
+  var sub = netAmount();
+  showLoad('กำลังสร้างออเดอร์...');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoad();
+      if (!res.ok) { Swal.fire('Error', res.msg, 'error'); return; }
+      printSlipPC(res.orderId, entity, items, sub, _s.member);
+      // Park and new bill
+      _s.cart = {}; _s.member = null; _s.billNo++;
+      clearMemberUI();
+      renderTabs(); renderCart(); renderProducts(_s.products);
+      Swal.fire({ icon:'success', title:'ออเดอร์: '+res.orderId, text:'พิมพ์ใบรายการแล้ว นำส่งแคชเชียร์', timer:3000, showConfirmButton:false });
+    })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .createOrder({
+      entity:       entity,
+      device:       'PC',
+      source:       'POS-PC',
+      customerCode: _s.member ? _s.member.custId : '',
+      customerName: _s.member ? _s.member.name : '',
+      priceLevel:   _s.member ? _s.member.priceLevel : 'retail',
+      creditDays:   _s.member ? _s.member.creditDays : 30,
+      whId:         _s.whId,
+      items:        items,
+      subtotal:     sub, discount:memberDisc(), total:sub
+    });
+}
+
+function printSlipPC(orderId, entity, items, total, member) {
+  var win = window.open('','_blank','width=380,height=620');
+  if (!win) return;
+  var d  = new Date();
+  var ts = d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543)+' '+d.toTimeString().slice(0,5);
+  var rows = items.map(function(it){
+    return '<tr><td style="padding:3px 0">'+it.name+'</td><td style="text-align:right;padding:3px 0;white-space:nowrap">×'+it.qty+'</td><td style="text-align:right;padding:3px 4px;white-space:nowrap">฿'+Number(it.lineTotal).toLocaleString('th-TH')+'</td></tr>';
+  }).join('');
+  var custLine = member ? '<div style="margin:4px 0;padding:4px 8px;background:#FBE3D8;border-radius:4px;font-size:11px">สมาชิก: <b>'+member.name+'</b> ('+member.priceLevel+')</div>' : '';
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:"IBM Plex Sans Thai",system-ui;font-size:12px;width:72mm;margin:0;padding:6px}table{width:100%;border-collapse:collapse}.center{text-align:center}.bold{font-weight:700}@media print{@page{margin:0}}</style></head><body>'
+    +'<div class="center bold" style="font-size:15px">'+entity+'</div>'
+    +'<div class="center" style="font-size:11px;color:#666;margin-bottom:4px">ใบรายการขาย</div>'
+    +custLine
+    +'<div style="border-top:1px dashed #ccc;margin:4px 0"></div>'
+    +'<div class="center" style="margin:8px 0">'
+    +'<img src="https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent(orderId)+'&size=160x160&margin=6" width="130" height="130" style="display:block;margin:0 auto">'
+    +'</div>'
+    +'<div class="center bold" style="font-size:13px;margin:2px 0">'+orderId+'</div>'
+    +'<div style="border-top:1px dashed #ccc;margin:4px 0"></div>'
+    +'<table>'+rows+'</table>'
+    +'<div style="border-top:1px solid #333;margin:4px 0;display:flex;justify-content:space-between"><b>รวม</b><b>฿'+Number(total).toLocaleString('th-TH',{minimumFractionDigits:2})+'</b></div>'
+    +'<div class="center" style="font-size:10px;color:#888;margin-top:4px">'+ts+'</div>'
+    +'<div class="center" style="font-size:11px;font-weight:700;margin-top:6px;color:#E94E27">สแกน QR ที่แคชเชียร์</div>'
+    +'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 300);
+}
+
+// Legacy (kept for overlay if needed in future)
+function openPayment() {
+  var net = netAmount();
+  if (net <= 0) return;
+  _s.payMethod  = 'QR';
+  _s.cashRecv   = 0;
+  _s.drawerOpen = false;
+  _s.payDone    = false;
+  _s.lastSaleTotal = net;
+  document.getElementById('payTotalLabel').textContent = '฿'+net.toLocaleString('th-TH',{minimumFractionDigits:2});
+  document.getElementById('payBillInfo').textContent   = 'บิล #'+_s.billNo+' · '+cartCount()+' ชิ้น'+(_s.member?' · '+_s.member.name:'');
+  document.getElementById('qrAmtLabel').textContent    = '฿'+net.toLocaleString('th-TH',{minimumFractionDigits:2});
+  document.getElementById('cardAmtLabel').textContent  = '฿'+net.toLocaleString('th-TH',{minimumFractionDigits:2});
+  document.getElementById('paySuccess').style.display  = 'none';
+  document.getElementById('payInput').style.display    = 'flex';
+  document.getElementById('payRightTitle').textContent = 'รับชำระเงิน';
+  selectPayMethod('QR');
+  document.getElementById('payOverlay').style.display  = 'flex';
+}
+
+function closePayment() { if (!_s.payDone) document.getElementById('payOverlay').style.display='none'; }
+
+function selectPayMethod(m) {
+  _s.payMethod = m;
+  ['QR','CASH','CARD'].forEach(function(x){
+    var btn = document.getElementById('pt-'+x);
+    if (btn) btn.classList.toggle('on', x===m);
+    var panel = document.getElementById('pm-'+x);
+    if (panel) panel.style.display = (x===m) ? (x==='CASH'?'flex':'flex') : 'none';
+  });
+  var label = m==='CASH' ? 'ยืนยันรับเงิน · เปิดลิ้นชัก' : 'ยืนยันรับชำระ';
+  document.getElementById('confirmPayLabel').textContent = label;
+  updateCashDisplay();
+}
+
+function cashQuick(amt) {
+  if (amt === 0) _s.cashRecv = netAmount();
+  else _s.cashRecv += amt;
+  updateCashDisplay();
+}
+
+var _cashStr = '';
+function buildKeypad() {
+  var keys = ['1','2','3','4','5','6','7','8','9','00','0','del'];
+  var el   = document.getElementById('cashKeypad');
+  el.innerHTML = keys.map(function(k){
+    return '<button class="kkey" onclick="cashKey(\''+k+'\')">'+(k==='del'?'⌫':k)+'</button>';
+  }).join('');
+}
+
+function cashKey(k) {
+  if (k==='del') { _cashStr = _cashStr.slice(0,-1); }
+  else if (k==='C') { _cashStr = ''; }
+  else { _cashStr = (_cashStr + k).replace(/^0+(?=\d)/,'').slice(0,7); }
+  _s.cashRecv = parseInt(_cashStr||'0',10);
+  updateCashDisplay();
+}
+
+function updateCashDisplay() {
+  var net = netAmount();
+  var chg = _s.cashRecv - net;
+  document.getElementById('cashRecvDisplay').textContent = '฿'+_s.cashRecv.toLocaleString('th-TH');
+  var chgEl = document.getElementById('cashChangeDisplay');
+  var rowEl = document.getElementById('changeRow');
+  if (chg >= 0) {
+    chgEl.textContent = '฿'+chg.toLocaleString('th-TH');
+    chgEl.style.color = 'var(--ok)';
+  } else {
+    chgEl.textContent = '—';
+    chgEl.style.color = 'var(--ink-3)';
+  }
+  var canPay = _s.payMethod !== 'CASH' || _s.cashRecv >= net;
+  document.getElementById('btnConfirmPay').disabled = !canPay;
+}
+
+function openDrawer() {
+  _s.drawerOpen = true;
+  var ds = document.getElementById('drawerState');
+  ds.innerHTML = '<span style="width:6px;height:6px;border-radius:999px;background:#7FE0A8"></span>เปิดอยู่';
+  ds.style.color = '#7FE0A8';
+}
+
+function confirmPayment() {
+  var net = netAmount();
+  if (_s.payMethod === 'CASH') openDrawer();
+  // Call closeSale
+  var items = Object.values(_s.cart).map(function(it){ return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.unit, unitPrice:it.unitPrice, lineTotal:it.lineTotal }; });
+  showLoad('กำลังบันทึก...');
+  google.script.run
+    .withSuccessHandler(function(res){
+      hideLoad();
+      _s.payDone = true;
+      _s.lastSaleTotal = net;
+      document.getElementById('payInput').style.display   = 'none';
+      document.getElementById('paySuccess').style.display = 'flex';
+      document.getElementById('payRightTitle').textContent = 'ชำระเงินสำเร็จ';
+      var chg = _s.payMethod==='CASH' ? Math.max(0,_s.cashRecv-net) : 0;
+      document.getElementById('paySuccessLabel').textContent =
+        'รับชำระ ฿'+net.toLocaleString('th-TH') +
+        (_s.payMethod==='CASH' ? ' · เงินทอน ฿'+chg.toLocaleString('th-TH') : ' · '+(_s.payMethod==='QR'?'พร้อมเพย์':'บัตร'));
+      if (_s.drawerOpen) document.getElementById('drawerOpenedChip').style.display='inline-flex';
+    })
+    .withFailureHandler(function(e){ hideLoad(); alert('Error: '+e); })
+    .closeSale({
+      orderIds:      [],
+      entity:        _s.entity,
+      customerCode:  _s.member ? _s.member.custId : '',
+      customerName:  _s.member ? _s.member.name   : '',
+      creditDays:    _s.member ? _s.member.creditDays : 30,
+      vatRate:       0, vatAmt:0,
+      subtotal:      cartSubtotal(),
+      total:         net,
+      paymentMethod: _s.payMethod,
+      cashReceived:  _s.cashRecv || net,
+      changeGiven:   _s.payMethod==='CASH' ? Math.max(0,_s.cashRecv-net) : 0,
+      warehouseId:   _s.whId,
+      items:         items
+    });
+}
+
+function printReceipt() { alert('ส่งงานพิมพ์ไปยัง Tigercashbox (ต้องเชื่อมต่อ API)'); }
+
+function finishSale() {
+  _s.cart = {};
+  _s.member = null;
+  _s.billNo++;
+  _s.cashRecv = 0;
+  _cashStr = '';
+  _s.drawerOpen = false;
+  clearMemberUI();
+  document.getElementById('payOverlay').style.display = 'none';
+  document.getElementById('drawerOpenedChip').style.display = 'none';
+  renderTabs(); renderCart(); renderProducts(_s.products);
+}
+
+// ── Helpers ────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function showLoad(msg){ document.getElementById('ovMsg').textContent=msg||'...'; document.getElementById('overlay').style.display='flex'; }
+function hideLoad(){ document.getElementById('overlay').style.display='none'; }
+</script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH Supplier Master</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<style>
+:root{--orange:#E65100;--orange2:#FF8F00;--dark:#37474F;--teal:#00695C;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#f0f2f5;font-family:'Segoe UI','Sarabun',sans-serif;font-size:14px;}
+.hdr{background:linear-gradient(135deg,var(--teal),#00897B);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.25);position:sticky;top:0;z-index:200;}
+.hdr h1{font-size:1.05rem;font-weight:700;flex:1;}
+.btn-hdr{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:4px;}
+.btn-hdr:hover{background:rgba(255,255,255,.35);}
+.toolbar{background:#fff;padding:12px 16px;border-bottom:1px solid #e0e0e0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.search-box{flex:1;min-width:200px;padding:7px 12px;border:1px solid #ddd;border-radius:8px;font-size:.88rem;outline:none;}
+.search-box:focus{border-color:var(--teal);}
+.btn{border:none;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:.85rem;font-weight:500;display:inline-flex;align-items:center;gap:5px;}
+.btn-primary{background:var(--teal);color:#fff;}
+.btn-primary:hover{background:#00897B;}
+.btn-sm{padding:4px 10px;font-size:.78rem;}
+.btn-edit{background:#E3F2FD;color:#1565C0;border:none;}
+.btn-edit:hover{background:#BBDEFB;}
+.btn-del{background:#FFEBEE;color:#c62828;border:none;}
+.btn-del:hover{background:#FFCDD2;}
+.btn-secondary{background:#e0e0e0;color:#333;}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.1);margin:16px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;font-size:.86rem;}
+thead tr{background:var(--dark);color:#fff;}
+thead th{padding:10px 12px;text-align:left;white-space:nowrap;}
+tbody tr:nth-child(even){background:rgba(0,0,0,.025);}
+tbody tr:hover{background:#E0F2F1;}
+tbody td{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:middle;}
+.code-badge{font-family:monospace;background:#E0F2F1;color:#00695C;border-radius:10px;padding:2px 8px;font-size:.78rem;font-weight:600;}
+/* Modal */
+.modal-bg{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0;}
+.modal-box{background:#fff;border-radius:12px;width:90%;max-width:600px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden;}
+.modal-hdr{background:linear-gradient(135deg,var(--teal),#00897B);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:8px;}
+.modal-hdr h3{font-size:1rem;font-weight:600;flex:1;}
+.modal-body{padding:18px;}
+.section-title{font-size:.78rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;border-bottom:1px solid #E0F2F1;padding-bottom:4px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.form-group{margin-bottom:0;}
+.form-group label{display:block;font-size:.8rem;color:#555;margin-bottom:3px;font-weight:500;}
+.form-group input,.form-group select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:.86rem;outline:none;}
+.form-group input:focus{border-color:var(--teal);}
+.form-group input[readonly]{background:#f5f5f5;color:#888;}
+.modal-footer{padding:14px 18px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end;}
+/* Loading */
+#overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.8);z-index:9999;flex-direction:column;align-items:center;justify-content:center;}
+.spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@media(max-width:520px){.grid-2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <i class="bi bi-people fs-5"></i>
+  <h1>Supplier Master — จัดการเจ้าหนี้</h1>
+  <button class="btn-hdr" onclick="openAddModal()"><i class="bi bi-plus-circle"></i> เพิ่มใหม่</button>
+  <button class="btn-hdr" onclick="goBack()" title="ย้อนกลับ"><i class="bi bi-arrow-left"></i> ย้อนกลับ</button>
+</div>
+
+<div class="toolbar">
+  <input type="text" class="search-box" id="searchBox" placeholder="🔍 ค้นหารหัส / ชื่อ / TAX ID / เบอร์..." oninput="filterTable(this.value)">
+  <button class="btn btn-primary" onclick="loadSuppliers()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+  <span id="countLabel" style="color:#888;font-size:.82rem"></span>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px">รหัส</th>
+          <th style="min-width:200px">ชื่อเจ้าหนี้</th>
+          <th style="width:130px">ผู้ติดต่อ</th>
+          <th style="width:110px">เบอร์โทร</th>
+          <th style="width:120px">เลขผู้เสียภาษี</th>
+          <th style="width:70px">เครดิต</th>
+          <th style="width:90px">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="supplierTbody">
+        <tr><td colspan="7" style="text-align:center;color:#aaa;padding:30px">กำลังโหลด...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:8px 16px;font-size:.78rem;color:#888;background:#fafafa;border-top:1px solid #eee" id="countBar"></div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-bg" id="supplierModal">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <i class="bi bi-person-lines-fill"></i>
+      <h3 id="modalTitle">เพิ่มเจ้าหนี้ใหม่</h3>
+      <button onclick="closeModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="section-title">ข้อมูลพื้นฐาน</div>
+      <div class="grid-2" style="margin-bottom:10px">
+        <div class="form-group">
+          <label>รหัสเจ้าหนี้</label>
+          <input type="text" id="mCode" placeholder="auto" readonly>
+        </div>
+        <div class="form-group">
+          <label>เลขผู้เสียภาษี (13 หลัก)</label>
+          <input type="text" id="mTaxId" placeholder="0000000000000" maxlength="13">
+        </div>
+      </div>
+      <div style="margin-bottom:10px" class="form-group">
+        <label>ชื่อเจ้าหนี้ / บริษัท <span style="color:red">*</span></label>
+        <input type="text" id="mName" placeholder="ชื่อบริษัท / ร้านค้า">
+      </div>
+      <div class="grid-2" style="margin-bottom:10px">
+        <div class="form-group">
+          <label>ผู้ติดต่อ / พนักงานขาย</label>
+          <input type="text" id="mContact" placeholder="ชื่อพนักงานขาย">
+        </div>
+        <div class="form-group">
+          <label>เบอร์โทรศัพท์</label>
+          <input type="tel" id="mTel" placeholder="0XX-XXX-XXXX">
+        </div>
+      </div>
+      <div style="margin-bottom:10px" class="form-group">
+        <label>ที่อยู่</label>
+        <input type="text" id="mAddress" placeholder="ที่อยู่">
+      </div>
+
+      <div class="section-title">ข้อมูลการชำระเงิน</div>
+      <div class="grid-2" style="margin-bottom:10px">
+        <div class="form-group">
+          <label>ธนาคาร</label>
+          <input type="text" id="mBankName" placeholder="กรุงไทย / กสิกร / ไทยพาณิชย์...">
+        </div>
+        <div class="form-group">
+          <label>เลขบัญชีโอนเงิน</label>
+          <input type="text" id="mBankAccount" placeholder="XXX-X-XXXXX-X">
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:10px">
+        <div class="form-group">
+          <label>เช็คสั่งจ่ายในนาม</label>
+          <input type="text" id="mCheque" placeholder="ชื่อบริษัทที่สั่งจ่าย">
+        </div>
+        <div class="form-group">
+          <label>เทอมเครดิต (วัน)</label>
+          <input type="number" id="mCreditDays" placeholder="30" min="0" max="365">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>หมายเหตุ</label>
+        <input type="text" id="mNote" placeholder="">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveSupplier()"><i class="bi bi-check-circle"></i> บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="overlay">
+  <div class="spinner"></div>
+  <div style="margin-top:12px;color:#666;font-size:.9rem" id="overlayMsg">กำลังดำเนินการ...</div>
+</div>
+
+<script>
+// ── Template vars ────────────────────────────────────────────────
+var _fromPage = '<?= fromPage ?>';
+var _execUrl  = '';
+var _all      = [];
+var _editMode = false;
+
+window.onload = function() {
+  google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
+  loadSuppliers();
+};
+
+// ── Navigation ────────────────────────────────────────────────────
+function goBack() {
+  if (_fromPage && _execUrl) { window.top.location.href = _execUrl + '?page=' + _fromPage; return; }
+  if (_execUrl) window.top.location.href = _execUrl;
+  else window.location.href = '?page=index';
+}
+
+// ── Loading ────────────────────────────────────────────────────────
+function showLoad(msg) { document.getElementById('overlayMsg').textContent=msg||'...'; document.getElementById('overlay').style.display='flex'; }
+function hideLoad() { document.getElementById('overlay').style.display='none'; }
+
+// ── Load Table ─────────────────────────────────────────────────────
+function loadSuppliers() {
+  showLoad('กำลังโหลด...');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoad();
+      _all = data || [];
+      renderTable(_all);
+    })
+    .withFailureHandler(function(e) { hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getSupplierList();
+}
+
+var _codeMap = {};  // code → supplier object (for edit lookup)
+
+function renderTable(rows) {
+  var tb = document.getElementById('supplierTbody');
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:30px">ไม่มีข้อมูล</td></tr>';
+    document.getElementById('countBar').textContent = '';
+    document.getElementById('countLabel').textContent = '0 รายการ';
+    return;
+  }
+  // rebuild lookup map
+  _codeMap = {};
+  rows.forEach(function(r){ _codeMap[r.code] = r; });
+
+  tb.innerHTML = rows.map(function(r) {
+    var code = r.code || '';
+    return '<tr>'
+      + '<td><span class="code-badge">' + code + '</span></td>'
+      + '<td style="font-weight:500">' + (r.name||'') + '</td>'
+      + '<td style="color:#666">' + (r.contact||'—') + '</td>'
+      + '<td>' + (r.tel||'—') + '</td>'
+      + '<td style="font-family:monospace;font-size:.8rem">' + (r.taxId||'—') + '</td>'
+      + '<td style="text-align:center">' + (r.creditDays ? r.creditDays+' วัน' : '—') + '</td>'
+      + '<td style="white-space:nowrap">'
+      + '<button class="btn btn-sm btn-edit" onclick="openEditByCode(\'' + code + '\')" title="แก้ไข"><i class="bi bi-pencil"></i></button> '
+      + '<button class="btn btn-sm btn-del" onclick="confirmDelete(\'' + code + '\')" title="ลบ"><i class="bi bi-trash"></i></button>'
+      + '</td></tr>';
+  }).join('');
+  document.getElementById('countBar').textContent = rows.length + ' รายการ';
+  document.getElementById('countLabel').textContent = _all.length + ' รายการทั้งหมด';
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function filterTable(q) {
+  var ql = q.trim().toLowerCase();
+  if (!ql) { renderTable(_all); return; }
+  renderTable(_all.filter(function(r){
+    return (r.code+r.name+r.tel+r.contact+r.taxId).toLowerCase().indexOf(ql)>=0;
+  }));
+}
+
+// ── Add ────────────────────────────────────────────────────────────
+function openAddModal() {
+  _editMode = false;
+  document.getElementById('modalTitle').textContent = 'เพิ่มเจ้าหนี้ใหม่';
+  ['mCode','mTaxId','mName','mContact','mTel','mAddress','mBankName','mBankAccount','mCheque','mCreditDays','mNote']
+    .forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('mCode').value = '(auto-generate)';
+  document.getElementById('supplierModal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('mName').focus(); }, 100);
+}
+
+// ── Edit (by code — safe from HTML attribute issues) ───────────────
+function openEditByCode(code) {
+  var r = _codeMap[code];
+  if (!r) { Swal.fire('ไม่พบข้อมูล','รหัส '+code+' ไม่อยู่ในตาราง','warning'); return; }
+  openEditModal(r);
+}
+function openEditModal(r) {
+  _editMode = true;
+  document.getElementById('modalTitle').textContent = 'แก้ไข — ' + r.code;
+  document.getElementById('mCode').value        = r.code;
+  document.getElementById('mTaxId').value       = r.taxId||'';
+  document.getElementById('mName').value        = r.name||'';
+  document.getElementById('mContact').value     = r.contact||'';
+  document.getElementById('mTel').value         = r.tel||'';
+  document.getElementById('mAddress').value     = r.address||'';
+  document.getElementById('mBankName').value    = r.bankName||'';
+  document.getElementById('mBankAccount').value = r.bankAccount||'';
+  document.getElementById('mCheque').value      = r.chequePayable||'';
+  document.getElementById('mCreditDays').value  = r.creditDays||'';
+  document.getElementById('mNote').value        = r.note||'';
+  document.getElementById('supplierModal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('supplierModal').style.display='none'; }
+
+function saveSupplier() {
+  var name = document.getElementById('mName').value.trim();
+  if (!name) { Swal.fire('แจ้งเตือน','กรุณากรอกชื่อเจ้าหนี้','warning'); return; }
+  var data = {
+    name:          name,
+    taxId:         document.getElementById('mTaxId').value.trim(),
+    contact:       document.getElementById('mContact').value.trim(),
+    tel:           document.getElementById('mTel').value.trim(),
+    address:       document.getElementById('mAddress').value.trim(),
+    bankName:      document.getElementById('mBankName').value.trim(),
+    bankAccount:   document.getElementById('mBankAccount').value.trim(),
+    chequePayable: document.getElementById('mCheque').value.trim(),
+    creditDays:    document.getElementById('mCreditDays').value.trim(),
+    note:          document.getElementById('mNote').value.trim()
+  };
+  closeModal();
+  showLoad('กำลังบันทึก...');
+  if (_editMode) {
+    var code = document.getElementById('mCode').value;
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ Swal.fire({icon:'success',title:'สำเร็จ',text:res.msg,timer:2000,showConfirmButton:false}); loadSuppliers(); } else Swal.fire('Error',res.msg,'error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .updateSupplier(code, data);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res.status==='success'){ Swal.fire({icon:'success',title:'เพิ่มสำเร็จ',text:res.code+' — '+res.name,timer:2000,showConfirmButton:false}); loadSuppliers(); } else Swal.fire('Error',res.message||'error','error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .addNewSupplier(data);
+  }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────
+function confirmDelete(code) {
+  var r = _codeMap[code] || {};
+  var name = r.name || code;
+  Swal.fire({
+    title: 'ยืนยันการลบ',
+    html: 'ลบเจ้าหนี้ <b style="color:#c62828">' + code + '</b><br>'
+      + '<span style="color:#444;font-weight:500">' + name + '</span><br>'
+      + '<small style="color:#999">ไม่สามารถกู้คืนได้</small>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#c62828',
+    confirmButtonText: '<i class="bi bi-trash"></i> ลบ',
+    cancelButtonText: 'ยกเลิก'
+  }).then(function(r) {
+    if (!r.isConfirmed) return;
+    showLoad('กำลังลบ ' + code + '...');
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res.ok){ Swal.fire({icon:'success',title:'ลบสำเร็จ',text:res.msg,timer:2000,showConfirmButton:false}); loadSuppliers(); } else Swal.fire('Error',res.msg,'error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .deleteSupplier(code);
+  });
+}
+</script>
+</body>
+</html>

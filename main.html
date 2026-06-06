@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KLH ERP</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+:root { --orange:#E65100; --orange2:#FF8F00; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  min-height:100vh;
+  background:linear-gradient(150deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  font-family:'Segoe UI','Sarabun',sans-serif;
+  color:#fff;
+}
+
+/* Header */
+.hdr {
+  padding:28px 24px 20px;
+  display:flex; align-items:center; gap:16px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.logo-ring {
+  width:56px; height:56px; border-radius:50%;
+  background:linear-gradient(135deg,var(--orange),var(--orange2));
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.6rem; font-weight:900; color:#fff;
+  box-shadow:0 4px 16px rgba(230,81,0,.5);
+}
+.hdr-text h1 { font-size:1.4rem; font-weight:700; }
+.hdr-text p  { font-size:.82rem; color:rgba(255,255,255,.55); margin-top:2px; }
+.hdr-right { margin-left:auto; font-size:.78rem; color:rgba(255,255,255,.4); text-align:right; }
+
+/* Grid */
+.grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap:16px;
+  padding:24px;
+  max-width:1100px;
+  margin:0 auto;
+}
+
+/* Module card */
+.mod-card {
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  padding:24px;
+  cursor:pointer;
+  transition:.2s;
+  text-decoration:none;
+  color:#fff;
+  display:flex; flex-direction:column; gap:12px;
+  position:relative; overflow:hidden;
+}
+.mod-card:hover {
+  background:rgba(255,255,255,.11);
+  border-color:rgba(255,255,255,.25);
+  transform:translateY(-2px);
+  box-shadow:0 8px 32px rgba(0,0,0,.3);
+}
+.mod-card::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:3px;
+  background:var(--accent);
+}
+.mod-icon {
+  width:48px; height:48px; border-radius:12px;
+  background:rgba(255,255,255,.1);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.5rem;
+}
+.mod-title { font-size:1.05rem; font-weight:700; }
+.mod-desc  { font-size:.82rem; color:rgba(255,255,255,.55); line-height:1.5; }
+.mod-badge {
+  display:inline-block; font-size:.72rem; padding:2px 10px;
+  border-radius:20px; font-weight:600; margin-top:4px;
+}
+.badge-live { background:rgba(76,175,80,.2); color:#81C784; border:1px solid rgba(76,175,80,.3); }
+.badge-todo { background:rgba(255,255,255,.08); color:rgba(255,255,255,.4); border:1px solid rgba(255,255,255,.12); }
+
+/* Status strip */
+.status-strip {
+  margin:0 24px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  padding:14px 20px;
+  display:flex; gap:24px; flex-wrap:wrap;
+  font-size:.82rem; color:rgba(255,255,255,.5);
+}
+.stat-item b { color:#fff; font-size:1.1rem; display:block; margin-bottom:2px; }
+
+/* Footer */
+.footer {
+  text-align:center; padding:24px;
+  font-size:.75rem; color:rgba(255,255,255,.2);
+}
+
+@media(max-width:480px) {
+  .grid { padding:14px; gap:12px; }
+  .hdr  { padding:20px 16px 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="logo-ring">K</div>
+  <div class="hdr-text">
+    <h1>KLH Grocery EPS-POS</h1>
+    <p>ระบบบริหารจัดการธุรกิจค้าส่ง — ห้างหุ้นส่วน เคแอลเอช</p>
+  </div>
+  <div class="hdr-right" id="dateTime"></div>
+</div>
+
+<!-- Quick Stats (placeholder) -->
+<div class="status-strip">
+  <div class="stat-item"><b id="statDate">—</b>วันนี้</div>
+  <div class="stat-item"><b>5</b>กิจการ</div>
+  <div class="stat-item"><b>5</b>คลังสินค้า</div>
+  <div class="stat-item" style="color:rgba(76,175,80,.8)"><b>● Live</b>ระบบทำงานปกติ</div>
+</div>
+
+<!-- Module Grid -->
+<div class="grid">
+
+  <!-- 0: Data Survey -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('survey')" style="--accent:linear-gradient(90deg,#FF8F00,#FFB300)">
+    <div class="mod-icon" style="color:#FFB300"><i class="bi bi-search"></i></div>
+    <div>
+      <div class="mod-title">KLH Data Survey</div>
+      <div class="mod-desc">สำรวจ อัปเดต ราคาต้นทุน ราคาขาย บาร์โค้ด รูปสินค้า จาก KLH DATA</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- WMS -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('wms')" style="--accent:linear-gradient(90deg,#1565C0,#1976D2)">
+    <div class="mod-icon" style="color:#64B5F6"><i class="bi bi-boxes"></i></div>
+    <div>
+      <div class="mod-title">WMS คลังสินค้า</div>
+      <div class="mod-desc">รับสินค้าเข้า โอนระหว่างคลัง ดูสต็อก Pick List ตั้งค่า ROP แจ้งเตือน LINE</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Price List -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pricelist')" style="--accent:linear-gradient(90deg,#2E7D32,#388E3C)">
+    <div class="mod-icon" style="color:#81C784"><i class="bi bi-book"></i></div>
+    <div>
+      <div class="mod-title">Price List</div>
+      <div class="mod-desc">ตารางราคาสินค้าแบบหนังสือ แยกหมวดหมู่ ค้นหาได้ iPad-optimized</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Invoice OCR -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('ocr')" style="--accent:linear-gradient(90deg,#6A1B9A,#7B1FA2)">
+    <div class="mod-icon" style="color:#CE93D8"><i class="bi bi-file-earmark-text"></i></div>
+    <div>
+      <div class="mod-title">Invoice OCR</div>
+      <div class="mod-desc">สแกนใบกำกับภาษี OCR แยกข้อมูล ตรวจสอบ บันทึกเข้าระบบ WMS และบัญชี</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Supplier Master -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('supplier')" style="--accent:linear-gradient(90deg,#00695C,#00897B)">
+    <div class="mod-icon" style="color:#80CBC4"><i class="bi bi-people"></i></div>
+    <div>
+      <div class="mod-title">Supplier Master</div>
+      <div class="mod-desc">จัดการรายชื่อเจ้าหนี้/ผู้จำหน่าย เพิ่ม แก้ไข ลบ รวม SUPPLIER_MASTER เดียว</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- POS Handheld (Sunmi V4) -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos')" style="--accent:linear-gradient(90deg,#E94E27,#C73A1B)">
+    <div class="mod-icon" style="color:#FFAB91"><i class="bi bi-phone"></i></div>
+    <div>
+      <div class="mod-title">POS Handheld</div>
+      <div class="mod-desc">Sunmi V4 — รายการเร็ว แถบหมวด+Dense list สแกน+สร้างออเดอร์ พิมพ์ใบ</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- POS PC -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos_pc')" style="--accent:linear-gradient(90deg,#6A1B9A,#7B1FA2)">
+    <div class="mod-icon" style="color:#CE93D8"><i class="bi bi-display"></i></div>
+    <div>
+      <div class="mod-title">POS PC</div>
+      <div class="mod-desc">3-column desktop — หมวดซ้าย · สินค้ากลาง · บิลขวา พักบิล สมาชิก Tiger</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- POS Sunmi T2 Lite -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos_t2')" style="--accent:linear-gradient(90deg,#4527A0,#5E35B1)">
+    <div class="mod-icon" style="color:#B39DDB"><i class="bi bi-tablet"></i></div>
+    <div>
+      <div class="mod-title">POS T2 Lite</div>
+      <div class="mod-desc">Sunmi T2 countertop จอสัมผัส + จอลูกค้า (Customer Display) QR ให้ลูกค้าสแกน</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Cashier -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('cashier')" style="--accent:linear-gradient(90deg,#221E1A,#37474F)">
+    <div class="mod-icon" style="color:#B0BEC5"><i class="bi bi-cash-coin"></i></div>
+    <div>
+      <div class="mod-title">Cashier รับชำระ</div>
+      <div class="mod-desc">สแกน QR รวมบิล รับเงิน Cash/QR/เชื่อ ปิดบิล+ตัดสต็อก Tiger Cashbox (อนาคต)</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Customer & AR -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('customer')" style="--accent:linear-gradient(90deg,#1565C0,#1976D2)">
+    <div class="mod-icon" style="color:#90CAF9"><i class="bi bi-people-fill"></i></div>
+    <div>
+      <div class="mod-title">Customer & AR</div>
+      <div class="mod-desc">สมาชิก ระดับราคา วงเงินเครดิต ลูกหนี้การค้า รับชำระ AR</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Label Print -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('label')" style="--accent:linear-gradient(90deg,#EF6C00,#F57C00)">
+    <div class="mod-icon" style="color:#FFCC80"><i class="bi bi-tags"></i></div>
+    <div>
+      <div class="mod-title">พิมพ์สติ๊กเกอร์</div>
+      <div class="mod-desc">พิมพ์ป้ายราคาหน้าชั้น และสติ๊กเกอร์บาร์โค้ดราคา ผ่าน Xprinter XP-420B WiFi</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Slip Verify -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('slip')" style="--accent:linear-gradient(90deg,#1B5E20,#2E7D32)">
+    <div class="mod-icon" style="color:#A5D6A7"><i class="bi bi-receipt-cutoff"></i></div>
+    <div>
+      <div class="mod-title">ตรวจสลิปโอนเงิน</div>
+      <div class="mod-desc">ถ่ายรูปสลิป OCR ตรวจยอดด้วย Gemini AI ป้องกันสลิปปลอม — iPhone/มือถือ</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- สต๊อกสิ้นเดือน KLH (ข้อ 5) -->
+  <a class="mod-card" href="javascript:void(0)" onclick="goTo('stock_month')" style="--accent:linear-gradient(90deg,#00695C,#26A69A)">
+    <div class="mod-icon" style="color:#80CBC4"><i class="bi bi-clipboard-data"></i></div>
+    <div>
+      <div class="mod-title">สต๊อกสิ้นเดือน KLH</div>
+      <div class="mod-desc">แยกสต๊อกสินค้า KLH กับร้านอื่น + สร้างยอดขายจำลองจาก statement → สต๊อกคงเหลือ KLH</div>
+    </div>
+    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
+  </a>
+
+  <!-- Accounting (TODO) -->
+  <div class="mod-card" style="--accent:linear-gradient(90deg,#37474F,#455A64);cursor:default;opacity:.6">
+    <div class="mod-icon" style="color:#90A4AE"><i class="bi bi-calculator"></i></div>
+    <div>
+      <div class="mod-title">บัญชี AP/AR/VAT</div>
+      <div class="mod-desc">เจ้าหนี้ ลูกหนี้ ภาษีซื้อ-ขาย แยก 5 กิจการ รายงานกำไร-ขาดทุน</div>
+    </div>
+    <div><span class="mod-badge badge-todo">🔲 TODO</span></div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">KLH Grocery EPS-POS v2.0 — Google Apps Script + Sheets</div>
+
+<script>
+// ── Navigation ────────────────────────────────────────────────
+function goTo(p) {
+  google.script.run
+    .withSuccessHandler(function(url) {
+      // url = exec URL เต็ม e.g. https://script.google.com/macros/s/xxx/exec
+      window.top.location.href = url + '?page=' + p;
+    })
+    .withFailureHandler(function() {
+      // fallback: navigate iframe directly
+      window.location.href = '?page=' + p;
+    })
+    .getExecUrl();
+}
+
+function tick() {
+  var now = new Date();
+  var days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+  var d = now.getDate() + ' ' + ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][now.getMonth()] + ' ' + (now.getFullYear()+543);
+  var t = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  document.getElementById('dateTime').innerHTML = 'วัน' + days[now.getDay()] + '<br>' + d + '  ' + t;
+  document.getElementById('statDate').textContent = d;
+}
+tick();
+setInterval(tick, 30000);
+</script>
+</body>
+</html>

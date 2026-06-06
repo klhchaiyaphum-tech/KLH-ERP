@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>POS PC + Sunmi T2 Lite — แคชเชียร์ · ลิ้นชัก · QR (Tigercashbox)</title>
+<link rel="stylesheet" href="pos.css" />
+<link rel="stylesheet" href="desktop.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="data.js"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="desktop.jsx"></script>
+<script type="text/babel">
+function App() {
+  return (
+    <div className="dstage">
+      <div className="dstage-head">
+        <div style={{ fontFamily: "var(--ff-num)", fontSize: 12, fontWeight: 700, letterSpacing: ".18em", color: "var(--brand-2)" }}>POS · COUNTER / CASHIER</div>
+        <h1 style={{ margin: "4px 0 0", fontSize: 31, fontWeight: 700, letterSpacing: "-.01em" }}>หน้าจอแคชเชียร์ — POS PC &amp; Sunmi T2 Lite</h1>
+        <p style={{ margin: "8px 0 0", color: "var(--ink-2)", fontSize: 15, maxWidth: 820, lineHeight: 1.55 }}>
+          2 รูปแบบเครื่องคิดเงินหน้าร้าน ใช้ดีไซน์/ข้อมูลชุดเดียวกับ Handheld — เลือกสินค้า, <b>พักบิล/เปิดบิลใหม่</b>, สมาชิก,
+          และ <b>หน้าชำระเงินแคชเชียร์</b>ที่มี <b>เงินสด + ลิ้นชักเก็บเงิน</b>, <b>QR พร้อมเพย์</b> และบัตร — เตรียมเชื่อมต่อ <b>Tigercashbox</b> (ลิ้นชัก/เครื่องพิมพ์) · กดเล่นได้จริงทั้งสองเครื่อง
+        </p>
+      </div>
+
+      <div className="dblock">
+        <div className="dblock-label" style={{ marginBottom: 18 }}>
+          <div className="vn">แบบที่ 1 · DESKTOP</div>
+          <div className="vt">POS สำหรับ PC</div>
+          <div className="vd">เลย์เอาต์ 3 คอลัมน์สำหรับจอกว้าง + เมาส์ — หมวดหมู่ซ้าย · ตารางสินค้ากลาง · บิลขวา · บิลที่พักไว้แสดงเป็นแท็บด้านบน คลิกสลับได้ทันที</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}><PCPos /></div>
+      </div>
+
+      <div className="dblock" style={{ maxWidth: 1340 }}>
+        <div className="dblock-label" style={{ marginBottom: 18 }}>
+          <div className="vn">แบบที่ 2 · COUNTERTOP</div>
+          <div className="vt">Sunmi T2 Lite (2 จอ)</div>
+          <div className="vd">เครื่องตั้งเคาน์เตอร์จอสัมผัส ปุ่มใหญ่ขึ้น + <b>จอลูกค้า (Customer Display)</b> แยกอีกจอ โชว์รายการ/ยอด และ <b>QR ให้ลูกค้าสแกนจ่าย</b> ตอนกดชำระเงิน</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", overflowX: "auto", paddingBottom: 10 }}><SunmiT2 /></div>
+      </div>
+
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "18px 20px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--line)", color: "var(--ink-2)", fontSize: 13.5, lineHeight: 1.6 }}>
+        <b style={{ color: "var(--ink)" }}>ลองเล่น:</b> กดสินค้าเพื่อเพิ่มลงบิล → <b>พักบิล</b> (ปุ่มในแผงขวา) แล้วกด <b>＋ บิลใหม่</b> เพื่อขายรายการใหม่ → กลับมาคลิกแท็บบิลเดิม (PC) หรือปุ่ม “บิลพัก” (T2) เพื่อเปิดต่อ · กด <b>ชำระเงิน</b> เพื่อเปิดหน้าแคชเชียร์ (เงินสด/คีย์แพด + ลิ้นชัก, QR, บัตร)
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="20" fill="#E94E27"/>
+  <rect x="20" y="26" width="60" height="40" rx="4" fill="#fff"/>
+  <rect x="24" y="32" width="20" height="28" rx="2" fill="#FBE3D8"/>
+  <rect x="47" y="32" width="29" height="6" rx="2" fill="#221E1A"/>
+  <rect x="47" y="42" width="29" height="6" rx="2" fill="#F4C9B0"/>
+  <rect x="47" y="52" width="18" height="6" rx="2" fill="#C73A1B"/>
+  <rect x="42" y="68" width="16" height="5" fill="#C73A1B"/>
+  <rect x="34" y="73" width="32" height="5" rx="2" fill="#C73A1B"/>
+</svg>
+</template>
+</body>
+</html>

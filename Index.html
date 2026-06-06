@@ -40,9 +40,12 @@
     .btn-calc  { background:var(--orange); color:white; height:45px; margin-top:18px; }
     .btn-save  { background:var(--success); color:white; margin-top:15px; height:55px; font-size:18px; }
     .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
-    .round-btn { background:#DFE6E9; border:none; width:35px; height:35px; border-radius:8px;
-      font-size:16px; cursor:pointer; color:var(--dark); display:flex;
+    .round-btn { background:#DFE6E9; border:none; width:26px; height:26px; border-radius:6px;
+      font-size:12px; cursor:pointer; color:var(--dark); display:flex;
       align-items:center; justify-content:center; flex-shrink:0; }
+    .step-btn { background:#EEF0F2; border:1px solid #CCC; border-radius:5px;
+      font-size:11px; padding:2px 5px; cursor:pointer; color:#555; line-height:1; }
+    .step-btn.active { background:var(--orange); color:#fff; border-color:var(--orange); font-weight:700; }
     .input-icon { position:relative; }
     .input-icon input { padding-right:30px; }
     .input-icon span { position:absolute; right:12px; top:38px; color:#636E72; font-weight:bold; }
@@ -135,7 +138,8 @@
           <label>ผู้จำหน่าย (G):</label>
           <div style="display:flex;gap:5px;">
             <select id="eSupCode" style="flex:1;"><option value="">-- เลือก --</option></select>
-            <button class="round-btn" onclick="openSupModal()">🏢</button>
+            <button class="round-btn" onclick="openSupModal()" title="เพิ่มผู้จัดจำหน่ายใหม่">🏢</button>
+            <button class="round-btn" style="background:#80CBC4;" onclick="goToSupplierMaster()" title="จัดการ/แก้ไขทั้งหมด">✏️</button>
           </div>
         </div>
       </div>
@@ -165,27 +169,73 @@
       </div>
       <hr style="border:.5px dashed #DDD;margin:15px 0;">
       <div class="grid-2">
-        <div><label>ขายส่งเก่า (U):</label><input type="number" id="eWholeU"></div>
         <div>
-          <label>ขายส่งคำนวณ (V): <span id="sLabel" style="color:var(--blue);font-weight:normal;"></span></label>
-          <div style="display:flex;align-items:center;gap:5px;">
-            <input type="text" id="eWholeV" readonly style="color:var(--blue);font-weight:bold;">
+          <label>ขายส่งเก่า (U):</label>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <input type="number" id="eWholeU" style="max-width:90px;">
             <div style="display:flex;flex-direction:column;gap:2px;">
-              <button class="round-btn" onclick="adjCalcPrice('V',1)">▲</button>
-              <button class="round-btn" onclick="adjCalcPrice('V',-1)">▼</button>
+              <button class="round-btn" onclick="adjOldPrice('U',1)" title="+0.25">▲</button>
+              <button class="round-btn" onclick="adjOldPrice('U',-1)" title="-0.25">▼</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label>ส่ง×หน่วยใหญ่ (V): <span id="sLabel" style="color:var(--blue);font-weight:normal;font-size:11px;"></span></label>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <input type="text" id="eWholeV" readonly style="color:var(--blue);font-weight:bold;flex:1;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="round-btn" onclick="adjCalcPrice('V',1)" title="+0.25">▲</button>
+              <button class="round-btn" onclick="adjCalcPrice('V',-1)" title="-0.25">▼</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="grid-2" style="margin-top:10px;">
-        <div><label>ขายปลีกเก่า (W):</label><input type="number" id="eRetailW"></div>
+      <div class="grid-2" style="margin-top:8px;">
         <div>
-          <label>ขายปลีกคำนวณ (X): <span id="tLabel" style="color:var(--success);font-weight:normal;"></span></label>
-          <div style="display:flex;align-items:center;gap:5px;">
-            <input type="text" id="eRetailX" readonly style="color:var(--success);font-weight:bold;">
+          <label>ขายปลีกเก่า (W):</label>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <input type="number" id="eRetailW" style="max-width:90px;">
             <div style="display:flex;flex-direction:column;gap:2px;">
-              <button class="round-btn" onclick="adjCalcPrice('X',1)">▲</button>
-              <button class="round-btn" onclick="adjCalcPrice('X',-1)">▼</button>
+              <button class="round-btn" onclick="adjOldPrice('W',1)" title="+0.25">▲</button>
+              <button class="round-btn" onclick="adjOldPrice('W',-1)" title="-0.25">▼</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label>ปลีกคำนวณ (X): <span id="tLabel" style="color:var(--success);font-weight:normal;font-size:11px;"></span></label>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <input type="text" id="eRetailX" readonly style="color:var(--success);font-weight:bold;flex:1;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="round-btn" onclick="adjCalcPrice('X',1)" title="+0.25">▲</button>
+              <button class="round-btn" onclick="adjCalcPrice('X',-1)" title="-0.25">▼</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ โหล (AH: BARCODE_DOZ, AI: RETAIL_DOZ) ══ -->
+      <div style="margin-top:10px;padding:10px;background:#F0FFF4;border-radius:10px;border:1.5px solid #A8E6CF;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:#2E7D32;">
+          <input type="checkbox" id="chkDoz" onchange="toggleDoz(this.checked)" style="width:16px;height:16px;accent-color:#2E7D32;">
+          🔢 สร้างหน่วยโหล (×12)
+        </label>
+        <div id="dozFields" style="display:none;margin-top:8px;">
+          <div class="grid-2">
+            <div>
+              <label style="font-size:12px;color:#555;">บาร์โค้ดโหล (AH):</label>
+              <input type="text" id="eBarcDoz" placeholder="auto: 5+barcode"
+                style="font-size:13px;" oninput="selected.barcode_doz=this.value">
+            </div>
+            <div>
+              <label style="font-size:12px;color:#555;">ราคาโหล (AI): <span id="dozLabel" style="color:#2E7D32;font-size:11px;"></span></label>
+              <div style="display:flex;align-items:center;gap:3px;">
+                <input type="text" id="eRetailDoz" readonly
+                  style="flex:1;color:#2E7D32;font-weight:bold;font-size:14px;">
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <button class="round-btn" onclick="adjDozPrice(1)" style="background:#C8E6C9;" title="+0.25">▲</button>
+                  <button class="round-btn" onclick="adjDozPrice(-1)" style="background:#C8E6C9;" title="-0.25">▼</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -539,7 +589,20 @@
       .manageListData(key, oldN, newN, mode);
   }
 
-  // ─── SUPPLIER MANAGER ───────────────────────────────────
+  // ─── SUPPLIER MASTER NAVIGATION ─────────────────────────
+  let _execUrl = '';
+  google.script.run
+    .withSuccessHandler(u => { _execUrl = u || ''; })
+    .withFailureHandler(() => {})
+    .getExecUrl();
+
+  function goToSupplierMaster() {
+    const url = _execUrl || '';
+    if (url) window.top.location.href = url + '?page=supplier&from=survey';
+    else window.location.href = '?page=supplier&from=survey';
+  }
+
+  // ─── SUPPLIER MANAGER (เพิ่มใหม่) ─────────────────────────
   function openSupModal() {
     Swal.fire({
       title:'🏢 เพิ่มผู้จัดจำหน่ายใหม่',
@@ -620,25 +683,88 @@
 
   function calcSalesFromPercent() {
     const R = parseFloat(document.getElementById('eCostR').value)||0;
+    const E = parseFloat(document.getElementById('ePackMult').value)||1;
     const S = selected.wholesale_percent, T = selected.retail_percent;
-    document.getElementById('eWholeV').value  = (R + R*(S/100)).toFixed(2);
-    document.getElementById('sLabel').innerText = `(${S.toFixed(1)}%)`;
+    // V = E × R × (1 + S%) = ราคาส่งต่อหน่วยใหญ่ (หีบ/กล่อง)
+    const vPerPiece = R*(1 + S/100);
+    document.getElementById('eWholeV').value  = (E * vPerPiece).toFixed(2);
+    document.getElementById('sLabel').innerText = `${E>1?'×'+E+' ':''}(${S.toFixed(1)}%)`;
     document.getElementById('eRetailX').value = (R + R*(T/100)).toFixed(2);
     document.getElementById('tLabel').innerText = `(${T.toFixed(1)}%)`;
+    // อัพเดทราคาโหล ถ้าเปิดอยู่
+    if (document.getElementById('chkDoz').checked) calcDoz();
   }
 
-  function adjCalcPrice(type, val) {
+  // snap ไปยัง 0.25 ที่ใกล้ที่สุดในทิศทาง dir
+  // ถ้าค่าลงตัว .00/.25/.50/.75 อยู่แล้ว → ±0.25 ปกติ
+  // ถ้าไม่ลงตัว → ปัดขึ้น (dir>0) หรือ ปัดลง (dir<0) ไปหา 0.25 ที่ใกล้สุด
+  function snapQuarter(val, dir) {
+    var q = val / 0.25;
+    var rounded = Math.round(q);
+    // ถ้าลงตัว 0.25 อยู่แล้ว (ภายใน epsilon) → ขยับ 1 step
+    if (Math.abs(q - rounded) < 0.001) {
+      return Math.round((val + dir*0.25)*100)/100;
+    }
+    // ไม่ลงตัว → snap ขึ้น/ลง
+    var snapped = dir > 0 ? Math.ceil(q) : Math.floor(q);
+    return Math.round(snapped * 0.25 * 100)/100;
+  }
+
+  function adjCalcPrice(type, dir) {
     const R = parseFloat(document.getElementById('eCostR').value)||0; if (R<=0) return;
     if (type==='V') {
-      const nv = Math.round(parseFloat(document.getElementById('eWholeV').value)||R) + val;
-      selected.wholesale_percent = ((nv-R)/R)*100;
+      const cur = parseFloat(document.getElementById('eWholeV').value)||R;
+      const nv = snapQuarter(cur, dir);
+      const E = parseFloat(document.getElementById('ePackMult').value)||1;
+      selected.wholesale_percent = E>0 ? ((nv/E-R)/R)*100 : ((nv-R)/R)*100;
       document.getElementById('mS').value = selected.wholesale_percent.toFixed(2);
     } else {
-      const nx = Math.round(parseFloat(document.getElementById('eRetailX').value)||R) + val;
+      const cur = parseFloat(document.getElementById('eRetailX').value)||R;
+      const nx = snapQuarter(cur, dir);
       selected.retail_percent = ((nx-R)/R)*100;
       document.getElementById('mT').value = selected.retail_percent.toFixed(2);
     }
     calcSalesFromPercent();
+  }
+
+  // ── โหล functions ─────────────────────────────────────────
+  function toggleDoz(on) {
+    document.getElementById('dozFields').style.display = on ? 'block' : 'none';
+    if (on) calcDoz();
+  }
+
+  function calcDoz() {
+    const R = parseFloat(document.getElementById('eCostR').value)||0;
+    const S = selected.wholesale_percent||0;
+    const vPerPiece = R*(1 + S/100);
+    const dozPrice = vPerPiece * 12;
+    selected.retail_doz = dozPrice;
+    document.getElementById('eRetailDoz').value = dozPrice.toFixed(2);
+    document.getElementById('dozLabel').innerText = '(R×%×12 = '+dozPrice.toFixed(2)+')';
+    // Auto-gen barcode_doz = "5" + barcode_small (ถ้ายังไม่มี)
+    const bc = document.getElementById('bcVal').value.trim();
+    if (bc && !document.getElementById('eBarcDoz').value) {
+      const dozBc = '5' + bc;
+      document.getElementById('eBarcDoz').value = dozBc;
+      selected.barcode_doz = dozBc;
+    }
+  }
+
+  function adjOldPrice(type, dir) {
+    // ปรับ U (ขายส่งเก่า) หรือ W (ขายปลีกเก่า) snap 0.25
+    var elId = type==='U' ? 'eWholeU' : 'eRetailW';
+    var el = document.getElementById(elId);
+    var cur = parseFloat(el.value)||0;
+    el.value = snapQuarter(cur, dir).toFixed(2);
+  }
+
+  function adjDozPrice(dir) {
+    const cur = parseFloat(document.getElementById('eRetailDoz').value)||0;
+    const nv = snapQuarter(cur, dir);
+    selected.retail_doz = nv;
+    document.getElementById('eRetailDoz').value = nv.toFixed(2);
+    const R = parseFloat(document.getElementById('eCostR').value)||0;
+    if (R>0) document.getElementById('dozLabel').innerText = '('+((nv/12-R)/R*100).toFixed(1)+'%×12)';
   }
 
   function openCostModal()  { document.getElementById('costModal').style.display = 'flex'; }
@@ -661,27 +787,21 @@
   }
 
   function finalPrint() {
-    const n  = document.getElementById('eName').value.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const b  = document.getElementById('bcVal').value;
-    const p  = document.getElementById('eRetailX').value;
-    const w  = window.open('','_blank');
-    w.document.write(`<html><head>
-      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
-      <style>
-        @page{size:80mm 40mm;margin:0}
-        body{margin:0;width:80mm;height:40mm;position:relative;font-family:sans-serif}
-        .n{position:absolute;top:${pos.pvName.t}mm;left:${pos.pvName.l}mm;font-size:14px;font-weight:bold;width:70mm;overflow:hidden}
-        .p{position:absolute;top:${pos.pvPrice.t}mm;left:${pos.pvPrice.l}mm;font-size:24px;font-weight:bold}
-        .b{position:absolute;bottom:3mm;left:2mm}
-      </style></head><body>
-      <div class="n">${n}</div>
-      <div class="p">฿${p}</div>
-      <div class="b"><svg id="bc"></svg></div>
-      <script>
-        JsBarcode("#bc","${b}",{format:"CODE128",width:1.5,height:35,displayValue:true});
-        window.onload=()=>{setTimeout(()=>{window.print();window.close();},800)};
-      <\/script></body></html>`);
-    w.document.close();
+    // ใช้ shelf_print page ร่วมกับ Label page (DRY)
+    const item = [{
+      name:    document.getElementById('eName').value,
+      barcode: document.getElementById('bcVal').value,
+      retail:  parseFloat(document.getElementById('eRetailX').value) || 0,
+      ws:      parseFloat(document.getElementById('eWholeU') ? document.getElementById('eWholeU').value : 0) || 0,
+      unit:    '',
+      convRate:1
+    }];
+    localStorage.setItem('klh_shelf_print', JSON.stringify(item));
+    google.script.run.withSuccessHandler(function(url){
+      window.open(url+'?page=shelf_print','_blank','width=720,height=560');
+    }).withFailureHandler(function(){
+      window.open('?page=shelf_print','_blank','width=720,height=560');
+    }).getExecUrl();
     closePreview();
   }
 
@@ -758,7 +878,9 @@
       wholesale_calc:   document.getElementById('eWholeV').value,
       retail_price:     document.getElementById('eRetailW').value,
       retail_calc:      document.getElementById('eRetailX').value,
-      barcode_big:      bBig
+      barcode_big:      bBig,
+      barcode_doz:      document.getElementById('chkDoz').checked ? document.getElementById('eBarcDoz').value : '',
+      retail_doz:       document.getElementById('chkDoz').checked ? (selected.retail_doz||0) : ''
     };
 
     google.script.run

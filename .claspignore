@@ -1,0 +1,6 @@
+# Design reference files — DO NOT push to GAS
+App onboarding/**
+App onboarding PC/**
+**/*.mhtml
+**/*.md
+KLH_SYSTEM_ARCHITECTURE.md

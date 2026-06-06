@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>KLH Slip Verify</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+:root{--brand:#E94E27;--ok:#27AE60;--err:#E74C3C;--warn:#F39C12;--bg:#F2F2F2;--surface:#fff;--ink:#1A1A1A;--ink-2:#555;--ink-3:#999;--line:#E0E0E0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"IBM Plex Sans Thai",sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;}
+button{font-family:inherit;cursor:pointer;border:none;}
+.topbar{background:var(--brand);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:10px;}
+.topbar h1{font-size:16px;font-weight:700;flex:1;}
+.back{background:rgba(255,255,255,.2);color:#fff;padding:5px 12px;border-radius:7px;font-size:13px;}
+/* Steps */
+.steps{display:flex;align-items:center;padding:11px 14px;background:var(--surface);border-bottom:1px solid var(--line);}
+.step{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-3);}
+.step.active{color:var(--brand);}
+.step.done{color:var(--ok);}
+.snum{width:20px;height:20px;border-radius:50%;background:var(--line);color:var(--ink-3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.step.active .snum{background:var(--brand);color:#fff;}
+.step.done .snum{background:var(--ok);color:#fff;}
+.sline{flex:1;height:1px;background:var(--line);margin:0 5px;}
+.sline.done{background:var(--ok);}
+/* Page */
+.page{padding:13px;display:flex;flex-direction:column;gap:11px;max-width:500px;margin:0 auto;}
+.card{background:var(--surface);border-radius:14px;padding:15px;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.card-title{font-size:11.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+/* Step 1 */
+.scan-area{position:relative;width:100%;height:220px;background:#111;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.scan-area video{width:100%;height:100%;object-fit:cover;}
+#scanCanvas{display:none;}
+.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+.scan-frame{width:55%;aspect-ratio:1;border:2px solid rgba(233,78,39,.9);border-radius:10px;box-shadow:0 0 0 2000px rgba(0,0,0,.45);}
+.scan-hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.75);}
+.btn-scan{width:100%;padding:11px;border-radius:9px;font-size:13.5px;font-weight:600;color:#fff;background:#2C3E50;margin-top:8px;}
+.btn-scan.on{background:var(--err);}
+.divider{text-align:center;font-size:11.5px;color:var(--ink-3);margin:7px 0;}
+.manual-row{display:flex;gap:7px;}
+.manual-input{flex:1;padding:8px 11px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;}
+.btn-load{padding:8px 14px;background:var(--brand);color:#fff;border-radius:8px;font-size:13px;font-weight:600;}
+.order-found{background:#E8F8EE;border-radius:9px;padding:10px 13px;margin-top:8px;display:none;}
+/* Step 2 */
+.qr-row{display:flex;align-items:center;gap:14px;}
+.qr-wrap{width:130px;height:130px;flex-shrink:0;background:#f5f5f5;border-radius:10px;display:flex;align-items:center;justify-content:center;}
+.qr-wrap img{width:130px;height:130px;border-radius:8px;display:block;}
+.qr-amt{font-size:24px;font-weight:900;color:var(--brand);}
+.btn-paid{width:100%;padding:12px;background:var(--ok);color:#fff;border-radius:11px;font-size:14.5px;font-weight:700;margin-top:10px;}
+/* Step 3 */
+.cam-area{width:100%;aspect-ratio:4/3;background:#111;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.cam-area img{width:100%;height:100%;object-fit:contain;}
+.cam-ph{text-align:center;color:#888;}
+.cam-ph .ico{font-size:38px;margin-bottom:6px;}
+.btn-cam{width:100%;padding:11px;background:#2C3E50;color:#fff;border-radius:9px;font-size:14px;font-weight:600;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-verify{width:100%;padding:13px;background:var(--brand);color:#fff;border-radius:12px;font-size:15px;font-weight:700;}
+.btn-verify:disabled{background:#ccc;cursor:not-allowed;}
+/* Result */
+.res-box{border-radius:12px;padding:15px;}
+.res-box.ok{background:#E8F8EE;}
+.res-box.fail{background:#FDECEA;}
+.res-icon{font-size:38px;text-align:center;margin-bottom:6px;}
+.res-title{font-size:16px;font-weight:800;text-align:center;margin-bottom:8px;}
+.res-title.ok-c{color:var(--ok);}
+.res-title.fail-c{color:var(--err);}
+.amt-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.amt-row .lbl{color:var(--ink-3);}
+.amt-row .val{font-weight:700;}
+.match{color:var(--ok);}
+.mismatch{color:var(--err);}
+.saved-badge{background:#E8F0FE;border-radius:8px;padding:7px;font-size:12px;color:#1565C0;text-align:center;margin-top:8px;display:none;}
+.btn-reset{width:100%;padding:11px;background:#2C3E50;color:#fff;border-radius:9px;font-size:14px;font-weight:600;margin-top:8px;}
+/* Disabled card */
+.disabled-card{opacity:.45;pointer-events:none;}
+/* Spinner */
+.spinner{display:inline-block;width:17px;height:17px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="back" onclick="goHome()">←</button>
+  <h1>🧾 ตรวจสลิปโอนเงิน</h1>
+</div>
+
+<!-- Step indicator -->
+<div class="steps">
+  <div class="step active" id="si1"><div class="snum">1</div>สแกนบิล</div>
+  <div class="sline" id="sl1"></div>
+  <div class="step" id="si2"><div class="snum">2</div>รับเงิน</div>
+  <div class="sline" id="sl2"></div>
+  <div class="step" id="si3"><div class="snum">3</div>ตรวจสลิป</div>
+</div>
+
+<div class="page">
+
+<!-- ══ STEP 1 ══ -->
+<div id="step1">
+  <div class="card">
+    <div class="card-title">สแกน QR บนใบเสร็จ / บิล</div>
+    <div class="scan-area" id="scanArea">
+      <video id="scanVideo" autoplay playsinline muted></video>
+      <canvas id="scanCanvas"></canvas>
+      <div class="scan-overlay"><div class="scan-frame"></div></div>
+      <div class="scan-hint">จ่อ QR บิลเข้ากรอบ</div>
+    </div>
+    <button class="btn-scan" id="btnCam" onclick="toggleCam()">📷 เปิดกล้องสแกน QR บิล</button>
+    <div class="divider">— หรือพิมพ์เลขออเดอร์ —</div>
+    <div class="manual-row">
+      <input class="manual-input" id="manualId" placeholder="ORD-20260601-001">
+      <button class="btn-load" onclick="lookupManual()">โหลด</button>
+    </div>
+    <div class="order-found" id="orderFound"></div>
+  </div>
+  <button id="btnNext1" class="hidden btn-verify" onclick="gotoStep2()">ถัดไป → แสดง QR รับเงิน ›</button>
+</div>
+
+<!-- ══ STEP 2 ══ -->
+<div id="step2" class="hidden">
+  <div class="card">
+    <div class="card-title">ให้ลูกค้าสแกน QR โอนเงิน</div>
+    <div class="qr-row">
+      <div class="qr-wrap" id="qr2Wrap"><span style="font-size:11px;color:#aaa">โหลด...</span></div>
+      <div>
+        <div class="qr-amt" id="qr2Amt">฿0.00</div>
+        <div style="font-size:14px;font-weight:700;margin-top:3px;">เค แอล เอช</div>
+        <div style="font-size:12px;color:var(--ink-3);">กรุงไทย ถุงเงิน</div>
+        <div style="font-size:12px;color:var(--ink-3);">รับทุกธนาคาร / วอลเล็ต</div>
+        <div id="qr2OrderId" style="font-size:11px;color:var(--ink-3);margin-top:4px;"></div>
+      </div>
+    </div>
+    <button class="btn-paid" onclick="gotoStep3()">✅ ลูกค้าโอนแล้ว → ตรวจสลิป</button>
+  </div>
+</div>
+
+<!-- ══ STEP 3 ══ -->
+<div id="step3" class="hidden">
+  <div class="card">
+    <div class="card-title">ถ่ายรูปสลิปโอนเงิน</div>
+    <div class="cam-area" id="camArea" onclick="document.getElementById('slipFile').click()">
+      <div class="cam-ph" id="camPh"><div class="ico">📸</div><p>แตะเพื่อถ่าย / เลือกรูป</p></div>
+      <img id="slipImg" style="display:none">
+    </div>
+    <input type="file" id="slipFile" accept="image/*" capture="environment" style="display:none" onchange="onSlipPick(this)">
+    <button class="btn-cam" onclick="document.getElementById('slipFile').click()">📸 ถ่ายรูปสลิป / เลือกรูป</button>
+  </div>
+  <button class="btn-verify" id="btnVerify" disabled onclick="doVerify()">🔍 ตรวจสอบสลิป</button>
+  <div id="resArea" class="hidden"></div>
+</div>
+
+</div><!-- /page -->
+
+<script>
+var _execUrl='', _orderId='', _orderAmt=0, _slipB64='', _slipMime='image/jpeg';
+var _camStream=null, _camLoop=null, _camOn=false;
+
+var _KTB = '00020101021130690016A000000677010112011501075370008820502192A036354TB2000326PG0303KLH53037645802TH620807040000630499B3';
+
+function crc16(s){var c=0xFFFF;for(var i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(var j=0;j<8;j++){if(c&0x8000)c=(c<<1)^0x1021;else c<<=1;c&=0xFFFF;}}return c;}
+
+function genQr(amt){
+  if(!amt||amt<=0)return _KTB;
+  var b=_KTB.replace('010211','010212').slice(0,-8);
+  var a=amt.toFixed(2);
+  b=b.replace('5802TH','54'+String(a.length).padStart(2,'0')+a+'5802TH')+'6304';
+  return b+crc16(b).toString(16).toUpperCase().padStart(4,'0');
+}
+
+function showQr(elId,amt){
+  var el=document.getElementById(elId);if(!el)return;
+  var img=document.createElement('img');
+  img.src='https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=2&data='+encodeURIComponent(genQr(amt));
+  img.style.cssText='width:130px;height:130px;display:block;border-radius:8px;';
+  el.innerHTML='';el.appendChild(img);
+}
+
+window.onload=function(){
+  google.script.run.withSuccessHandler(function(u){_execUrl=u||'';}).getExecUrl();
+};
+
+function goHome(){if(_execUrl)window.top.location.href=_execUrl;else window.location.href='?page=index';}
+
+// Steps
+function setStep(n){
+  [1,2,3].forEach(function(i){
+    var si=document.getElementById('si'+i);
+    si.className='step'+(i<n?' done':i===n?' active':'');
+  });
+  [1,2].forEach(function(i){
+    document.getElementById('sl'+i).className='sline'+(i<n?' done':'');
+  });
+  document.getElementById('step1').classList.toggle('hidden',n!==1);
+  document.getElementById('step2').classList.toggle('hidden',n!==2);
+  document.getElementById('step3').classList.toggle('hidden',n!==3);
+}
+
+// ── STEP 1 ────────────────────────────────────────────────
+function toggleCam(){
+  if(_camOn){stopCam();return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:640}})
+    .then(function(s){
+      _camStream=s;
+      var v=document.getElementById('scanVideo');
+      v.srcObject=s;_camOn=true;
+      var b=document.getElementById('btnCam');
+      b.textContent='⏹ หยุดกล้อง';b.classList.add('on');
+      _camLoop=setInterval(scanFrame,300);
+    })
+    .catch(function(e){alert('เปิดกล้องไม่ได้: '+e.message+'\nใช้พิมพ์ Order ID แทน');});
+}
+
+function stopCam(){
+  clearInterval(_camLoop);_camLoop=null;
+  if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
+  _camOn=false;
+  var b=document.getElementById('btnCam');
+  b.textContent='📷 เปิดกล้องสแกน QR บิล';b.classList.remove('on');
+}
+
+function scanFrame(){
+  var v=document.getElementById('scanVideo'),c=document.getElementById('scanCanvas');
+  if(v.readyState!==v.HAVE_ENOUGH_DATA)return;
+  c.width=v.videoWidth;c.height=v.videoHeight;
+  var ctx=c.getContext('2d');ctx.drawImage(v,0,0);
+  var d=ctx.getImageData(0,0,c.width,c.height);
+  var code=jsQR(d.data,d.width,d.height,{inversionAttempts:'dontInvert'});
+  if(code&&code.data){stopCam();handleQrData(code.data);}
+}
+
+function lookupManual(){
+  var v=document.getElementById('manualId').value.trim();
+  if(!v){alert('กรุณาใส่เลขออเดอร์');return;}
+  handleQrData(v);
+}
+
+function handleQrData(raw){
+  var id=raw.trim();
+  var m=raw.match(/ORD-[\d]+-[\d]+/i);
+  if(m)id=m[0].toUpperCase();
+  _orderId=id;
+  var fo=document.getElementById('orderFound');
+  fo.style.display='block';
+  fo.innerHTML='<span style="font-size:12px;color:var(--ok);font-weight:700;">กำลังโหลด '+id+'...</span>';
+
+  google.script.run
+    .withSuccessHandler(function(order){
+      if(!order||!order.orderId){
+        fo.innerHTML='<span style="color:var(--err);font-size:13px;">❌ ไม่พบออเดอร์ '+id+'</span>';
+        return;
+      }
+      _orderAmt=parseFloat(order.total)||0;
+      fo.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--ok);">✅ พบออเดอร์</div>'
+        +'<div style="font-size:14px;font-weight:700;margin-top:3px;">'+order.orderId+'</div>'
+        +'<div style="font-size:11px;color:var(--ink-3);">'+(order.customerName||'ลูกค้าทั่วไป')+'</div>'
+        +'<div style="font-size:20px;font-weight:900;color:var(--brand);margin-top:4px;">฿'+_orderAmt.toLocaleString('th',{minimumFractionDigits:2})+'</div>';
+      document.getElementById('btnNext1').classList.remove('hidden');
+    })
+    .withFailureHandler(function(){
+      fo.innerHTML='<span style="color:var(--err);font-size:13px;">❌ โหลดไม่ได้ — '
+        +'<a href="#" onclick="askManualAmt()" style="color:var(--brand);">ใส่ยอดเอง</a></span>';
+    })
+    .loadOrderById(id);
+}
+
+function askManualAmt(){
+  var a=prompt('ใส่ยอดชำระ (บาท):');
+  if(!a)return;
+  _orderAmt=parseFloat(a)||0;
+  document.getElementById('orderFound').innerHTML='<div style="font-size:14px;font-weight:700;color:var(--ok);">✅ ยอด: ฿'+_orderAmt.toLocaleString()+'</div>';
+  document.getElementById('btnNext1').classList.remove('hidden');
+}
+
+// ── STEP 2 ────────────────────────────────────────────────
+function gotoStep2(){
+  stopCam();setStep(2);
+  document.getElementById('qr2Amt').textContent='฿'+_orderAmt.toLocaleString('th',{minimumFractionDigits:2});
+  document.getElementById('qr2OrderId').textContent=_orderId;
+  showQr('qr2Wrap',_orderAmt);
+}
+
+// ── STEP 3 ────────────────────────────────────────────────
+function gotoStep3(){setStep(3);}
+
+function onSlipPick(input){
+  var f=input.files[0];if(!f)return;
+  _slipMime=f.type||'image/jpeg';
+  var r=new FileReader();
+  r.onload=function(e){
+    _slipB64=e.target.result.split(',')[1];
+    var img=document.getElementById('slipImg');
+    img.src=e.target.result;img.style.display='block';
+    document.getElementById('camPh').style.display='none';
+    document.getElementById('btnVerify').disabled=false;
+  };
+  r.readAsDataURL(f);
+}
+
+function doVerify(){
+  var btn=document.getElementById('btnVerify');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span> กำลังตรวจสอบ...';
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      btn.disabled=false;btn.textContent='🔍 ตรวจสอบสลิป';
+      showResult(res);
+      // บันทึกสลิป Drive
+      google.script.run
+        .withSuccessHandler(function(saved){
+          if(saved&&saved.ok){
+            var b=document.getElementById('savedBadge');
+            if(b)b.style.display='block';
+          }
+        })
+        .withFailureHandler(function(){})
+        .saveSlipToDrive(_slipB64,_slipMime,_orderId);
+    })
+    .withFailureHandler(function(e){
+      btn.disabled=false;btn.textContent='🔍 ตรวจสอบสลิป';
+      showResult({error:String(e)});
+    })
+    .verifySlipGemini(_slipB64,_slipMime,_orderAmt);
+}
+
+function showResult(r){
+  var ra=document.getElementById('resArea');ra.classList.remove('hidden');
+  if(!r||r.error){
+    ra.innerHTML='<div class="res-box fail"><div class="res-icon">❌</div><div class="res-title fail-c">ตรวจสอบไม่ได้</div><div style="font-size:13px;color:var(--ink-2);">'+(r?r.error:'error')+'</div></div>';
+    return;
+  }
+  var sa=r.amount||0;
+  var match=_orderAmt>0?Math.abs(sa-_orderAmt)<0.01:null;
+  var icon=match===null?'🔍':match?'✅':'❌';
+  var title=match===null?'อ่านสลิปสำเร็จ':match?'ยอดถูกต้อง!':'ยอดไม่ตรง!';
+  var cls=match===null?'':match?'ok':'fail';
+  var h='<div class="res-box '+cls+'"><div class="res-icon">'+icon+'</div><div class="res-title '+(match?'ok-c':match===false?'fail-c':'')+'">'+title+'</div>'
+    +'<div style="background:rgba(0,0,0,.05);border-radius:8px;padding:9px 12px;margin-top:8px;">';
+  if(sa>0) h+='<div class="amt-row"><span class="lbl">ยอดในสลิป</span><span class="val '+(match===false?'mismatch':match?'match':'')+'">฿'+sa.toLocaleString('th',{minimumFractionDigits:2})+'</span></div>';
+  if(_orderAmt>0) h+='<div class="amt-row"><span class="lbl">ยอดออเดอร์</span><span class="val">฿'+_orderAmt.toLocaleString('th',{minimumFractionDigits:2})+'</span></div>';
+  if(r.date) h+='<div class="amt-row"><span class="lbl">วันที่</span><span class="val">'+r.date+'</span></div>';
+  if(r.sender) h+='<div class="amt-row"><span class="lbl">ผู้โอน</span><span class="val">'+r.sender+'</span></div>';
+  if(r.receiver) h+='<div class="amt-row"><span class="lbl">ผู้รับ</span><span class="val">'+r.receiver+'</span></div>';
+  if(r.bank) h+='<div class="amt-row"><span class="lbl">ธนาคาร</span><span class="val">'+r.bank+'</span></div>';
+  if(r.refNo) h+='<div class="amt-row"><span class="lbl">เลขอ้างอิง</span><span class="val">'+r.refNo+'</span></div>';
+  h+='</div><div class="saved-badge" id="savedBadge">💾 บันทึกสลิปลน Google Drive แล้ว</div>'
+    +'<button class="btn-reset" onclick="resetAll()">🔄 ตรวจสลิปใหม่</button></div>';
+  ra.innerHTML=h;
+}
+
+function resetAll(){
+  _orderId='';_orderAmt=0;_slipB64='';_slipMime='image/jpeg';
+  document.getElementById('manualId').value='';
+  document.getElementById('orderFound').style.display='none';
+  document.getElementById('btnNext1').classList.add('hidden');
+  document.getElementById('slipImg').style.display='none';
+  document.getElementById('camPh').style.display='block';
+  document.getElementById('btnVerify').disabled=true;
+  document.getElementById('resArea').classList.add('hidden');
+  document.getElementById('slipFile').value='';
+  setStep(1);
+}
+</script>
+</body>
+</html>

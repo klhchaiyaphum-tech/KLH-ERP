@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH Label Print</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+:root{
+  --brand:#E94E27;--brand-soft:#FCEDE6;
+  --bg:#F5F5F5;--surface:#fff;--ink:#1A1A1A;--ink-2:#555;--ink-3:#999;
+  --line:#E5E5E5;--r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"IBM Plex Sans Thai","IBM Plex Sans",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;}
+button{font-family:inherit;cursor:pointer;border:none;}
+
+/* ── Layout ── */
+.topbar{background:var(--brand);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;}
+.topbar h1{font-size:17px;font-weight:700;}
+.topbar .back{background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;}
+.wrap{display:flex;height:calc(100vh - 48px);}
+
+/* ── Left: Product list ── */
+.left{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--line);overflow:hidden;}
+.cat-bar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;background:var(--surface);}
+.cat-chip{padding:5px 14px;border-radius:20px;border:1.5px solid var(--line);font-size:12.5px;background:var(--surface);color:var(--ink-2);cursor:pointer;}
+.cat-chip.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.search-bar{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);}
+.search-bar input{width:100%;padding:7px 12px;border:1.5px solid var(--line);border-radius:7px;font-size:13.5px;font-family:inherit;}
+.prod-list{flex:1;overflow-y:auto;}
+.prod-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);gap:10px;cursor:pointer;transition:background .1s;}
+.prod-row:hover{background:#fafafa;}
+.prod-row.selected{background:var(--brand-soft);}
+.prod-check{width:18px;height:18px;accent-color:var(--brand);cursor:pointer;flex-shrink:0;}
+.prod-info{flex:1;min-width:0;}
+.prod-name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prod-meta{font-size:11.5px;color:var(--ink-3);margin-top:2px;}
+.prod-prices{text-align:right;flex-shrink:0;}
+.price-retail{font-size:14px;font-weight:700;color:var(--brand);}
+.price-ws{font-size:11.5px;color:var(--ink-3);}
+
+/* ── Right: Print panel ── */
+.right{width:360px;display:flex;flex-direction:column;background:var(--surface);}
+.right-head{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px;color:var(--ink);}
+.sel-list{flex:1;overflow-y:auto;padding:8px 0;}
+.sel-item{padding:8px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.sel-item-name{flex:1;font-size:12.5px;font-weight:600;}
+.sel-item-bc{font-size:11px;color:var(--ink-3);}
+.qty-wrap{display:flex;align-items:center;gap:4px;}
+.qty-wrap label{font-size:11.5px;color:var(--ink-3);}
+.qty-input{width:48px;padding:3px 6px;border:1.5px solid var(--line);border-radius:5px;text-align:center;font-size:13px;font-family:inherit;}
+.remove-btn{background:none;color:#ccc;font-size:16px;padding:0 4px;line-height:1;}
+.remove-btn:hover{color:#e74c3c;}
+.no-sel{padding:24px 16px;text-align:center;color:var(--ink-3);font-size:13px;}
+.print-btns{padding:14px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;}
+.btn-shelf{background:#2C3E50;color:#fff;padding:11px;border-radius:8px;font-size:13.5px;font-weight:600;}
+.btn-shelf:hover{background:#1a252f;}
+.btn-barcode{background:var(--brand);color:#fff;padding:11px;border-radius:8px;font-size:13.5px;font-weight:600;}
+.btn-barcode:hover{background:#c0392b;}
+.sel-count{font-size:12px;color:var(--ink-3);text-align:center;}
+
+/* ── Print Preview ── */
+@media print {
+  body > *:not(#printArea){ display:none !important; }
+  #printArea{ display:block !important; }
+}
+#printArea{ display:none; }
+
+/* Shelf label print */
+.shelf-page{ page-break-after:always; padding:4mm; }
+.shelf-label{
+  width:90mm; min-height:40mm; border:1px solid #ddd; border-radius:3mm;
+  padding:4mm; font-family:"IBM Plex Sans Thai",sans-serif;
+  display:flex; flex-direction:column; gap:2mm;
+}
+.sl-name{ font-size:14pt; font-weight:700; color:#1a1a1a; line-height:1.2; }
+.sl-size{ font-size:9pt; color:#777; }
+.sl-prices{ display:flex; gap:4mm; align-items:baseline; margin-top:1mm; }
+.sl-retail{ font-size:22pt; font-weight:900; color:#E94E27; }
+.sl-ws{ font-size:11pt; color:#555; }
+.sl-unit{ font-size:9pt; color:#888; }
+.sl-bc{ margin-top:2mm; }
+
+/* Barcode sticker print */
+.bc-grid{ display:flex; flex-wrap:wrap; gap:2mm; padding:4mm; }
+.bc-sticker{
+  width:50mm; border:0.5px solid #eee; border-radius:2mm;
+  padding:2mm; font-family:"IBM Plex Sans Thai",sans-serif;
+  display:flex; flex-direction:column; align-items:center; gap:1mm;
+}
+.bc-name{ font-size:7pt; font-weight:700; color:#1a1a1a; text-align:center; max-width:48mm; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.bc-price{ font-size:11pt; font-weight:800; color:#E94E27; }
+.bc-unit{ font-size:7pt; color:#777; }
+
+/* Loading */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.ov-box{background:#fff;border-radius:12px;padding:24px 32px;text-align:center;font-size:14px;font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="back" onclick="goHome()">← หลัก</button>
+  <h1>🏷️ พิมพ์สติ๊กเกอร์</h1>
+</div>
+
+<div class="wrap">
+  <!-- Left: Product list -->
+  <div class="left">
+    <div class="cat-bar" id="catBar">
+      <button class="cat-chip active" data-cat="all" onclick="setCat('all',this)">ทั้งหมด</button>
+    </div>
+    <div class="search-bar">
+      <input id="searchInput" placeholder="ค้นหาสินค้า / บาร์โค้ด..." oninput="onSearch(this.value)">
+    </div>
+    <div class="prod-list" id="prodList">
+      <div class="no-sel" style="margin-top:40px">กำลังโหลด...</div>
+    </div>
+  </div>
+
+  <!-- Right: Print panel -->
+  <div class="right">
+    <div class="right-head">
+      รายการที่เลือก (<span id="selCount">0</span>)
+    </div>
+    <div class="sel-list" id="selList">
+      <div class="no-sel">เลือกสินค้าจากรายการซ้าย</div>
+    </div>
+    <div class="print-btns">
+      <div class="sel-count" id="selNote">เลือกสินค้าแล้วกดพิมพ์</div>
+
+      <!-- Shelf label options -->
+      <div style="background:#f8f8f8;border-radius:8px;padding:10px;margin-bottom:2px;">
+        <div style="font-size:11.5px;font-weight:700;color:#555;margin-bottom:6px;">ป้ายหน้าชั้น — แสดงราคา</div>
+        <div style="display:flex;gap:6px;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;">
+            <input type="radio" name="shelfPrice" value="retail" checked> ปลีก (W)
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;">
+            <input type="radio" name="shelfPrice" value="ws"> ส่ง (U)
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;">
+            <input type="radio" name="shelfPrice" value="both"> ทั้งคู่
+          </label>
+        </div>
+      </div>
+      <button class="btn-shelf" onclick="printShelf()">🖨️ พิมพ์ป้ายราคาหน้าชั้น</button>
+
+      <!-- Barcode sticker options -->
+      <div style="background:#f8f8f8;border-radius:8px;padding:10px;margin-top:4px;margin-bottom:2px;">
+        <div style="font-size:11.5px;font-weight:700;color:#555;margin-bottom:6px;">สติ๊กเกอร์บาร์โค้ด — โหมด</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;">
+            <input type="radio" name="printMode" value="roll" checked> ม้วน (Xprinter)
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;">
+            <input type="radio" name="printMode" value="sheet" onchange="toggleSheetSettings(this.checked)"> แผ่น
+          </label>
+        </div>
+        <div id="sheetSettings" style="display:none;background:#fff;border-radius:6px;padding:8px;font-size:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+            <div><label style="font-size:11px;color:#888">กว้าง/ดวง (mm)</label><input id="sW" type="number" value="50" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;"></div>
+            <div><label style="font-size:11px;color:#888">สูง/ดวง (mm)</label><input id="sH" type="number" value="30" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;"></div>
+            <div><label style="font-size:11px;color:#888">ระยะห่าง H (mm)</label><input id="sGH" type="number" value="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;"></div>
+            <div><label style="font-size:11px;color:#888">คอลัมน์/แถว</label><input id="sCols" type="number" value="3" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;"></div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input id="tplName" placeholder="ชื่อ template" style="flex:1;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;">
+            <button onclick="saveTemplate()" style="background:#2C3E50;color:#fff;padding:4px 8px;border-radius:4px;font-size:11.5px;">บันทึก</button>
+            <select id="tplSel" onchange="loadTemplate(this.value)" style="border:1px solid #ddd;border-radius:4px;padding:3px;font-size:11.5px;">
+              <option value="">โหลด...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn-barcode" onclick="printBarcode()">🔖 พิมพ์สติ๊กเกอร์บาร์โค้ด</button>
+    </div>
+  </div>
+</div>
+
+<!-- Print area -->
+<div id="printArea"></div>
+
+<!-- Loading overlay -->
+<div class="overlay" id="overlay">
+  <div class="ov-box" id="ovMsg">กำลังโหลด...</div>
+</div>
+
+<script>
+var _execUrl = '';
+var _allProducts = [];
+var _selected = {}; // barcode → {product, qty}
+var _activeCat = 'all';
+var _searchQ = '';
+
+// ── Boot ──
+window.onload = function() {
+  google.script.run.withSuccessHandler(function(u){ _execUrl = u||''; }).getExecUrl();
+  showLoad('กำลังโหลดหมวดหมู่...');
+  // โหลด categories
+  google.script.run
+    .withSuccessHandler(function(cats) {
+      hideLoad();
+      if (cats && cats.length) {
+        var bar = document.getElementById('catBar');
+        var html = '<button class="cat-chip active" data-cat="all" onclick="setCat(\'all\',this)">ทั้งหมด</button>';
+        for (var i=0;i<cats.length;i++) {
+          var nm = String(cats[i].name||'');
+          if (!nm) continue;
+          html += '<button class="cat-chip" data-cat="'+nm+'" onclick="setCat(\''+nm.replace(/'/g,'')+'\',this)">'+nm+'</button>';
+        }
+        bar.innerHTML = html;
+      }
+      loadProducts('', 'all');
+    })
+    .withFailureHandler(function(){ hideLoad(); loadProducts('','all'); })
+    .getPosCategories();
+};
+
+function goHome() {
+  if (_execUrl) window.top.location.href = _execUrl;
+  else window.location.href = '?page=index';
+}
+
+// ── Categories ──
+function setCat(cat, btn) {
+  _activeCat = cat;
+  document.querySelectorAll('.cat-chip').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-cat') === cat);
+  });
+  loadProducts(_searchQ, cat);
+}
+
+// ── Search ──
+var _stimer = null;
+function onSearch(val) {
+  _searchQ = val.trim();
+  clearTimeout(_stimer);
+  _stimer = setTimeout(function(){ loadProducts(_searchQ, _activeCat); }, 300);
+}
+
+// ── Load Products ──
+function loadProducts(q, cat) {
+  showLoad('โหลดสินค้า...');
+  var catArg = (cat && cat !== 'all') ? cat : '';
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      hideLoad();
+      _allProducts = rows || [];
+      renderList(rows);
+    })
+    .withFailureHandler(function(){ hideLoad(); })
+    .posSearchProducts(q||'', 'W1', catArg);
+}
+
+// ── Render product list ──
+function renderList(products) {
+  var el = document.getElementById('prodList');
+  if (!products.length) {
+    el.innerHTML = '<div class="no-sel" style="margin-top:40px">ไม่พบสินค้า</div>';
+    return;
+  }
+  var html = '';
+  for (var i=0;i<products.length;i++) {
+    var p = products[i];
+    var sel = !!_selected[p.barcode];
+    var rp = p.retailPrice > 0 ? '฿'+p.retailPrice : '—';
+    var wp = p.wholesalePrice > 0 ? 'ส่ง ฿'+p.wholesalePrice : '';
+    var unit = p.unitBig ? p.convRate+'×'+p.unitBig : '';
+    html += '<div class="prod-row'+(sel?' selected':'')+'" onclick="toggleSelect(\''+esc(p.barcode)+'\')">'
+      + '<input type="checkbox" class="prod-check" '+(sel?'checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+esc(p.barcode)+'\')">'
+      + '<div class="prod-info">'
+      +   '<div class="prod-name">'+esc2(p.name)+'</div>'
+      +   '<div class="prod-meta">'+esc2(p.barcode)+(unit?' · '+unit:'')+'</div>'
+      + '</div>'
+      + '<div class="prod-prices">'
+      +   '<div class="price-retail">'+rp+'</div>'
+      +   '<div class="price-ws">'+wp+'</div>'
+      + '</div>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ── Select / Deselect ──
+function toggleSelect(barcode) {
+  if (_selected[barcode]) {
+    delete _selected[barcode];
+  } else {
+    var p = null;
+    for (var i=0;i<_allProducts.length;i++) {
+      if (_allProducts[i].barcode === barcode) { p = _allProducts[i]; break; }
+    }
+    if (p) _selected[barcode] = { product: p, qty: 1 };
+  }
+  renderList(_allProducts);
+  renderSelPanel();
+}
+
+function removeSelected(barcode) {
+  delete _selected[barcode];
+  renderList(_allProducts);
+  renderSelPanel();
+}
+
+function setQty(barcode, val) {
+  var n = parseInt(val, 10);
+  if (_selected[barcode]) _selected[barcode].qty = (n>0?n:1);
+}
+
+// ── Render selection panel ──
+function renderSelPanel() {
+  var keys = Object.keys(_selected);
+  var el = document.getElementById('selList');
+  document.getElementById('selCount').textContent = keys.length;
+  if (!keys.length) {
+    el.innerHTML = '<div class="no-sel">เลือกสินค้าจากรายการซ้าย</div>';
+    document.getElementById('selNote').textContent = 'เลือกสินค้าแล้วกดพิมพ์';
+    return;
+  }
+  var html = '';
+  for (var i=0;i<keys.length;i++) {
+    var bc = keys[i];
+    var item = _selected[bc];
+    var p = item.product;
+    html += '<div class="sel-item">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div class="sel-item-name">'+esc2(p.name)+'</div>'
+      +   '<div class="sel-item-bc">'+esc2(bc)+'</div>'
+      + '</div>'
+      + '<div class="qty-wrap">'
+      +   '<label>จำนวน</label>'
+      +   '<input class="qty-input" type="number" min="1" value="'+item.qty+'" onchange="setQty(\''+esc(bc)+'\',this.value)">'
+      + '</div>'
+      + '<button class="remove-btn" onclick="removeSelected(\''+esc(bc)+'\')">✕</button>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+  document.getElementById('selNote').textContent = 'พิมพ์ '+keys.length+' รายการ';
+}
+
+// ── Print: Shelf Label (Survey-style popup, adjustable) ──
+// ── Open shared shelf_print page ──
+function openShelfPrint(items) {
+  localStorage.setItem('klh_shelf_print', JSON.stringify(items));
+  // เปิด shelf_print page ผ่าน GAS exec URL
+  google.script.run.withSuccessHandler(function(url) {
+    window.open(url + '?page=shelf_print', '_blank', 'width=720,height=560');
+  }).withFailureHandler(function(){
+    window.open('?page=shelf_print', '_blank', 'width=720,height=560');
+  }).getExecUrl();
+}
+
+function printShelf() {
+  var keys = Object.keys(_selected);
+  if (!keys.length) { Swal.fire({icon:'warning',title:'ยังไม่ได้เลือกสินค้า',text:'กรุณาเลือกสินค้าก่อนพิมพ์'}); return; }
+
+  var items = [];
+  for (var i=0;i<keys.length;i++) {
+    var p = _selected[keys[i]].product;
+    items.push({
+      name: p.name,
+      barcode: p.barcode || '',
+      retail: p.retailPrice || 0,
+      ws: p.wholesalePrice || 0,
+      unit: p.unitBig || '',
+      convRate: p.convRate || 1
+    });
+  }
+
+  var pos = _shelfPos;
+  var itemsJson = JSON.stringify(items).replace(/</g,'\\u003c').replace(/>/g,'\\u003e');
+
+  // ใช้ shelf_print.html ร่วมกับ Survey (DRY — แก้ที่เดียว)
+  openShelfPrint(items);
+  return; // หยุดที่นี่ ส่วนโค้ดเดิมด้านล่างไม่ใช้แล้ว
+  var w = window.open('','_blank','width=700,height=500');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+  + '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>'
+  + '<style>'
+  + '@page{size:80mm 40mm;margin:0}'
+  + 'body{margin:0;font-family:"IBM Plex Sans Thai",sans-serif;background:#f0f0f0;}'
+  + '.controls{background:#2C3E50;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;}'
+  + '.controls label{color:rgba(255,255,255,.7);}'
+  + '.ctrl-group{display:flex;align-items:center;gap:4px;}'
+  + '.ctrl-input{width:45px;padding:2px 5px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:4px;text-align:center;font-size:12px;}'
+  + '.btn-print{background:#E94E27;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;}'
+  + '.btn-nav{background:rgba(255,255,255,.2);color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;}'
+  + '.label-wrap{width:80mm;height:40mm;position:relative;background:#fff;margin:10px auto;box-shadow:0 2px 8px rgba(0,0,0,.15);overflow:hidden;border:1px solid #ddd;}'
+  + '.lbl-name{position:absolute;font-size:14px;font-weight:800;color:#1A1A1A;max-width:74mm;line-height:1.2;cursor:move;user-select:none;}'
+  + '.lbl-price{position:absolute;font-size:22px;font-weight:900;color:#E94E27;cursor:move;user-select:none;}'
+  + '.lbl-ws{position:absolute;font-size:13px;font-weight:700;color:#1565C0;cursor:move;user-select:none;}'
+  + '.lbl-bc{position:absolute;bottom:2mm;left:2mm;}'
+  + '.page-info{text-align:center;font-size:12px;color:#888;margin-top:4px;}'
+  + '</style></head><body>'
+  + '<div class="controls">'
+  +   '<div class="ctrl-group"><label>ชื่อ T</label><input class="ctrl-input" id="nT" type="number" value="'+pos.name.t+'" oninput="upd()"></div>'
+  +   '<div class="ctrl-group"><label>L</label><input class="ctrl-input" id="nL" type="number" value="'+pos.name.l+'" oninput="upd()"></div>'
+  +   '<div class="ctrl-group"><label>ราคา T</label><input class="ctrl-input" id="pT" type="number" value="'+pos.price.t+'" oninput="upd()"></div>'
+  +   '<div class="ctrl-group"><label>L</label><input class="ctrl-input" id="pL" type="number" value="'+pos.price.l+'" oninput="upd()"></div>'
+  +   (priceType!=='retail'?'<div class="ctrl-group"><label>ส่ง T</label><input class="ctrl-input" id="wT" type="number" value="'+pos.ws.t+'" oninput="upd()"></div>':'')
+  +   '<button class="btn-nav" onclick="prev()">◀</button>'
+  +   '<span id="pageNum" style="color:#fff;font-size:12px;">1/'+(items.length)+'</span>'
+  +   '<button class="btn-nav" onclick="next()">▶</button>'
+  +   '<button class="btn-print" onclick="printAll()">🖨️ พิมพ์ทั้งหมด ('+items.length+')</button>'
+  + '</div>'
+  + '<div class="label-wrap" id="lw">'
+  +   '<div class="lbl-name" id="pvName"></div>'
+  +   '<div class="lbl-price" id="pvPrice"></div>'
+  +   (priceType!=='retail'?'<div class="lbl-ws" id="pvWs"></div>':'')
+  +   '<div class="lbl-bc"><svg id="pvBc"></svg></div>'
+  + '</div>'
+  + '<div class="page-info" id="pageInfo"></div>'
+  + '<script>'
+  + 'var _items = '+itemsJson+';'
+  + 'var _cur = 0;'
+  + 'var _priceType = "'+priceType+'";'
+  + 'function fmt(n){ return n>0?"฿"+n.toLocaleString():"—"; }'
+  + 'function upd(){'
+  +   'var item=_items[_cur];'
+  +   'var nT=parseFloat(document.getElementById("nT").value)||4;'
+  +   'var nL=parseFloat(document.getElementById("nL").value)||3;'
+  +   'var pT=parseFloat(document.getElementById("pT").value)||16;'
+  +   'var pL=parseFloat(document.getElementById("pL").value)||3;'
+  +   'document.getElementById("pvName").style.top=nT+"mm";'
+  +   'document.getElementById("pvName").style.left=nL+"mm";'
+  +   'document.getElementById("pvName").textContent=item.name;'
+  +   'document.getElementById("pvPrice").style.top=pT+"mm";'
+  +   'document.getElementById("pvPrice").style.left=pL+"mm";'
+  +   'document.getElementById("pvPrice").textContent=_priceType==="ws"?fmt(item.ws):fmt(item.retail);'
+  +   'var wsEl=document.getElementById("pvWs");'
+  +   'if(wsEl){'
+  +     'var wT=parseFloat(document.getElementById("wT")?document.getElementById("wT").value:26)||26;'
+  +     'wsEl.style.top=wT+"mm";wsEl.style.left="3mm";'
+  +     'if(_priceType==="both") wsEl.textContent="ส่ง "+fmt(item.ws);'
+  +     'else wsEl.textContent="";'
+  +   '}'
+  +   'try{JsBarcode("#pvBc",item.barcode||"000000",{width:1.3,height:28,fontSize:8,displayValue:true});}catch(e){}'
+  +   'document.getElementById("pageNum").textContent=(_cur+1)+"/"+_items.length;'
+  +   'document.getElementById("pageInfo").textContent=item.barcode+(item.unit?" · "+item.convRate+"/"+item.unit:"");'
+  + '}'
+  + 'function prev(){if(_cur>0){_cur--;upd();}}'
+  + 'function next(){if(_cur<_items.length-1){_cur++;upd();}}'
+  + 'function printAll(){'
+  +   'var html="<html><head><meta charset=\\"UTF-8\\">"'
+  +   '+"<script src=\\"https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js\\"><\\/script>"'
+  +   '+"<style>@page{size:80mm 40mm;margin:0}body{margin:0;font-family:sans-serif;}"'
+  +   '+"</style></head><body>";'
+  +   'var nT=parseFloat(document.getElementById("nT").value)||4;'
+  +   'var nL=parseFloat(document.getElementById("nL").value)||3;'
+  +   'var pT=parseFloat(document.getElementById("pT").value)||16;'
+  +   'var pL=parseFloat(document.getElementById("pL").value)||3;'
+  +   'var wT=document.getElementById("wT")?parseFloat(document.getElementById("wT").value)||26:26;'
+  +   'for(var i=0;i<_items.length;i++){'
+  +     'var it=_items[i];'
+  +     'var pr=_priceType==="ws"?it.ws:it.retail;'
+  +     'html+="<div style=\\"width:80mm;height:40mm;position:relative;page-break-after:always;overflow:hidden;\\">"'
+  +     '+"<div style=\\"position:absolute;top:"+nT+"mm;left:"+nL+"mm;font-size:14px;font-weight:800;max-width:74mm;\\">"+it.name+"</div>"'
+  +     '+"<div style=\\"position:absolute;top:"+pT+"mm;left:"+pL+"mm;font-size:22px;font-weight:900;color:#E94E27;\\">฿"+(pr>0?pr.toLocaleString():"—")+"</div>"'
+  +     '+(_priceType==="both"&&it.ws>0?"<div style=\\"position:absolute;top:"+wT+"mm;left:3mm;font-size:13px;font-weight:700;color:#1565C0;\\">ส่ง ฿"+it.ws.toLocaleString()+"</div>":"")'
+  +     '+(it.barcode?"<div style=\\"position:absolute;bottom:2mm;left:2mm;\\"><svg id=\\"bc_"+i+"\\"></svg></div>":"")'
+  +     '+"</div>";'
+  +   '}'
+  +   'html+="<script>window.onload=function(){";'
+  +   'for(var j=0;j<_items.length;j++){'
+  +     'if(_items[j].barcode) html+="try{JsBarcode(\\"#bc_"+j+"\\",\\""+_items[j].barcode+"\\",{width:1.3,height:28,fontSize:8,displayValue:true});}catch(e){}";'
+  +   '}'
+  +   'html+="setTimeout(function(){window.print();window.close();},800);};<\\/script></body></html>";'
+  +   'var pw=window.open("","_blank");pw.document.write(html);pw.document.close();'
+  + '}'
+  + 'upd();'
+  + '<\/script></body></html>');
+  w.document.close();
+}
+
+// ── Print: Barcode Sticker (Roll or Sheet) ──
+var _templates = JSON.parse(localStorage.getItem('klh_stickerTpl') || '{}');
+
+function toggleSheetSettings(isSheet) {
+  document.getElementById('sheetSettings').style.display = isSheet ? 'block' : 'none';
+}
+
+function saveTemplate() {
+  var name = document.getElementById('tplName').value.trim();
+  if (!name) { alert('กรุณาใส่ชื่อ template'); return; }
+  _templates[name] = {
+    w: document.getElementById('sW').value,
+    h: document.getElementById('sH').value,
+    gH: document.getElementById('sGH').value,
+    cols: document.getElementById('sCols').value
+  };
+  localStorage.setItem('klh_stickerTpl', JSON.stringify(_templates));
+  refreshTplSel();
+  alert('บันทึก "'+name+'" แล้ว');
+}
+
+function loadTemplate(name) {
+  if (!name || !_templates[name]) return;
+  var t = _templates[name];
+  document.getElementById('sW').value = t.w;
+  document.getElementById('sH').value = t.h;
+  document.getElementById('sGH').value = t.gH;
+  document.getElementById('sCols').value = t.cols;
+}
+
+function refreshTplSel() {
+  var sel = document.getElementById('tplSel');
+  sel.innerHTML = '<option value="">โหลด...</option>';
+  Object.keys(_templates).forEach(function(k){
+    sel.innerHTML += '<option value="'+k+'">'+k+'</option>';
+  });
+}
+
+function printBarcode() {
+  var keys = Object.keys(_selected);
+  if (!keys.length) { Swal.fire({icon:'warning',title:'ยังไม่ได้เลือกสินค้า',text:'กรุณาเลือกสินค้าก่อนพิมพ์'}); return; }
+
+  var modeRadios = document.getElementsByName('printMode');
+  var mode = 'roll';
+  for (var r=0;r<modeRadios.length;r++) { if (modeRadios[r].checked) { mode=modeRadios[r].value; break; } }
+
+  if (mode === 'roll') {
+    // ── Roll mode: 80mm wide, one sticker per line ──
+    var items = [];
+    for (var i=0;i<keys.length;i++) {
+      var item = _selected[keys[i]];
+      var p = item.product;
+      var qty = item.qty || 1;
+      for (var q=0;q<qty;q++) items.push(p);
+    }
+    var stickersJson = JSON.stringify(items.map(function(p){
+      return {n:p.name, bc:p.barcode||'', pr:p.retailPrice||0, unit:p.unitBig||''};
+    })).replace(/</g,'\\u003c').replace(/>/g,'\\u003e');
+
+    var w = window.open('','_blank');
+    // แสดงคำแนะนำการตั้งค่าก่อน
+    var rollW = prompt('ความกว้างม้วนสติ๊กเกอร์ (mm) เช่น 80 หรือ 57', '80');
+    if (!rollW) return;
+    rollW = parseInt(rollW) || 80;
+
+    w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>'
+    +'<style>'
+    +'@page{size:'+rollW+'mm auto;margin:1mm}'
+    +'body{margin:0;font-family:"IBM Plex Sans Thai",sans-serif;width:'+rollW+'mm;background:#fff;}'
+    +'.notice{background:#FFF3CD;padding:3mm;font-size:8pt;color:#856404;text-align:center;}'
+    +'.notice b{display:block;font-size:9pt;}'
+    +'@media print{.notice{display:none}}'
+    +'.s{width:'+(rollW-4)+'mm;padding:2mm 2mm;border-bottom:0.5pt dashed #ccc;page-break-inside:avoid;text-align:center;}'
+    +'.sn{font-size:9pt;font-weight:700;color:#1a1a1a;margin-bottom:1mm;}'
+    +'.sp{font-size:13pt;font-weight:900;color:#E94E27;margin-bottom:1mm;}'
+    +'</style></head><body>'
+    +'<div class="notice">'
+    +'<b>⚠️ ตั้งค่าก่อนพิมพ์</b>'
+    +'ขนาดกระดาษ: <b>'+rollW+'mm × Auto</b> · Margin: None/Minimum<br>'
+    +'Chrome: More settings → Paper size → Custom → '+rollW+' mm'
+    +'</div>'
+    +'<script>'
+    +'var items='+stickersJson+';'
+    +'window.onload=function(){'
+    +  'var body=document.body;'
+    +  'for(var i=0;i<items.length;i++){'
+    +    'var it=items[i];'
+    +    'var d=document.createElement("div");d.className="s";'
+    +    'if(it.n) d.innerHTML+="<div class=\\"sn\\">"+it.n+"</div>";'
+    +    'if(it.pr>0) d.innerHTML+="<div class=\\"sp\\">฿"+it.pr.toLocaleString()+(it.unit?"/"+it.unit:"")+"</div>";'
+    +    'if(it.bc){'
+    +      'var s=document.createElementNS("http://www.w3.org/2000/svg","svg");'
+    +      's.id="bc"+i;d.appendChild(s);'
+    +      'try{JsBarcode("#bc"+i,it.bc,{width:1.3,height:28,fontSize:8,displayValue:true});}catch(e){}'
+    +    '}'
+    +    'body.appendChild(d);'
+    +  '}'
+    +  'setTimeout(function(){window.print();},800);'
+    +'}'
+    +'<\/script></body></html>');
+    w.document.close();
+
+  } else {
+    // ── Sheet mode: grid layout ──
+    var sW   = parseFloat(document.getElementById('sW').value)   || 50;
+    var sH   = parseFloat(document.getElementById('sH').value)   || 30;
+    var sGH  = parseFloat(document.getElementById('sGH').value)  || 2;
+    var sCols= parseInt(document.getElementById('sCols').value)  || 3;
+
+    var html = '<div class="bc-grid">';
+    var bcData = [];
+    for (var i=0;i<keys.length;i++) {
+      var bc = keys[i];
+      var item = _selected[bc];
+      var p = item.product;
+      var qty = item.qty || 1;
+      var rp = p.retailPrice > 0 ? '฿'+p.retailPrice : '';
+      var unit = p.unitBig ? '/'+p.unitBig : '';
+      for (var q=0;q<qty;q++) {
+        var idx = i+'_'+q;
+        bcData.push({idx:idx, barcode:p.barcode});
+        html += '<div class="bc-sticker" style="width:'+sW+'mm;min-height:'+sH+'mm;margin:'+sGH/2+'mm;">'
+          + '<div class="bc-name">'+escHtml(p.name)+'</div>'
+          + (rp ? '<div class="bc-price">'+rp+unit+'</div>' : '')
+          + '<svg id="bcst_'+idx+'"></svg>'
+          + '</div>';
+      }
+    }
+    html += '</div>';
+
+    // Override grid CSS for sheet mode
+    var sheetCss = '.bc-grid{display:flex;flex-wrap:wrap;padding:4mm;}';
+    doPrint('<style>'+sheetCss+'</style>'+html, function() {
+      for (var k=0;k<bcData.length;k++) {
+        if (bcData[k].barcode) {
+          try { JsBarcode('#bcst_'+bcData[k].idx, bcData[k].barcode, {width:1.2,height:25,fontSize:8,displayValue:true}); }
+          catch(e) {}
+        }
+      }
+    });
+  }
+}
+
+function doPrint(innerHtml, afterRenderFn) {
+  var pa = document.getElementById('printArea');
+  pa.style.display = 'block';
+  pa.innerHTML = innerHtml;
+  if (afterRenderFn) setTimeout(afterRenderFn, 100);
+  setTimeout(function() {
+    window.print();
+    pa.style.display = 'none';
+    pa.innerHTML = '';
+  }, 500);
+}
+
+// Load saved templates on startup
+refreshTplSel();
+
+// ── Utils ──
+function esc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showLoad(msg){ document.getElementById('ovMsg').textContent=msg; document.getElementById('overlay').classList.add('show'); }
+function hideLoad(){ document.getElementById('overlay').classList.remove('show'); }
+</script>
+</body>
+</html>
