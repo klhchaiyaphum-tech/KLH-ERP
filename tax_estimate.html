@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH ประมาณการ สรรพากร</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-soft:#FCE6DC;
+  --cream:#F1EBDE; --paper:#FCFBF7; --paper-2:#F6F2E9;
+  --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90; --line:#EBE4D6; --line-2:#E0D8C7;
+  --green:#2E7D46; --blue:#3A37C9; --teal:#00897B; --miss:#D9512B;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif; --ffn:"IBM Plex Sans",sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--ff); color:var(--ink); min-height:100vh; padding:18px 14px 40px;
+  background:linear-gradient(157deg,#F4EEE2 0%,#EFE6D7 100%); -webkit-font-smoothing:antialiased; }
+.num{ font-family:var(--ffn); font-variant-numeric:tabular-nums; }
+.wrap{ max-width:880px; margin:0 auto; }
+.top{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.back{ background:var(--paper); border:1px solid var(--line); color:var(--ink-2); padding:9px 15px; border-radius:11px; cursor:pointer; font-family:inherit; font-size:14px; }
+h1{ font-size:20px; } .sub{ font-size:12.5px; color:var(--ink-3); }
+.bar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:var(--paper); border:1px solid var(--line); padding:13px; border-radius:14px; margin-bottom:14px; }
+.bar label{ font-size:13px; color:var(--ink-2); font-weight:600; }
+input[type=month], input[type=number]{ background:var(--paper); border:1.5px solid var(--line-2); color:var(--ink); padding:9px 11px; border-radius:10px; font-size:14.5px; font-family:inherit; outline:none; }
+input:focus{ border-color:var(--coral); }
+.btn{ background:linear-gradient(135deg,#FF8A3D,#E2502B); color:#fff; border:none; padding:10px 18px; border-radius:11px; cursor:pointer; font-size:14px; font-weight:700; font-family:inherit; box-shadow:0 8px 16px -8px var(--coral); }
+.btn.green{ background:linear-gradient(135deg,#22C083,#12A268); box-shadow:0 8px 16px -8px var(--green); }
+.cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:11px; margin-bottom:16px; }
+.card{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:15px; border-left:4px solid var(--teal); box-shadow:0 1px 2px rgba(60,40,25,.04); }
+.card.buy{ border-left-color:var(--blue); } .card.sell{ border-left-color:var(--coral); }
+.card.net{ border-left-color:var(--green); } .card.warn{ border-left-color:var(--miss); }
+.card .k{ font-size:12px; color:var(--ink-2); } .card .v{ font-size:21px; font-weight:800; margin-top:5px; }
+.card .s{ font-size:11.5px; color:var(--ink-3); margin-top:3px; }
+.sec{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:17px; margin-bottom:14px; }
+.sec h2{ font-size:15.5px; margin-bottom:11px; display:flex; align-items:center; gap:8px; }
+.row{ display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line); font-size:14px; }
+.row:last-child{ border-bottom:none; } .row b{ font-weight:700; }
+.err{ background:#FBE9E4; color:var(--miss); padding:11px 13px; border-radius:11px; font-size:13.5px; margin-bottom:12px; }
+.hint{ font-size:12px; color:var(--ink-3); margin-top:8px; line-height:1.6; }
+.loading{ text-align:center; padding:40px; color:var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <button class="back" onclick="goBack()">← กลับ</button>
+    <div><h1>🧾 ประมาณการ สรรพากร (ภพ.30)</h1>
+      <div class="sub">ภาษีซื้อจาก Invoice OCR (เฉพาะบิลชื่อ KLH) · ภาษีขายจากยอดขาย · เป้า = ภาษีซื้อ + % ผู้บริหาร</div></div>
+  </div>
+
+  <div class="bar">
+    <label>เดือน:</label><input type="month" id="month">
+    <button class="btn" onclick="load()">โหลดข้อมูล</button>
+  </div>
+
+  <div id="msg"></div>
+  <div id="content"><div class="loading">เลือกเดือนแล้วกด "โหลดข้อมูล"</div></div>
+
+  <!-- ผู้บริหารกรอกประมาณการ -->
+  <div class="sec" id="estSec" style="display:none">
+    <h2>🎯 ตั้งเป้าผู้บริหาร (เดือนนี้)</h2>
+    <div class="bar" style="margin-bottom:0;border:none;padding:0;background:none">
+      <label>% เพิ่มเหนือภาษีซื้อ:</label>
+      <input type="number" id="pct" placeholder="เช่น 15" style="width:110px">
+      <label>ยอดขายปีที่แล้ว (เฉลี่ย/เดือน):</label>
+      <input type="number" id="lastYear" placeholder="บาท (ถ้ามี)" style="width:150px">
+      <button class="btn green" onclick="saveEst()">บันทึกเป้า</button>
+    </div>
+    <div class="hint">ระบบจะคำนวณ: VAT ขายเป้า = VAT ซื้อ × (1 + %) → ยอดขายที่ต้องมี = VAT เป้า × 107/7<br>
+    ทุกวันอาทิตย์ 19:00 ระบบเทียบยอดจริงกับเป้า แล้วแจ้งเตือนเข้ากลุ่ม LINE อัตโนมัติ (ตั้ง trigger ด้วย setupWeeklyTaxTrigger ใน GAS Editor ครั้งเดียว)</div>
+  </div>
+</div>
+
+<script>
+function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+(function(){ var d=new Date(); document.getElementById('month').value = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); })();
+
+var _pp = null;
+function load(){
+  var ym = document.getElementById('month').value;
+  document.getElementById('content').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+  document.getElementById('msg').innerHTML = '';
+  google.script.run.withSuccessHandler(function(res){
+    if(!res || !res.ok){ document.getElementById('msg').innerHTML='<div class="err">ผิดพลาด: '+((res&&res.error)||'')+'</div>'; document.getElementById('content').innerHTML=''; return; }
+    _pp = res; render(res);
+    document.getElementById('estSec').style.display='block';
+    if (res.estimate){ document.getElementById('pct').value = res.estimate.execPercent||''; document.getElementById('lastYear').value = res.estimate.lastYearAvg||''; }
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; }).getPP30(ym);
+}
+
+function render(r){
+  var est = r.estimate;
+  var h = '<div class="cards">'
+    + '<div class="card buy"><div class="k">ภาษีซื้อ (บิลชื่อ KLH)</div><div class="v num" style="color:var(--blue)">฿'+nf(r.input.vat)+'</div><div class="s">'+r.input.count+' ใบกำกับ · ฐาน ฿'+nf(r.input.base)+'</div></div>'
+    + '<div class="card sell"><div class="k">ภาษีขาย (จากยอดจริง)</div><div class="v num" style="color:var(--coral-2)">฿'+nf(r.outputVatActual)+'</div><div class="s">ยอดขาย KLH ฿'+nf(r.actualSales)+'</div></div>'
+    + '<div class="card '+(r.netVat>=0?'net':'warn')+'"><div class="k">VAT สุทธิ (ต้องนำส่ง)</div><div class="v num" style="color:'+(r.netVat>=0?'var(--green)':'var(--miss)')+'">฿'+nf(r.netVat)+'</div><div class="s">'+(r.netVat>=0?'ขาย > ซื้อ ✓':'⚠️ ขาย < ซื้อ — ต้องเพิ่มยอดขาย')+'</div></div>'
+    + '<div class="card"><div class="k">ยอดซื้อรวมทุกนิติ (เจ้าหนี้)</div><div class="v num">฿'+nf(r.purchaseAllEntities)+'</div><div class="s">เก็บทุกชื่อใน SHOPS</div></div>'
+    + '</div>';
+  h += '<div class="sec"><h2>📋 สรุป ภพ.30 — '+r.month+'</h2>'
+    + '<div class="row"><span>ยอดขายขั้นต่ำที่ต้องมี (ให้ VAT ขาย > ซื้อ)</span><b class="num">฿'+nf(r.minSalesRequired)+'</b></div>'
+    + '<div class="row"><span>ยอดขายจริงเดือนนี้ (KLH)</span><b class="num" style="color:'+(r.actualSales>=r.minSalesRequired?'var(--green)':'var(--miss)')+'">฿'+nf(r.actualSales)+'</b></div>';
+  if (est) {
+    h += '<div class="row"><span>เป้าผู้บริหาร (+'+est.execPercent+'% เหนือภาษีซื้อ)</span><b class="num">฿'+nf(est.targetSales)+'</b></div>'
+      + '<div class="row"><span>VAT ขายตามเป้า</span><b class="num">฿'+nf(est.targetVat)+'</b></div>'
+      + '<div class="row"><span>ส่วนต่างจากเป้า</span><b class="num" style="color:'+(r.actualSales>=est.targetSales?'var(--green)':'var(--miss)')+'">'+(r.actualSales>=est.targetSales?'+':'')+nf(r.actualSales-est.targetSales)+'</b></div>';
+  } else {
+    h += '<div class="row"><span style="color:var(--ink-3)">ยังไม่ได้ตั้งเป้าเดือนนี้ — กรอก % ด้านล่าง</span><b></b></div>';
+  }
+  h += '</div>';
+  document.getElementById('content').innerHTML = h;
+}
+
+function saveEst(){
+  var ym = document.getElementById('month').value;
+  var pct = Number(document.getElementById('pct').value)||0;
+  if (pct<=0){ document.getElementById('msg').innerHTML='<div class="err">กรอก % มากกว่า 0</div>'; return; }
+  google.script.run.withSuccessHandler(function(res){
+    if(!res||!res.ok){ document.getElementById('msg').innerHTML='<div class="err">'+((res&&res.msg)||'บันทึกไม่สำเร็จ')+'</div>'; return; }
+    document.getElementById('msg').innerHTML='';
+    load();
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .saveTaxEstimate(ym, pct, Number(document.getElementById('lastYear').value)||0);
+}
+</script>
+</body>
+</html>

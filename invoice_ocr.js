@@ -394,8 +394,22 @@ function saveInvoice(d) {
     // ── บันทึก AP_LEDGER (เจ้าหนี้การค้า) ─────────────────────
     writeApLedger_(ss, d);
 
+    // ── รับเข้าคลัง WMS อัตโนมัติ (STOCK_LOG + FIFO + Cost_Avg + ROP) ──
+    var wms = { ok: false, msg: 'skip' };
+    try {
+      wms = batchReceiveFromInvoice({
+        recvNo: d.recvNo, entity: d.entity || '', whId: d.whId || 'W1',
+        supplierName: d.supplierName || '',
+        items: (d.items || []).map(function(it) {
+          return { barcode: it.barcode || '', productName: it.productName || '',
+                   buyQty: Number(it.qty) || 0, freeQty: 0,
+                   unit: it.unit || 'ชิ้น', unitPrice: Number(it.unitPrice) || 0 };
+        })
+      });
+    } catch(e2) { wms = { ok: false, msg: e2.message }; }
+
     lock.releaseLock();
-    return { ok: true, recvNo: d.recvNo };
+    return { ok: true, recvNo: d.recvNo, wms: wms };
   } catch(e) {
     return { ok: false, msg: e.message || String(e) };
   }

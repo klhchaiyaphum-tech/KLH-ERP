@@ -5,207 +5,249 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <style>
-    :root {
-      --main: #FF7E5F; --blue: #0984E3; --success: #00B894;
-      --orange: #E67E22; --danger: #D63031; --bg: #F4F7F9; --dark: #2D3436;
+    /* ===== KLH Data Survey — mobile redesign (handoff_survey) ===== */
+    :root{
+      --main:#F4701E; --or:#F4701E; --or2:#FF9A4D; --or-d:#E25E0E; --or-soft:#FDEBDD;
+      --bg:#EEF0FA; --paper:#FFFFFF; --paper2:#F8F5F0;
+      --ink:#23201C; --ink2:#6C645A; --ink3:#A79E92;
+      --hair:#F0EBE2; --hair2:#E1DACC;
+      --blue:#3A6FD8; --blue-edge:#2E64D6;
+      --success:#16A06A; --ok:#16A06A; --orange:#E67E22; --danger:#D9512B; --miss:#D9512B; --dark:#2B2A28;
+      --ffn:"IBM Plex Sans",-apple-system,system-ui,sans-serif;
+      --sh-card:0 1px 2px rgba(60,40,25,.04), 0 10px 28px -16px rgba(60,40,25,.18);
     }
-    html,body { min-height:100vh; overflow-x:hidden; -webkit-overflow-scrolling:touch;
-      font-family:'Segoe UI',sans-serif; background:var(--bg); margin:0; padding:10px; color:#2D3436; }
-    .card { max-width:500px; margin:auto; background:white; border-radius:20px;
-      box-shadow:0 10px 30px rgba(0,0,0,0.08); padding-bottom:30px; }
-
-    /* ─── HEADER ─── */
-    .header { background:linear-gradient(135deg,#FF7E5F,#FEB47B); color:white;
-      padding:16px 20px; border-radius:20px 20px 0 0; }
-    .header-inner { display:flex; align-items:center; gap:12px; justify-content:center; }
-    #appLogo { width:44px; height:44px; border-radius:10px; object-fit:contain;
-      background:white; padding:3px; display:none; flex-shrink:0; }
-    #appNameHeader { margin:0; font-size:19px; line-height:1.2; }
-    .header-sub { font-size:11px; opacity:.75; margin-top:2px; }
-
-    .section { padding:18px; border-bottom:1px solid #F0F2F5; }
-    .title { font-weight:bold; margin-bottom:12px; display:flex; align-items:center; gap:8px; font-size:15px; }
-    .num { background:var(--main); color:white; width:22px; height:22px; border-radius:50%;
-      display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; }
-    label { font-size:11px; color:#636E72; font-weight:bold; margin-bottom:4px; display:block; }
-    input,select { width:100%; padding:12px; border-radius:10px; border:1px solid #E0E0E0;
-      box-sizing:border-box; font-size:14px; transition:.2s; background:white; }
-    input:focus,select:focus { border-color:var(--main); outline:none; background:#FFF9F7; }
-    input[readonly] { background:#F1F2F6; color:#636E72; font-weight:bold;
-      cursor:not-allowed; border:none; }
-    .btn { width:100%; padding:14px; border:none; border-radius:12px; font-weight:bold;
-      cursor:pointer; display:flex; align-items:center; justify-content:center;
-      gap:8px; font-size:15px; }
-    .btn-calc  { background:var(--orange); color:white; height:45px; margin-top:18px; }
-    .btn-save  { background:var(--success); color:white; margin-top:15px; height:55px; font-size:18px; }
-    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
-    .round-btn { background:#DFE6E9; border:none; width:26px; height:26px; border-radius:6px;
-      font-size:12px; cursor:pointer; color:var(--dark); display:flex;
-      align-items:center; justify-content:center; flex-shrink:0; }
-    .step-btn { background:#EEF0F2; border:1px solid #CCC; border-radius:5px;
-      font-size:11px; padding:2px 5px; cursor:pointer; color:#555; line-height:1; }
-    .step-btn.active { background:var(--orange); color:#fff; border-color:var(--orange); font-weight:700; }
-    .input-icon { position:relative; }
-    .input-icon input { padding-right:30px; }
-    .input-icon span { position:absolute; right:12px; top:38px; color:#636E72; font-weight:bold; }
-    #results { background:white; border-radius:10px; max-height:200px; overflow-y:auto;
-      margin-top:10px; border:1px solid #EEE; display:none; }
-    .res-item { padding:12px; border-bottom:1px solid #F0F2F5; cursor:pointer; }
-    .res-item:hover { background:#FFF9F7; }
-    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-      background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center; }
-    .modal-content { background:white; width:95%; max-width:450px; border-radius:20px;
-      padding:20px; max-height:90vh; overflow-y:auto; }
-    .preview-box { border:2px dashed #ccc; width:80mm; height:40mm; position:relative;
-      margin:10px auto; background:#fff; overflow:hidden; }
-    .control-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px;
-      width:120px; margin:10px auto; }
+    *{ box-sizing:border-box; }
+    html,body{ min-height:100vh; overflow-x:hidden; -webkit-overflow-scrolling:touch; margin:0; padding:0;
+      font-family:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif; color:var(--ink);
+      background:linear-gradient(180deg,#EEF0FA 0%,#F4EEF0 60%,#F6EBEA 100%); -webkit-font-smoothing:antialiased; }
+    .num{ font-variant-numeric:tabular-nums; font-family:var(--ffn); }
+    /* outer */
+    .sv{ max-width:560px; margin:0 auto; padding:0 0 40px; }
+    .sv-pad{ padding:12px; display:flex; flex-direction:column; gap:13px; }
+    /* header */
+    .sv-head{ margin:10px 12px 0; border-radius:20px; color:#fff; padding:15px 16px; display:flex; align-items:center; gap:11px;
+      background:linear-gradient(120deg,#FF7A2E 0%,#F4701E 48%,#FF9A4D 100%);
+      box-shadow:0 12px 26px -12px rgba(226,94,14,.62), inset 0 1px 0 rgba(255,255,255,.22); position:relative; overflow:hidden; }
+    .sv-head .hlogo{ width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.2); display:grid; place-items:center; flex:0 0 auto; overflow:hidden; }
+    .sv-head .hlogo img{ width:100%; height:100%; object-fit:cover; }
+    .sv-head .hh{ flex:1; }
+    .sv-head .hh b{ font-size:17px; font-weight:700; display:block; line-height:1.2; }
+    .sv-head .hh span{ font-size:11px; opacity:.92; }
+    /* section card */
+    .card{ background:var(--paper); border:1px solid var(--hair); border-radius:18px; }
+    .sec-card{ padding:16px; box-shadow:var(--sh-card); margin:0; border:1px solid var(--hair); border-radius:18px; background:var(--paper); }
+    .sec-card.blue-edge{ border-left:4px solid var(--blue-edge); }
+    .sec-card.peach-bg{ background:linear-gradient(180deg,#FFF8F1,#FFF0E2); border-color:#F7E2CF; border-left:4px solid var(--or); }
+    .sec-h{ display:flex; align-items:center; gap:11px; margin-bottom:15px; }
+    .sec-h h3{ margin:0; font-size:16px; font-weight:700; }
+    .sec-chip{ width:38px; height:38px; border-radius:12px; display:grid; place-items:center; color:#fff; flex:0 0 auto; position:relative;
+      background:linear-gradient(135deg,#FF8A3D,#E25E0E); box-shadow:0 6px 14px -7px rgba(226,94,14,.6), inset 0 1px 0 rgba(255,255,255,.3); font-size:18px; }
+    .sec-chip.blue{ background:linear-gradient(135deg,#5B86E5,#2E64D6); }
+    .sec-chip.gold{ background:linear-gradient(135deg,#F6B53C,#E8910E); }
+    .sec-chip .sn{ position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:#fff; color:var(--or-d); font-family:var(--ffn); font-size:10px; font-weight:800; display:grid; place-items:center; box-shadow:0 2px 5px rgba(0,0,0,.18); }
+    .sec-chip.blue .sn{ color:var(--blue-edge); } .sec-chip.gold .sn{ color:#E8910E; }
+    .edit-tag{ margin-left:auto; font-size:11px; color:var(--ink3); }
+    /* form fields */
+    .ffield{ margin-bottom:12px; } .ffield.mb0{ margin-bottom:0; }
+    .ffield label, label{ display:block; font-size:12px; font-weight:600; color:var(--ink2); margin-bottom:5px; }
+    .ffield label .col{ color:var(--ink3); font-weight:500; font-family:var(--ffn); font-size:11px; }
+    .inp, input, select{ width:100%; font-size:15px; color:var(--ink); background:var(--paper); border:1.5px solid var(--hair2); border-radius:12px; padding:11px 13px; outline:none; transition:border-color .14s, box-shadow .14s; }
+    .inp:focus, input:focus, select:focus{ border-color:var(--or); box-shadow:0 0 0 3.5px var(--or-soft); }
+    .inp.num{ font-family:var(--ffn); font-weight:600; }
+    input[readonly]{ background:var(--paper2); color:var(--ink2); }
+    .row2, .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:0; }
+    /* select with mini buttons */
+    .sel-row{ display:flex; gap:7px; align-items:stretch; }
+    .sel-row select{ flex:1; min-width:0; }
+    .mini-btn, .round-btn{ width:36px; flex:0 0 auto; border-radius:11px; color:#fff; display:grid; place-items:center; border:none; cursor:pointer;
+      background:linear-gradient(135deg,#FF8A3D,#E25E0E); box-shadow:0 4px 10px -5px rgba(60,40,25,.4), inset 0 1px 0 rgba(255,255,255,.28); transition:transform .1s, filter .1s; font-size:13px; height:auto; }
+    .mini-btn:active, .round-btn:active{ filter:brightness(.93); transform:scale(.94); }
+    /* section1 search */
+    .search-row{ display:flex; gap:8px; }
+    .search-row .inp{ flex:1; }
+    .sq-btn{ width:48px; flex:0 0 auto; border-radius:12px; color:#fff; display:grid; place-items:center; border:none; cursor:pointer; font-size:20px;
+      box-shadow:0 6px 14px -7px rgba(60,40,25,.45), inset 0 1px 0 rgba(255,255,255,.2); transition:transform .1s; }
+    .sq-btn.dark{ background:linear-gradient(160deg,#3A3835,#23211F); }
+    .sq-btn.blue{ background:linear-gradient(160deg,#4C7DE6,#2E64D6); }
+    .btn-addnew{ width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px; padding:13px; border-radius:13px; border:none; cursor:pointer;
+      background:linear-gradient(135deg,#FF8A3D,#E8780F); color:#fff; font-size:15px; font-weight:700; box-shadow:0 10px 20px -10px var(--or), inset 0 1px 0 rgba(255,255,255,.28); }
+    #results{ background:var(--paper); border-radius:12px; max-height:230px; overflow-y:auto; margin-top:11px; border:1px solid var(--hair); display:none; }
+    .res-item{ padding:12px 13px; border-bottom:1px solid var(--hair); cursor:pointer; font-size:14.5px; }
+    .res-item:last-child{ border-bottom:none; } .res-item:active{ background:var(--paper2); }
+    /* cost & price */
+    .cost-row{ display:flex; gap:10px; align-items:stretch; }
+    .cost-val{ flex:1; background:linear-gradient(180deg,#FFF4EE,#FCE9E2); border:1px solid #F6CFC0; border-radius:12px; padding:11px 14px; font-size:23px; font-weight:800; color:var(--miss); display:flex; align-items:center; }
+    .calc-btn{ flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:0 17px; border-radius:12px; border:none; cursor:pointer;
+      background:linear-gradient(135deg,#FF8A3D,#E25E0E); color:#fff; font-size:14.5px; font-weight:700; box-shadow:0 8px 16px -8px var(--or), inset 0 1px 0 rgba(255,255,255,.28); height:auto; margin-top:0; }
+    .price-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:13px; }
+    .pg-cell{ background:var(--paper); border:1px solid var(--hair2); border-radius:11px; padding:9px 10px; }
+    .pg-cell .pg-l{ font-size:11px; color:var(--ink2); margin-bottom:6px; font-weight:600; line-height:1.3; }
+    .pg-cell .pg-l .col{ color:var(--ink3); font-family:var(--ffn); }
+    .adj{ display:flex; align-items:center; gap:7px; }
+    .adj .adj-val{ flex:1; }
+    .adj-btns{ display:flex; flex-direction:column; gap:3px; }
+    .adj-btns .round-btn{ width:30px; height:18px; border-radius:6px; background:linear-gradient(180deg,#fff,#F6F1EA); border:1px solid var(--hair2); font-size:9px; color:var(--or-d); box-shadow:none; }
+    .adj-btns .round-btn:active{ background:var(--or-soft); }
+    /* dozen */
+    .dozen{ width:100%; margin-top:13px; display:flex; align-items:center; gap:10px; padding:13px; border-radius:13px; border:1.5px solid #C3E6D1; background:linear-gradient(180deg,#F3FBF6,#EAF7F0); font-size:13.5px; font-weight:600; }
+    /* big buttons */
+    .big-btn, .btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px; border-radius:14px; font-size:15px; font-weight:700; margin-top:11px; border:none; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.18); transition:transform .1s; }
+    .big-btn:active, .btn:active{ transform:scale(.99); }
+    .big-btn.dark, .btn.dark{ background:linear-gradient(160deg,#3A3835,#23211F); color:#fff; }
+    .btn-calc{ background:linear-gradient(135deg,#FF8A3D,#E25E0E); color:#fff; }
+    .big-btn.save, .btn-save{ background:linear-gradient(135deg,#22C083,#12A268); color:#fff; box-shadow:0 12px 22px -11px var(--ok), inset 0 1px 0 rgba(255,255,255,.3); }
+    .btn-save:disabled{ background:linear-gradient(160deg,#CDD3CF,#BCC3BE); box-shadow:none; cursor:not-allowed; }
+    .ph-shot{ width:100%; border-radius:15px; margin-top:10px; }
+    .step-btn{ background:#EEF0F2; border:1px solid #CCC; border-radius:5px; font-size:11px; padding:2px 5px; cursor:pointer; color:#555; }
+    /* ===== legacy classes kept for MODALS (cost/print) ===== */
+    .input-icon{ position:relative; }
+    .input-icon input{ padding-right:30px; }
+    .input-icon span{ position:absolute; right:12px; top:34px; color:var(--ink3); font-weight:bold; }
+    .modal{ display:none; position:fixed; inset:0; background:rgba(35,32,28,.55); z-index:1000; align-items:center; justify-content:center; padding:12px; }
+    .modal-content{ background:var(--paper); width:100%; max-width:450px; border-radius:20px; padding:20px; max-height:92vh; overflow-y:auto; }
+    .preview-box{ border:2px dashed #ccc; width:80mm; height:40mm; position:relative; margin:10px auto; background:#fff; overflow:hidden; }
+    .control-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:5px; width:120px; margin:10px auto; }
+    .control-grid .round-btn{ background:#DFE6E9; color:var(--dark); box-shadow:none; }
   </style>
 </head>
 <body>
-<div class="card">
+<div class="sv">
 
   <!-- HEADER + LOGO -->
-  <div class="header">
-    <div class="header-inner">
-      <img id="appLogo" src="" alt="logo">
-      <div>
-        <h2 id="appNameHeader">กำลังโหลด...</h2>
-        <div class="header-sub">Enterprise Survey &amp; Pricing</div>
-      </div>
+  <div class="sv-head">
+    <div class="hlogo"><img id="appLogo" src="" alt="logo" style="display:none"></div>
+    <div class="hh">
+      <b id="appNameHeader">กำลังโหลด...</b>
+      <span>Data Survey · สำรวจ/อัปเดตราคา</span>
     </div>
   </div>
 
+  <div class="sv-pad">
+
   <!-- SECTION 1: ค้นหา -->
-  <div class="section">
-    <div class="title"><div class="num">1</div> ค้นหาสินค้า</div>
-    <div style="display:flex;gap:6px;">
-      <input type="text" id="sInp" placeholder="ชื่อ / บาร์โค้ดชิ้น / บาร์โค้ดลัง..."
+  <div class="sec-card">
+    <div class="sec-h"><div class="sec-chip"><span class="sn">1</span>🔍</div><h3>ค้นหาสินค้า</h3></div>
+    <div class="search-row">
+      <input class="inp" type="text" id="sInp" placeholder="ชื่อ / บาร์โค้ดชิ้น / บาร์โค้ดลัง..."
         onkeydown="if(event.key==='Enter')doSearch()">
-      <button class="btn" style="background:var(--dark);color:white;width:55px;padding:0;font-size:20px;"
+      <button class="sq-btn dark"
         onclick="document.getElementById('sScanInp').click()">📷</button>
       <input type="file" id="sScanInp" accept="image/*" capture="environment"
         onchange="handleSearchScan(this)" style="display:none">
-      <button class="btn" style="background:var(--blue);color:white;width:65px;padding:0;"
-        onclick="doSearch()">🔍</button>
+      <button class="sq-btn blue" onclick="doSearch()">🔍</button>
     </div>
     <div id="results"></div>
-    <button class="btn" style="background:var(--orange);color:white;margin-top:10px;"
-      onclick="prepNew()">➕ เพิ่มสินค้าใหม่</button>
+    <button class="btn-addnew" onclick="prepNew()">➕ เพิ่มสินค้าใหม่</button>
   </div>
 
   <!-- SECTION 2: แก้ไข -->
   <div id="editArea" style="display:none;">
 
     <!-- 2A: ข้อมูลพื้นฐาน -->
-    <div class="section" style="border-left:4px solid var(--blue);">
-      <div class="title">
-        <div class="num" style="background:var(--blue);">2</div>
-        ข้อมูลพื้นฐาน
-        <span id="tag" style="margin-left:auto;font-size:10px;color:#636E72;"></span>
+    <div class="sec-card blue-edge">
+      <div class="sec-h">
+        <div class="sec-chip blue"><span class="sn">2</span>📋</div>
+        <h3>ข้อมูลพื้นฐาน</h3>
+        <span id="tag" class="edit-tag"></span>
       </div>
 
-      <div class="grid-2">
-        <div><label>รหัสกลุ่ม (AE):</label>
-          <input type="text" id="eGroup" placeholder="รวบสินค้าทดแทน"></div>
-        <div>
-          <label>นิติบุคคล (AD):</label>
-          <div style="display:flex;gap:5px;">
-            <select id="eTaxEntity" style="flex:1;border-color:var(--blue);font-weight:bold;">
-              <option value="">-- เลือกร้าน --</option></select>
-            <button class="round-btn" style="background:#81ECEC;"
-              onclick="openListManager('TAB_SHOPS','นิติบุคคล')">⚙️</button>
+      <div class="row2">
+        <div class="ffield mb0"><label>รหัสกลุ่ม <span class="col">(AE)</span></label>
+          <input class="inp" type="text" id="eGroup" placeholder="รวบสินค้าทดแทน"></div>
+        <div class="ffield mb0">
+          <label class="blue">นิติบุคคล <span class="col">(AD)</span></label>
+          <div class="sel-row">
+            <select id="eTaxEntity"><option value="">-- เลือกร้าน --</option></select>
+            <button class="round-btn" onclick="openListManager('TAB_SHOPS','นิติบุคคล')">⚙️</button>
           </div>
         </div>
       </div>
 
-      <div class="grid-2">
-        <div><label>ชื่อสินค้า (B):</label><input type="text" id="eName"></div>
-        <div><label>ขนาด (D):</label><input type="text" id="eSize"></div>
+      <div class="row2" style="margin-top:12px">
+        <div class="ffield mb0"><label>ชื่อสินค้า <span class="col">(B)</span></label><input class="inp" type="text" id="eName"></div>
+        <div class="ffield mb0"><label>ขนาด <span class="col">(D)</span></label><input class="inp" type="text" id="eSize"></div>
       </div>
 
-      <div class="grid-2">
-        <div>
-          <label>หมวด (C):</label>
-          <div style="display:flex;gap:5px;">
-            <select id="eCat" style="flex:1;"><option value="">-- เลือก --</option></select>
-            <button class="round-btn" style="background:#FFEAA7;"
-              onclick="openListManager('TAB_CATEGORY','หมวดสินค้า')">⚙️</button>
+      <div class="row2" style="margin-top:12px">
+        <div class="ffield mb0">
+          <label>หมวด <span class="col">(C)</span></label>
+          <div class="sel-row">
+            <select id="eCat"><option value="">-- เลือก --</option></select>
+            <button class="round-btn" onclick="openListManager('TAB_CATEGORY','หมวดสินค้า')">⚙️</button>
           </div>
         </div>
-        <div>
-          <label>ผู้จำหน่าย (G):</label>
-          <div style="display:flex;gap:5px;">
-            <select id="eSupCode" style="flex:1;"><option value="">-- เลือก --</option></select>
+        <div class="ffield mb0">
+          <label>ผู้จำหน่าย <span class="col">(G)</span></label>
+          <div class="sel-row">
+            <select id="eSupCode"><option value="">-- เลือก --</option></select>
             <button class="round-btn" onclick="openSupModal()" title="เพิ่มผู้จัดจำหน่ายใหม่">🏢</button>
-            <button class="round-btn" style="background:#80CBC4;" onclick="goToSupplierMaster()" title="จัดการ/แก้ไขทั้งหมด">✏️</button>
+            <button class="round-btn" onclick="goToSupplierMaster()" title="จัดการ/แก้ไขทั้งหมด">✏️</button>
           </div>
         </div>
       </div>
 
-      <div class="grid-2">
-        <div>
-          <label>หน่วยบรรจุ (F):</label>
-          <div style="display:flex;gap:5px;">
-            <select id="ePackUnit" style="flex:1;"><option value="">-- เลือก --</option></select>
-            <button class="round-btn" style="background:#B8E994;"
-              onclick="openListManager('TAB_PACKAGE','หน่วยบรรจุ')">⚙️</button>
+      <div class="row2" style="margin-top:12px">
+        <div class="ffield mb0">
+          <label>หน่วยบรรจุ <span class="col">(F)</span></label>
+          <div class="sel-row">
+            <select id="ePackUnit"><option value="">-- เลือก --</option></select>
+            <button class="round-btn" onclick="openListManager('TAB_PACKAGE','หน่วยบรรจุ')">⚙️</button>
           </div>
         </div>
-        <div><label>ตัวคูณ (E):</label>
-          <input type="number" id="ePackMult" placeholder="เช่น 12"></div>
+        <div class="ffield mb0"><label>ตัวคูณ <span class="col">(E)</span></label>
+          <input class="inp num" type="number" id="ePackMult" placeholder="เช่น 12"></div>
       </div>
     </div>
 
     <!-- 2B: ต้นทุน & ราคาขาย -->
-    <div class="section" style="background:#FFF9F2;border-left:4px solid var(--orange);">
-      <div class="title">💰 ต้นทุน &amp; ราคาขาย</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">
-        <div><label>ต้นทุนสุทธิ/ชิ้น (R):</label>
-          <input type="text" id="eCostR" readonly
-            style="color:var(--danger);font-size:18px;font-weight:bold;"></div>
-        <button class="btn btn-calc" onclick="openCostModal()">⚙️ คำนวณ</button>
+    <div class="sec-card peach-bg">
+      <div class="sec-h"><div class="sec-chip gold">🏷️</div><h3>ต้นทุน &amp; ราคาขาย</h3></div>
+
+      <div class="ffield mb0"><label class="coral">ต้นทุนสุทธิ/ชิ้น <span class="col">(R)</span></label>
+        <div class="cost-row">
+          <input class="cost-val num" type="text" id="eCostR" readonly>
+          <button class="calc-btn" onclick="openCostModal()">⚙️ คำนวณ</button>
+        </div>
       </div>
-      <hr style="border:.5px dashed #DDD;margin:15px 0;">
-      <div class="grid-2">
-        <div>
-          <label>ขายส่งเก่า (U):</label>
-          <div style="display:flex;align-items:center;gap:3px;">
-            <input type="number" id="eWholeU" style="max-width:90px;">
-            <div style="display:flex;flex-direction:column;gap:2px;">
+
+      <div class="price-grid">
+        <div class="pg-cell">
+          <div class="pg-l">ขายส่งเก่า <span class="col">(U)</span></div>
+          <div class="adj">
+            <input class="adj-val num" type="number" id="eWholeU">
+            <div class="adj-btns">
               <button class="round-btn" onclick="adjOldPrice('U',1)" title="+0.25">▲</button>
               <button class="round-btn" onclick="adjOldPrice('U',-1)" title="-0.25">▼</button>
             </div>
           </div>
         </div>
-        <div>
-          <label>ส่ง×หน่วยใหญ่ (V): <span id="sLabel" style="color:var(--blue);font-weight:normal;font-size:11px;"></span></label>
-          <div style="display:flex;align-items:center;gap:3px;">
-            <input type="text" id="eWholeV" readonly style="color:var(--blue);font-weight:bold;flex:1;">
-            <div style="display:flex;flex-direction:column;gap:2px;">
+        <div class="pg-cell">
+          <div class="pg-l">ส่ง×หน่วยใหญ่ <span class="col">(V)</span> <span id="sLabel" class="col"></span></div>
+          <div class="adj">
+            <input class="adj-val num ro" type="text" id="eWholeV" readonly>
+            <div class="adj-btns">
               <button class="round-btn" onclick="adjCalcPrice('V',1)" title="+0.25">▲</button>
               <button class="round-btn" onclick="adjCalcPrice('V',-1)" title="-0.25">▼</button>
             </div>
           </div>
         </div>
-      </div>
-      <div class="grid-2" style="margin-top:8px;">
-        <div>
-          <label>ขายปลีกเก่า (W):</label>
-          <div style="display:flex;align-items:center;gap:3px;">
-            <input type="number" id="eRetailW" style="max-width:90px;">
-            <div style="display:flex;flex-direction:column;gap:2px;">
+        <div class="pg-cell">
+          <div class="pg-l">ขายปลีกเก่า <span class="col">(W)</span></div>
+          <div class="adj">
+            <input class="adj-val num" type="number" id="eRetailW">
+            <div class="adj-btns">
               <button class="round-btn" onclick="adjOldPrice('W',1)" title="+0.25">▲</button>
               <button class="round-btn" onclick="adjOldPrice('W',-1)" title="-0.25">▼</button>
             </div>
           </div>
         </div>
-        <div>
-          <label>ปลีกคำนวณ (X): <span id="tLabel" style="color:var(--success);font-weight:normal;font-size:11px;"></span></label>
-          <div style="display:flex;align-items:center;gap:3px;">
-            <input type="text" id="eRetailX" readonly style="color:var(--success);font-weight:bold;flex:1;">
-            <div style="display:flex;flex-direction:column;gap:2px;">
+        <div class="pg-cell">
+          <div class="pg-l">ปลีกคำนวณ <span class="col">(X)</span> <span id="tLabel" class="col"></span></div>
+          <div class="adj">
+            <input class="adj-val num ro" type="text" id="eRetailX" readonly>
+            <div class="adj-btns">
               <button class="round-btn" onclick="adjCalcPrice('X',1)" title="+0.25">▲</button>
               <button class="round-btn" onclick="adjCalcPrice('X',-1)" title="-0.25">▼</button>
             </div>
@@ -214,27 +256,23 @@
       </div>
 
       <!-- ══ โหล (AH: BARCODE_DOZ, AI: RETAIL_DOZ) ══ -->
-      <div style="margin-top:10px;padding:10px;background:#F0FFF4;border-radius:10px;border:1.5px solid #A8E6CF;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:#2E7D32;">
-          <input type="checkbox" id="chkDoz" onchange="toggleDoz(this.checked)" style="width:16px;height:16px;accent-color:#2E7D32;">
-          🔢 สร้างหน่วยโหล (×12)
-        </label>
-        <div id="dozFields" style="display:none;margin-top:8px;">
-          <div class="grid-2">
-            <div>
-              <label style="font-size:12px;color:#555;">บาร์โค้ดโหล (AH):</label>
-              <input type="text" id="eBarcDoz" placeholder="auto: 5+barcode"
-                style="font-size:13px;" oninput="selected.barcode_doz=this.value">
-            </div>
-            <div>
-              <label style="font-size:12px;color:#555;">ราคาโหล (AI): <span id="dozLabel" style="color:#2E7D32;font-size:11px;"></span></label>
-              <div style="display:flex;align-items:center;gap:3px;">
-                <input type="text" id="eRetailDoz" readonly
-                  style="flex:1;color:#2E7D32;font-weight:bold;font-size:14px;">
-                <div style="display:flex;flex-direction:column;gap:2px;">
-                  <button class="round-btn" onclick="adjDozPrice(1)" style="background:#C8E6C9;" title="+0.25">▲</button>
-                  <button class="round-btn" onclick="adjDozPrice(-1)" style="background:#C8E6C9;" title="-0.25">▼</button>
-                </div>
+      <label class="dozen">
+        <input type="checkbox" id="chkDoz" onchange="toggleDoz(this.checked)" style="width:18px;height:18px;accent-color:#16A06A;">
+        🔢 สร้างหน่วยโหล (×12)
+      </label>
+      <div id="dozFields" style="display:none;margin-top:10px;">
+        <div class="row2">
+          <div class="ffield mb0">
+            <label>บาร์โค้ดโหล <span class="col">(AH)</span></label>
+            <input class="inp" type="text" id="eBarcDoz" placeholder="auto: 5+barcode" oninput="selected.barcode_doz=this.value">
+          </div>
+          <div class="ffield mb0">
+            <label>ราคาโหล <span class="col">(AI)</span> <span id="dozLabel" class="col"></span></label>
+            <div class="adj">
+              <input class="adj-val num ro" type="text" id="eRetailDoz" readonly>
+              <div class="adj-btns">
+                <button class="round-btn" onclick="adjDozPrice(1)" title="+0.25">▲</button>
+                <button class="round-btn" onclick="adjDozPrice(-1)" title="-0.25">▼</button>
               </div>
             </div>
           </div>
@@ -243,36 +281,33 @@
     </div>
 
     <!-- 2C: รูปภาพ & บาร์โค้ด -->
-    <div class="section" style="border-left:4px solid var(--dark);padding-bottom:30px;">
-      <div class="title"><div class="num" style="background:var(--dark);">3</div> รูปภาพ &amp; บาร์โค้ด</div>
-      <div class="grid-2">
-        <button class="btn" style="background:#636E72;color:white;"
-          onclick="document.getElementById('pInp').click()">📸 ถ่ายรูป</button>
-        <button class="btn" style="background:var(--dark);color:white;"
-          onclick="document.getElementById('bInp').click()">🔍 สแกนบาร์โค้ด</button>
+    <div class="sec-card" style="border-left:4px solid var(--dark);">
+      <div class="sec-h"><div class="sec-chip" style="background:linear-gradient(135deg,#5A5752,#2B2A28)"><span class="sn">3</span>📷</div><h3>รูปภาพ &amp; บาร์โค้ด</h3></div>
+      <div class="row2">
+        <button class="big-btn dark" style="margin-top:0" onclick="document.getElementById('pInp').click()">📸 ถ่ายรูป</button>
+        <button class="big-btn dark" style="margin-top:0" onclick="document.getElementById('bInp').click()">🔍 สแกนบาร์โค้ด</button>
       </div>
       <input type="file" id="pInp" accept="image/*" capture="environment"
         onchange="handleP(this)" style="display:none">
       <input type="file" id="bInp" accept="image/*" capture="environment"
         onchange="handleB(this)" style="display:none">
-      <img id="preview" style="width:100%;border-radius:15px;margin-top:10px;display:none;">
+      <img id="preview" class="ph-shot" style="display:none;">
 
-      <div class="grid-2" style="margin-top:15px;">
-        <div><label>บาร์โค้ดชิ้น (A):</label>
-          <input type="text" id="bcVal" onkeyup="check()"></div>
-        <div><label>บาร์โค้ดลัง (AB):</label>
-          <input type="text" id="bcBig"></div>
+      <div class="row2" style="margin-top:13px;">
+        <div class="ffield mb0"><label>บาร์โค้ดชิ้น <span class="col">(A)</span> <span style="color:var(--miss)">*</span></label>
+          <input class="inp num" type="text" id="bcVal" onkeyup="check()"></div>
+        <div class="ffield mb0"><label>บาร์โค้ดลัง <span class="col">(AB)</span></label>
+          <input class="inp num" type="text" id="bcBig"></div>
       </div>
-      <label style="margin-top:10px;">วันที่อัปเดต:</label>
-      <input type="date" id="eDate">
+      <div class="ffield" style="margin-top:13px;"><label>วันที่อัปเดต <span class="col">(Y)</span></label>
+        <input class="inp" type="date" id="eDate"></div>
 
-      <button class="btn btn-save" id="saveBtn" onclick="save()" disabled>🚀 บันทึกเข้าระบบ</button>
-      <button class="btn" id="printBtn"
-        style="background:var(--dark);color:white;margin-top:10px;"
-        onclick="printLabel()" disabled>🖨️ ตรวจสอบ &amp; พิมพ์ป้าย</button>
+      <button class="big-btn save" id="saveBtn" onclick="save()" disabled>🚀 บันทึกเข้าระบบ</button>
+      <button class="big-btn dark" id="printBtn" onclick="printLabel()" disabled>🖨️ ตรวจสอบ &amp; พิมพ์ป้าย</button>
     </div>
-  </div>
-</div>
+  </div><!-- /editArea -->
+  </div><!-- /sv-pad -->
+</div><!-- /sv -->
 
 <!-- ══ MODAL: Cost Calculator ══ -->
 <div id="costModal" class="modal">

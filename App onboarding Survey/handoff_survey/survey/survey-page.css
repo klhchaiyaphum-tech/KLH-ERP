@@ -1,0 +1,34 @@
+/* page chrome around the phone */
+.page{ min-height:100vh; padding:28px 30px 44px; box-sizing:border-box;
+  background:
+    radial-gradient(820px 560px at 10% 2%, #FBE0CB 0%, transparent 55%),
+    radial-gradient(760px 560px at 92% 6%, #FCEBCB 0%, transparent 52%),
+    linear-gradient(160deg,#F4EFE6 0%,#EFE7D9 100%);
+  font-family:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif; color:#23201C;
+}
+.pg-head{ max-width:1000px; margin:0 auto 24px; }
+.pg-brand{ display:flex; align-items:center; gap:14px; }
+.pg-logo{ width:50px; height:50px; border-radius:15px; overflow:hidden; box-shadow:0 10px 22px -10px rgba(226,94,14,.5); flex:0 0 auto; }
+.pg-logo img{ width:100%; height:100%; object-fit:cover; }
+.pg-brand h1{ margin:0; font-size:21px; font-weight:700; letter-spacing:-.01em; }
+.pg-brand p{ margin:4px 0 0; font-size:13.5px; color:#6C645A; line-height:1.5; max-width:680px; }
+
+.phone-wrap{ display:flex; gap:42px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
+.phone-col{ display:flex; flex-direction:column; align-items:center; gap:12px; }
+.phone-label{ font-size:12.5px; font-weight:700; color:#6C645A; letter-spacing:.04em; text-transform:uppercase; }
+
+.sidecard{ width:330px; background:rgba(255,255,255,.72); border:1px solid #E6DECF; border-radius:18px; padding:20px 22px; backdrop-filter:blur(6px); }
+.sidecard h2{ margin:0 0 10px; font-size:15px; font-weight:700; }
+.sidecard .lead{ margin:0 0 12px; font-size:13px; color:#4D463D; line-height:1.55; }
+.sidecard ul{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+.sidecard li{ font-size:12.5px; color:#5C544A; line-height:1.5; padding-left:16px; position:relative; }
+.sidecard li::before{ content:""; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%; background:#F4701E; }
+.sidecard b{ color:#23201C; }
+.sidecard code{ font-family:"IBM Plex Sans",monospace; font-size:11.5px; background:#FDEBDD; color:#C24A12; padding:1px 6px; border-radius:6px; }
+.sidecard .foot{ margin:14px 0 0; font-size:11.5px; color:#8A8074; line-height:1.55; border-top:1px solid #E6DECF; padding-top:12px; }
+
+@media (max-width:880px){
+  .page{ padding:20px 14px 34px; }
+  .phone-wrap{ gap:26px; }
+  .sidecard{ width:100%; max-width:390px; }
+}

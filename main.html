@@ -5,273 +5,212 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KLH ERP</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
-:root { --orange:#E65100; --orange2:#FF8F00; }
-* { box-sizing:border-box; margin:0; padding:0; }
-body {
-  min-height:100vh;
-  background:linear-gradient(150deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-  font-family:'Segoe UI','Sarabun',sans-serif;
-  color:#fff;
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-soft:#FCE6DC; --green:#34A853; --blue:#3A37C9;
+  --cream:#F1EBDE; --paper:#FCFBF7; --paper-2:#F6F2E9;
+  --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90; --line:#EBE4D6; --line-2:#E0D8C7;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif;
+  --ff-num:"IBM Plex Sans",-apple-system,sans-serif; --r:18px; --r-lg:24px;
 }
+*{ box-sizing:border-box; margin:0; padding:0; }
+.num{ font-variant-numeric:tabular-nums; font-family:var(--ff-num); }
+body{ font-family:var(--ff); color:var(--ink); -webkit-font-smoothing:antialiased; min-height:100vh; padding:24px 18px 40px;
+  background:radial-gradient(1100px 760px at 13% 6%,#FBDAC6 0%,transparent 58%),
+    radial-gradient(1000px 720px at 88% 14%,#F8E7CD 0%,transparent 55%),
+    radial-gradient(1200px 900px at 72% 102%,#F4D2D6 0%,transparent 60%),
+    linear-gradient(157deg,#F4EEE2 0%,#EFE6D7 100%); }
+button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
 
-/* Header */
-.hdr {
-  padding:28px 24px 20px;
-  display:flex; align-items:center; gap:16px;
-  border-bottom:1px solid rgba(255,255,255,.08);
-}
-.logo-ring {
-  width:56px; height:56px; border-radius:50%;
-  background:linear-gradient(135deg,var(--orange),var(--orange2));
-  display:flex; align-items:center; justify-content:center;
-  font-size:1.6rem; font-weight:900; color:#fff;
-  box-shadow:0 4px 16px rgba(230,81,0,.5);
-}
-.hdr-text h1 { font-size:1.4rem; font-weight:700; }
-.hdr-text p  { font-size:.82rem; color:rgba(255,255,255,.55); margin-top:2px; }
-.hdr-right { margin-left:auto; font-size:.78rem; color:rgba(255,255,255,.4); text-align:right; }
+.window{ width:min(1240px,100%); margin:0 auto; background:var(--paper); border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.10), 0 30px 70px -20px rgba(60,40,25,.42); }
+.titlebar{ height:46px; display:flex; align-items:center; padding:0 16px; background:rgba(252,251,247,.92); border-bottom:1px solid var(--line); position:relative; }
+.lights{ display:flex; gap:8px; }
+.lights i{ width:12px; height:12px; border-radius:999px; display:block; }
+.lights .r{ background:#ff5f57; } .lights .y{ background:#febc2e; } .lights .g{ background:#28c840; }
+.titlebar .tt{ position:absolute; left:0; right:0; text-align:center; font-size:13.5px; font-weight:600; color:var(--ink-2); pointer-events:none; }
+.winner{ padding:24px 28px 30px; }
 
-/* Grid */
-.grid {
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap:16px;
-  padding:24px;
-  max-width:1100px;
-  margin:0 auto;
-}
+.hero{ display:flex; align-items:center; gap:20px; padding:20px 22px; background:linear-gradient(120deg,#fff,var(--paper-2)); border:1px solid var(--line); border-radius:var(--r-lg); flex-wrap:wrap; }
+.hero-logo{ width:78px; height:78px; flex:0 0 auto; border-radius:20px; background:var(--cream); display:grid; place-items:center; overflow:hidden; box-shadow:0 6px 16px -8px rgba(226,80,43,.5); }
+.hero-logo img{ width:100%; height:100%; object-fit:contain; }
+.hero-logo .fallback{ font-size:30px; font-weight:900; color:var(--coral-2); }
+.hero h1{ font-size:24px; font-weight:700; line-height:1.1; }
+.hero .sub{ font-size:14px; color:var(--ink-2); margin-top:5px; }
+.stats{ margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; }
+.stat{ min-width:90px; background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:10px 14px; text-align:center; }
+.stat .v{ font-size:18px; font-weight:700; line-height:1; }
+.stat .v.coral{ color:var(--coral-2); }
+.stat .k{ font-size:12px; color:var(--ink-3); margin-top:4px; }
+.stat.live .v{ color:var(--green); font-size:15px; display:inline-flex; align-items:center; gap:6px; }
+.stat.live .v .ld{ width:8px; height:8px; border-radius:999px; background:var(--green); box-shadow:0 0 0 3px rgba(52,168,83,.18); }
 
-/* Module card */
-.mod-card {
-  background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.1);
-  border-radius:16px;
-  padding:24px;
-  cursor:pointer;
-  transition:.2s;
-  text-decoration:none;
-  color:#fff;
-  display:flex; flex-direction:column; gap:12px;
-  position:relative; overflow:hidden;
-}
-.mod-card:hover {
-  background:rgba(255,255,255,.11);
-  border-color:rgba(255,255,255,.25);
-  transform:translateY(-2px);
-  box-shadow:0 8px 32px rgba(0,0,0,.3);
-}
-.mod-card::before {
-  content:'';
-  position:absolute; top:0; left:0; right:0; height:3px;
-  background:var(--accent);
-}
-.mod-icon {
-  width:48px; height:48px; border-radius:12px;
-  background:rgba(255,255,255,.1);
-  display:flex; align-items:center; justify-content:center;
-  font-size:1.5rem;
-}
-.mod-title { font-size:1.05rem; font-weight:700; }
-.mod-desc  { font-size:.82rem; color:rgba(255,255,255,.55); line-height:1.5; }
-.mod-badge {
-  display:inline-block; font-size:.72rem; padding:2px 10px;
-  border-radius:20px; font-weight:600; margin-top:4px;
-}
-.badge-live { background:rgba(76,175,80,.2); color:#81C784; border:1px solid rgba(76,175,80,.3); }
-.badge-todo { background:rgba(255,255,255,.08); color:rgba(255,255,255,.4); border:1px solid rgba(255,255,255,.12); }
+.seclabel{ display:flex; align-items:baseline; gap:10px; margin:26px 4px 14px; flex-wrap:wrap; }
+.seclabel h2{ font-size:15px; font-weight:700; } .seclabel span{ font-size:13px; color:var(--ink-3); }
 
-/* Status strip */
-.status-strip {
-  margin:0 24px;
-  background:rgba(255,255,255,.04);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:12px;
-  padding:14px 20px;
-  display:flex; gap:24px; flex-wrap:wrap;
-  font-size:.82rem; color:rgba(255,255,255,.5);
-}
-.stat-item b { color:#fff; font-size:1.1rem; display:block; margin-bottom:2px; }
-
-/* Footer */
-.footer {
-  text-align:center; padding:24px;
-  font-size:.75rem; color:rgba(255,255,255,.2);
-}
-
-@media(max-width:480px) {
-  .grid { padding:14px; gap:12px; }
-  .hdr  { padding:20px 16px 14px; }
-}
+.grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.card{ position:relative; display:flex; flex-direction:column; gap:11px; padding:18px; background:var(--paper); border:1px solid var(--line); border-radius:var(--r); text-align:left; text-decoration:none; color:var(--ink); transition:transform .16s,box-shadow .16s,border-color .16s; box-shadow:0 1px 2px rgba(60,40,25,.04); }
+.card:hover{ transform:translateY(-3px); border-color:var(--coral); box-shadow:0 16px 32px -16px rgba(226,80,43,.4); }
+.card.todo{ opacity:.7; cursor:default; }
+.card-top{ display:flex; align-items:flex-start; }
+.sq{ width:52px; height:52px; flex:0 0 auto; border-radius:14px; display:grid; place-items:center; color:#fff;
+  background:linear-gradient(157deg,var(--sq,#F6704C),var(--sq,#F6704C)); box-shadow:0 6px 14px -5px var(--sq,#F6704C),inset 0 1px 0 rgba(255,255,255,.4); }
+.sq i{ font-size:24px; }
+.badge{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px; font-size:11.5px; font-weight:700; }
+.badge.live{ background:#E8F6EC; color:#2E8C4A; border:1px solid #CDEBD5; }
+.badge.live .ld{ width:6px; height:6px; border-radius:999px; background:var(--green); }
+.badge.todo{ background:var(--paper-2); color:var(--ink-3); border:1px solid var(--line); }
+.card h3{ font-size:16.5px; font-weight:700; }
+.card p{ font-size:13px; color:var(--ink-2); line-height:1.5; }
+.card .go{ margin-top:auto; padding-top:4px; display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--coral-2); opacity:0; transition:opacity .16s; }
+.card:hover .go{ opacity:1; }
+.card.todo .go{ display:none; }
+.footer{ text-align:center; padding:20px; font-size:12px; color:var(--ink-3); }
+@media(max-width:520px){ .winner{ padding:16px; } .hero .stats{ margin-left:0; width:100%; } }
 </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="hdr">
-  <div class="logo-ring">K</div>
-  <div class="hdr-text">
-    <h1>KLH Grocery EPS-POS</h1>
-    <p>ระบบบริหารจัดการธุรกิจค้าส่ง — ห้างหุ้นส่วน เคแอลเอช</p>
+<div class="window">
+  <div class="titlebar">
+    <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+    <div class="tt">KLH · หน้าหลัก</div>
   </div>
-  <div class="hdr-right" id="dateTime"></div>
-</div>
+  <div class="winner">
 
-<!-- Quick Stats (placeholder) -->
-<div class="status-strip">
-  <div class="stat-item"><b id="statDate">—</b>วันนี้</div>
-  <div class="stat-item"><b>5</b>กิจการ</div>
-  <div class="stat-item"><b>5</b>คลังสินค้า</div>
-  <div class="stat-item" style="color:rgba(76,175,80,.8)"><b>● Live</b>ระบบทำงานปกติ</div>
-</div>
-
-<!-- Module Grid -->
-<div class="grid">
-
-  <!-- 0: Data Survey -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('survey')" style="--accent:linear-gradient(90deg,#FF8F00,#FFB300)">
-    <div class="mod-icon" style="color:#FFB300"><i class="bi bi-search"></i></div>
-    <div>
-      <div class="mod-title">KLH Data Survey</div>
-      <div class="mod-desc">สำรวจ อัปเดต ราคาต้นทุน ราคาขาย บาร์โค้ด รูปสินค้า จาก KLH DATA</div>
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-logo">
+      <img id="appLogo" src="" alt="KLH" style="display:none" onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block'">
+      <span class="fallback" id="logoFallback">K</span>
     </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- WMS -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('wms')" style="--accent:linear-gradient(90deg,#1565C0,#1976D2)">
-    <div class="mod-icon" style="color:#64B5F6"><i class="bi bi-boxes"></i></div>
     <div>
-      <div class="mod-title">WMS คลังสินค้า</div>
-      <div class="mod-desc">รับสินค้าเข้า โอนระหว่างคลัง ดูสต็อก Pick List ตั้งค่า ROP แจ้งเตือน LINE</div>
+      <h1>KLH Grocery EPS-POS</h1>
+      <div class="sub">ระบบบริหารจัดการธุรกิจค้าส่ง — ห้างหุ้นส่วน เคแอลเอช</div>
     </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Price List -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pricelist')" style="--accent:linear-gradient(90deg,#2E7D32,#388E3C)">
-    <div class="mod-icon" style="color:#81C784"><i class="bi bi-book"></i></div>
-    <div>
-      <div class="mod-title">Price List</div>
-      <div class="mod-desc">ตารางราคาสินค้าแบบหนังสือ แยกหมวดหมู่ ค้นหาได้ iPad-optimized</div>
+    <div class="stats">
+      <div class="stat"><div class="v num" id="statDate">—</div><div class="k">วันนี้</div></div>
+      <div class="stat"><div class="v coral num">5</div><div class="k">กิจการ</div></div>
+      <div class="stat"><div class="v coral num">5</div><div class="k">คลังสินค้า</div></div>
+      <div class="stat live"><div class="v"><span class="ld"></span>Live</div><div class="k">ระบบทำงานปกติ</div></div>
     </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Invoice OCR -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('ocr')" style="--accent:linear-gradient(90deg,#6A1B9A,#7B1FA2)">
-    <div class="mod-icon" style="color:#CE93D8"><i class="bi bi-file-earmark-text"></i></div>
-    <div>
-      <div class="mod-title">Invoice OCR</div>
-      <div class="mod-desc">สแกนใบกำกับภาษี OCR แยกข้อมูล ตรวจสอบ บันทึกเข้าระบบ WMS และบัญชี</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Supplier Master -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('supplier')" style="--accent:linear-gradient(90deg,#00695C,#00897B)">
-    <div class="mod-icon" style="color:#80CBC4"><i class="bi bi-people"></i></div>
-    <div>
-      <div class="mod-title">Supplier Master</div>
-      <div class="mod-desc">จัดการรายชื่อเจ้าหนี้/ผู้จำหน่าย เพิ่ม แก้ไข ลบ รวม SUPPLIER_MASTER เดียว</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- POS Handheld (Sunmi V4) -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos')" style="--accent:linear-gradient(90deg,#E94E27,#C73A1B)">
-    <div class="mod-icon" style="color:#FFAB91"><i class="bi bi-phone"></i></div>
-    <div>
-      <div class="mod-title">POS Handheld</div>
-      <div class="mod-desc">Sunmi V4 — รายการเร็ว แถบหมวด+Dense list สแกน+สร้างออเดอร์ พิมพ์ใบ</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- POS PC -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos_pc')" style="--accent:linear-gradient(90deg,#6A1B9A,#7B1FA2)">
-    <div class="mod-icon" style="color:#CE93D8"><i class="bi bi-display"></i></div>
-    <div>
-      <div class="mod-title">POS PC</div>
-      <div class="mod-desc">3-column desktop — หมวดซ้าย · สินค้ากลาง · บิลขวา พักบิล สมาชิก Tiger</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- POS Sunmi T2 Lite -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('pos_t2')" style="--accent:linear-gradient(90deg,#4527A0,#5E35B1)">
-    <div class="mod-icon" style="color:#B39DDB"><i class="bi bi-tablet"></i></div>
-    <div>
-      <div class="mod-title">POS T2 Lite</div>
-      <div class="mod-desc">Sunmi T2 countertop จอสัมผัส + จอลูกค้า (Customer Display) QR ให้ลูกค้าสแกน</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Cashier -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('cashier')" style="--accent:linear-gradient(90deg,#221E1A,#37474F)">
-    <div class="mod-icon" style="color:#B0BEC5"><i class="bi bi-cash-coin"></i></div>
-    <div>
-      <div class="mod-title">Cashier รับชำระ</div>
-      <div class="mod-desc">สแกน QR รวมบิล รับเงิน Cash/QR/เชื่อ ปิดบิล+ตัดสต็อก Tiger Cashbox (อนาคต)</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Customer & AR -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('customer')" style="--accent:linear-gradient(90deg,#1565C0,#1976D2)">
-    <div class="mod-icon" style="color:#90CAF9"><i class="bi bi-people-fill"></i></div>
-    <div>
-      <div class="mod-title">Customer & AR</div>
-      <div class="mod-desc">สมาชิก ระดับราคา วงเงินเครดิต ลูกหนี้การค้า รับชำระ AR</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Label Print -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('label')" style="--accent:linear-gradient(90deg,#EF6C00,#F57C00)">
-    <div class="mod-icon" style="color:#FFCC80"><i class="bi bi-tags"></i></div>
-    <div>
-      <div class="mod-title">พิมพ์สติ๊กเกอร์</div>
-      <div class="mod-desc">พิมพ์ป้ายราคาหน้าชั้น และสติ๊กเกอร์บาร์โค้ดราคา ผ่าน Xprinter XP-420B WiFi</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Slip Verify -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('slip')" style="--accent:linear-gradient(90deg,#1B5E20,#2E7D32)">
-    <div class="mod-icon" style="color:#A5D6A7"><i class="bi bi-receipt-cutoff"></i></div>
-    <div>
-      <div class="mod-title">ตรวจสลิปโอนเงิน</div>
-      <div class="mod-desc">ถ่ายรูปสลิป OCR ตรวจยอดด้วย Gemini AI ป้องกันสลิปปลอม — iPhone/มือถือ</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- สต๊อกสิ้นเดือน KLH (ข้อ 5) -->
-  <a class="mod-card" href="javascript:void(0)" onclick="goTo('stock_month')" style="--accent:linear-gradient(90deg,#00695C,#26A69A)">
-    <div class="mod-icon" style="color:#80CBC4"><i class="bi bi-clipboard-data"></i></div>
-    <div>
-      <div class="mod-title">สต๊อกสิ้นเดือน KLH</div>
-      <div class="mod-desc">แยกสต๊อกสินค้า KLH กับร้านอื่น + สร้างยอดขายจำลองจาก statement → สต๊อกคงเหลือ KLH</div>
-    </div>
-    <div><span class="mod-badge badge-live">✅ LIVE</span></div>
-  </a>
-
-  <!-- Accounting (TODO) -->
-  <div class="mod-card" style="--accent:linear-gradient(90deg,#37474F,#455A64);cursor:default;opacity:.6">
-    <div class="mod-icon" style="color:#90A4AE"><i class="bi bi-calculator"></i></div>
-    <div>
-      <div class="mod-title">บัญชี AP/AR/VAT</div>
-      <div class="mod-desc">เจ้าหนี้ ลูกหนี้ ภาษีซื้อ-ขาย แยก 5 กิจการ รายงานกำไร-ขาดทุน</div>
-    </div>
-    <div><span class="mod-badge badge-todo">🔲 TODO</span></div>
   </div>
 
-</div>
+  <div class="seclabel"><h2>โมดูลทั้งหมด</h2><span id="dateTime"></span></div>
 
-<!-- Footer -->
-<div class="footer">KLH Grocery EPS-POS v2.0 — Google Apps Script + Sheets</div>
+  <!-- Module Grid -->
+  <div class="grid">
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('survey')" style="--sq:#F6704C">
+      <div class="card-top"><div class="sq"><i class="bi bi-search"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>KLH Data Survey</h3>
+      <p>สำรวจ อัปเดต ราคาต้นทุน ราคาขาย บาร์โค้ด รูปสินค้า จาก KLH DATA</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('wms')" style="--sq:#E08A2E">
+      <div class="card-top"><div class="sq"><i class="bi bi-boxes"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>WMS คลังสินค้า</h3>
+      <p>รับสินค้าเข้า โอนระหว่างคลัง ดูสต็อก Pick List ตั้งค่า ROP แจ้งเตือน LINE</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('pricelist')" style="--sq:#C85C3C">
+      <div class="card-top"><div class="sq"><i class="bi bi-book"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>Price List</h3>
+      <p>ตารางราคาสินค้าแบบหนังสือ แยกหมวดหมู่ ค้นหาได้ · iPad-optimized</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('ocr')" style="--sq:#3A37C9">
+      <div class="card-top"><div class="sq"><i class="bi bi-file-earmark-text"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>Invoice OCR</h3>
+      <p>สแกนใบกำกับภาษี OCR แยกข้อมูล ตรวจสอบ บันทึกเข้าระบบ WMS และบัญชี</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('supplier')" style="--sq:#D1764F">
+      <div class="card-top"><div class="sq"><i class="bi bi-people"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>Supplier Master</h3>
+      <p>จัดการรายชื่อเจ้าหนี้/ผู้จำหน่าย เพิ่ม แก้ไข ลบ รวม SUPPLIER_MASTER เดียว</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('pos')" style="--sq:#F2683C">
+      <div class="card-top"><div class="sq"><i class="bi bi-phone"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>POS Handheld</h3>
+      <p>Sunmi V4 — รายการเร็ว แถบหมวด+Dense list สแกน+สร้างออเดอร์ พิมพ์ใบ</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('pos_pc')" style="--sq:#7B4FC9">
+      <div class="card-top"><div class="sq"><i class="bi bi-display"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>POS PC</h3>
+      <p>3-column desktop — หมวดซ้าย · สินค้ากลาง · บิลขวา พักบิล สมาชิก Tiger</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('pos_t2')" style="--sq:#5E35B1">
+      <div class="card-top"><div class="sq"><i class="bi bi-tablet"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>POS T2 Lite</h3>
+      <p>Sunmi T2 countertop จอสัมผัส + จอลูกค้า (Customer Display) QR ให้ลูกค้าสแกน</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('cashier')" style="--sq:#E0962F">
+      <div class="card-top"><div class="sq"><i class="bi bi-cash-coin"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>Cashier รับชำระ</h3>
+      <p>สแกน QR รวมบิล รับเงิน Cash/QR/เชื่อ ปิดบิล+ตัดสต็อก Tiger Cashbox (อนาคต)</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('customer')" style="--sq:#4A52C8">
+      <div class="card-top"><div class="sq"><i class="bi bi-people-fill"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>Customer &amp; AR</h3>
+      <p>สมาชิก ระดับราคา วงเงินเครดิต ลูกหนี้การค้า รับชำระ AR</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('label')" style="--sq:#EF6C00">
+      <div class="card-top"><div class="sq"><i class="bi bi-tags"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>พิมพ์สติ๊กเกอร์</h3>
+      <p>พิมพ์ป้ายราคาหน้าชั้น และสติ๊กเกอร์บาร์โค้ดราคา ผ่าน Xprinter XP-420B WiFi</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('slip')" style="--sq:#2E8B57">
+      <div class="card-top"><div class="sq"><i class="bi bi-receipt-cutoff"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>ตรวจสลิปโอนเงิน</h3>
+      <p>ถ่ายรูปสลิป OCR ตรวจยอดด้วย Gemini AI ป้องกันสลิปปลอม — iPhone/มือถือ</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('stock_month')" style="--sq:#00897B">
+      <div class="card-top"><div class="sq"><i class="bi bi-clipboard-data"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>สต๊อกสิ้นเดือน KLH</h3>
+      <p>แยกสต๊อกสินค้า KLH กับร้านอื่น + สร้างยอดขายจำลองจาก statement → สต๊อกคงเหลือ KLH</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <a class="card" href="javascript:void(0)" onclick="goTo('tax')" style="--sq:#00695C">
+      <div class="card-top"><div class="sq"><i class="bi bi-calculator"></i></div><span class="badge live"><span class="ld"></span>LIVE</span></div>
+      <h3>ประมาณการ สรรพากร</h3>
+      <p>ภพ.30 — ภาษีซื้อจาก OCR (บิล KLH) เทียบภาษีขาย ตั้งเป้าผู้บริหาร แจ้ง LINE รายสัปดาห์</p>
+      <span class="go">เปิดโมดูล →</span>
+    </a>
+
+    <div class="card todo" style="--sq:#8A8378">
+      <div class="card-top"><div class="sq"><i class="bi bi-journal-text"></i></div><span class="badge todo">TODO</span></div>
+      <h3>บัญชี การเงิน/P&amp;L</h3>
+      <p>งบกำไรขาดทุน · งบกระแสเงินสด (Phase 6.3–6.5)</p>
+    </div>
+
+  </div>
+
+  <div class="footer">KLH Grocery EPS-POS v2.0 — Google Apps Script + Sheets</div>
+  </div><!-- /winner -->
+</div><!-- /window -->
 
 <script>
 // ── Navigation ────────────────────────────────────────────────
@@ -298,6 +237,19 @@ function tick() {
 }
 tick();
 setInterval(tick, 30000);
+
+// โหลดโลโก้จาก CONFIG (LOGO_URL)
+google.script.run
+  .withSuccessHandler(function(res){
+    if (res && res.logoUrl) {
+      var l = document.getElementById('appLogo');
+      l.src = res.logoUrl;
+      l.style.display = 'block';
+      document.getElementById('logoFallback').style.display = 'none';
+    }
+  })
+  .withFailureHandler(function(){})
+  .getDropdownData();
 </script>
 </body>
 </html>

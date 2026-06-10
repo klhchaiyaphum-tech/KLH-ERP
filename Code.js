@@ -18,7 +18,9 @@ function doGet(e) {
     label:       'label',          // Label printing — shelf + barcode stickers
     slip:        'slip',           // Slip verification — iPhone camera
     shelf_print: 'shelf_print',    // Shared shelf label print (Survey + Label)
-    stock_month: 'stock_month'     // สิ้นเดือน: แยกสต๊อก KLH vs ร้านอื่น + ขายจำลอง (ข้อ 5)
+    stock_month: 'stock_month',    // สิ้นเดือน: แยกสต๊อก KLH vs ร้านอื่น + ขายจำลอง (ข้อ 5)
+    line_shop:   'line_shop',      // LINE OA Shop (LIFF) — สั่งสินค้าผ่าน LINE
+    tax:         'tax_estimate'    // ประมาณการ สรรพากร (ภพ.30)
   };
   const tpl = pageMap[page] || 'main';
   const titles = {
@@ -32,7 +34,9 @@ function doGet(e) {
     slip:    'KLH Slip Verify',
     cashier: 'KLH Cashier',
     customer:'KLH Customer & AR',
-    stock_month: 'KLH สต๊อกสิ้นเดือน'
+    stock_month: 'KLH สต๊อกสิ้นเดือน',
+    line_shop: 'KLH สั่งสินค้า',
+    tax: 'KLH ประมาณการ สรรพากร'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
   tmpl.fromPage = (e && e.parameter && e.parameter.from) || '';
@@ -212,6 +216,7 @@ function getDropdownData() {
 
     return {
       companyName: cfg.COMPANY_NAME || "KLH Logistics",
+      logoUrl: cfg.LOGO_URL || "",
       vatRate: finalTaxRate,
       categories: cats,
       packages: packs,

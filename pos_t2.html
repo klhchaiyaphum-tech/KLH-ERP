@@ -60,6 +60,10 @@ input{font-family:inherit;}
 .pcard .pp{font-size:18px;font-weight:700;color:var(--brand-2);}
 .pcard .pu{font-size:11.5px;color:var(--ink-3);}
 .pcard .pqty{position:absolute;top:8px;right:8px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--brand);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;}
+.pcard.incart{border-color:var(--brand);}
+.uchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.uchip{font-size:11.5px;font-weight:600;color:var(--brand-2);background:#f5f0ec;border:1px solid var(--brand-2);border-radius:7px;padding:3px 9px;cursor:pointer;white-space:nowrap;}
+.uchip:hover{background:var(--brand);color:#fff;}
 .empty-grid{grid-column:1/-1;text-align:center;color:var(--ink-3);padding:50px 0;font-size:14px;}
 
 /* Right: Order panel */
@@ -313,10 +317,10 @@ function onScanEnterT2(e) {
   var val = e.target.value.trim();
   if (!val) return;
   clearTimeout(_sTimer);
-  var exact = null;
-  for(var i=0;i<_s.allProducts.length;i++) if(_s.allProducts[i].barcode===val){exact=_s.allProducts[i];break;}
+  var exact = null, exUnit='ชิ้น';
+  for(var i=0;i<_s.allProducts.length;i++){var pp=_s.allProducts[i];if(pp.barcode===val){exact=pp;break;}if(pp.dozenBarcode&&pp.dozenBarcode===val){exact=pp;exUnit='โหล';break;}}
   if (exact) {
-    cartAdd2(exact.barcode);
+    cartAdd2(exact.barcode,exUnit);
     e.target.value = '';
     e.target.style.background='rgba(233,78,39,.08)';
     setTimeout(function(){ e.target.style.background=''; }, 300);
@@ -388,43 +392,57 @@ function filterCat2(cat,btn){
   }
 }
 
+function unitInfo2(p,unit){
+  if(unit==='โหล') return {price:p.dozenPrice||0,ppu:12,label:'โหล',unitBig:'โหล'};
+  if(unit==='ลัง') return {price:p.wholesalePrice||0,ppu:p.convRate||1,label:(p.unitBig||'ลัง'),unitBig:(p.unitBig||'ลัง')};
+  return {price:p.retailPrice||0,ppu:1,label:'ชิ้น',unitBig:''};
+}
+
 function renderProds2(products){
   _s.products=products;
   var el=document.getElementById('prodGrid');
   if(!products.length){el.innerHTML='<div class="empty-grid">ไม่พบสินค้า</div>';return;}
   el.innerHTML=products.map(function(p){
-    var inCart=_s.cart[p.barcode];
-    var price=getPrice2(p);
-    return '<button class="pcard" onclick="cartAdd2(\''+esc2(p.barcode)+'\')">'
-      +(inCart?'<span class="pqty num">'+inCart.qty+'</span>':'')
+    var bc=esc2(p.barcode);
+    var pieceN=(_s.cart[p.barcode+'|ชิ้น']||{}).qty||0;
+    var chips='';
+    if(p.dozenPrice>0){ var dn=(_s.cart[p.barcode+'|โหล']||{}).qty||0;
+      chips+='<span class="uchip" onclick="event.stopPropagation();cartAdd2(\''+bc+'\',\'โหล\')">+โหล ฿'+p.dozenPrice.toLocaleString('th-TH')+(dn?' ('+dn+')':'')+'</span>'; }
+    if(p.wholesalePrice>0&&p.convRate>1){ var ln=(_s.cart[p.barcode+'|ลัง']||{}).qty||0;
+      chips+='<span class="uchip" onclick="event.stopPropagation();cartAdd2(\''+bc+'\',\'ลัง\')">+'+(p.unitBig||'ลัง')+' ฿'+p.wholesalePrice.toLocaleString('th-TH')+(ln?' ('+ln+')':'')+'</span>'; }
+    return '<div class="pcard'+(pieceN?' incart':'')+'" onclick="cartAdd2(\''+bc+'\',\'ชิ้น\')">'
+      +(pieceN?'<span class="pqty num">'+pieceN+'</span>':'')
       +'<div class="pn">'+p.name+'</div>'
-      +'<div><span class="pp num">฿'+price.toLocaleString('th-TH')+'</span>'
-      +'<span class="pu"> / '+(p.unitBig||'ชิ้น')+'</span></div>'
-      +'</button>';
+      +'<div><span class="pp num">฿'+(p.retailPrice||0).toLocaleString('th-TH')+'</span><span class="pu"> / ชิ้น</span></div>'
+      +(chips?'<div class="uchips">'+chips+'</div>':'')
+      +'</div>';
   }).join('');
 }
 
-function getPrice2(p){ if(_s.member&&_s.member.priceLevel==='wholesale'&&p.wholesalePrice>0) return p.wholesalePrice; return p.retailPrice||p.wholesalePrice||0; }
+function getPrice2(p){ return p.retailPrice||p.wholesalePrice||0; }
 function findProd2(barcode){ for(var i=0;i<_s.allProducts.length;i++) if(_s.allProducts[i].barcode===barcode) return _s.allProducts[i]; return null; }
 
-function cartAdd2(barcode){
+function cartAdd2(barcode,unit){
+  unit=unit||'ชิ้น';
   var p=findProd2(barcode); if(!p) return;
-  var price=getPrice2(p);
-  if(_s.cart[barcode]){ _s.cart[barcode].qty++; _s.cart[barcode].lineTotal=_s.cart[barcode].qty*price; }
-  else _s.cart[barcode]={barcode:barcode,name:p.name,qty:1,unitPrice:price,lineTotal:price,unit:p.unitBig||'ชิ้น'};
+  var ui=unitInfo2(p,unit);
+  if(ui.price<=0){ Swal.fire('','สินค้านี้ยังไม่มีราคา'+unit,'info'); return; }
+  var key=barcode+'|'+unit;
+  if(_s.cart[key]){ _s.cart[key].qty++; _s.cart[key].lineTotal=_s.cart[key].qty*_s.cart[key].unitPrice; }
+  else _s.cart[key]={key:key,barcode:barcode,name:p.name,qty:1,unitPrice:ui.price,lineTotal:ui.price,unit:ui.label,label:ui.label,ppu:ui.ppu,convRate:ui.ppu,unitBig:ui.unitBig};
   renderCart2(); renderProds2(_s.products); updateCustDisplay();
 }
 
-function cartStepper2(barcode,delta){
-  var it=_s.cart[barcode]; if(!it) return;
+function cartStepper2(key,delta){
+  var it=_s.cart[key]; if(!it) return;
   var newQ=it.qty+delta;
-  if(newQ<=0) delete _s.cart[barcode];
+  if(newQ<=0) delete _s.cart[key];
   else{it.qty=newQ;it.lineTotal=newQ*it.unitPrice;}
   renderCart2(); renderProds2(_s.products); updateCustDisplay();
 }
 
 function cartSub2(){ return Object.values(_s.cart).reduce(function(s,it){return s+it.lineTotal;},0); }
-function cartCnt2(){ return Object.values(_s.cart).reduce(function(s,it){return s+it.qty;},0); }
+function cartCnt2(){ return Object.values(_s.cart).reduce(function(s,it){return s+it.qty*(it.ppu||1);},0); }
 function memberDisc2(){ if(!_s.member) return 0; var r={'wholesale':0.05,'vip':0.08}; return Math.round(cartSub2()*(r[_s.member.priceLevel]||0.03)); }
 function netAmt2(){ return cartSub2()-memberDisc2(); }
 
@@ -436,12 +454,13 @@ function renderCart2(){
   if(!items.length){el.innerHTML='<div class="ord-empty">ยังไม่มีสินค้า</div>';}
   else{
     el.innerHTML=items.map(function(it){
+      var pcs=(it.ppu>1)?' · '+(it.qty*it.ppu)+' ชิ้น':'';
       return '<div class="ord-row">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:500;line-height:1.25">'+it.name+'</div>'
-        +'<div class="num" style="font-size:12px;color:var(--ink-3);margin-top:2px">฿'+it.unitPrice.toLocaleString('th-TH')+' × '+it.qty+'</div></div>'
-        +'<div class="stepper"><button class="minus" onclick="cartStepper2(\''+esc2(it.barcode)+'\',-1)">–</button><span class="q num">'+it.qty+'</span><button onclick="cartStepper2(\''+esc2(it.barcode)+'\',1)">+</button></div>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:500;line-height:1.25">'+it.name+' <span style="font-size:10.5px;color:var(--brand-2);background:#f3efeb;border-radius:5px;padding:1px 5px">'+it.label+'</span></div>'
+        +'<div class="num" style="font-size:12px;color:var(--ink-3);margin-top:2px">฿'+it.unitPrice.toLocaleString('th-TH')+' × '+it.qty+pcs+'</div></div>'
+        +'<div class="stepper"><button class="minus" onclick="cartStepper2(\''+esc2(it.key)+'\',-1)">–</button><span class="q num">'+it.qty+'</span><button onclick="cartStepper2(\''+esc2(it.key)+'\',1)">+</button></div>'
         +'<div class="num" style="width:55px;text-align:right;font-weight:700;font-size:13.5px">฿'+it.lineTotal.toLocaleString('th-TH')+'</div>'
-        +'<button onclick="cartStepper2(\''+esc2(it.barcode)+'\',-('+it.qty+'))" style="color:var(--ink-3);width:22px;height:22px;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
+        +'<button onclick="cartStepper2(\''+esc2(it.key)+'\',-('+it.qty+'))" style="color:var(--ink-3);width:22px;height:22px;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
         +'</div>';
     }).join('');
   }
@@ -516,8 +535,9 @@ function doCreateOrderT2() {
   if (!cartCnt2()) return;
   var entity = _s.entity || 'อึ้งกวงล่งเฮง';  // default entity
   var items = Object.values(_s.cart).map(function(it){
-    return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.unit,
-             unitPrice:it.unitPrice, discountAmt:0, lineTotal:it.lineTotal };
+    return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.label||it.unit,
+             unitPrice:it.unitPrice, discountAmt:0, lineTotal:it.lineTotal,
+             convRate:it.ppu||1, unitBig:it.unitBig||'', pieces:it.qty*(it.ppu||1) };
   });
   var sub = netAmt2();
   showLoad2('กำลังสร้างออเดอร์...');
@@ -608,7 +628,7 @@ function updateCashDisplay2(){
 function openDrawer(){ _s.drawerOpen=true; document.getElementById('drawerSt').textContent='● เปิดอยู่'; document.getElementById('drawerSt').style.color='#7FE0A8'; }
 function confirmPay(){
   var net=netAmt2(); if(_s.payMethod==='CASH') openDrawer();
-  var items=Object.values(_s.cart).map(function(it){return{barcode:it.barcode,name:it.name,qty:it.qty,unit:it.unit,unitPrice:it.unitPrice,lineTotal:it.lineTotal};});
+  var items=Object.values(_s.cart).map(function(it){return{barcode:it.barcode,name:it.name,qty:it.qty,unit:it.label||it.unit,unitPrice:it.unitPrice,lineTotal:it.lineTotal,convRate:it.ppu||1,unitBig:it.unitBig||'',pieces:it.qty*(it.ppu||1)};});
   showLoad2('กำลังบันทึก...');
   google.script.run
     .withSuccessHandler(function(res){

@@ -456,7 +456,11 @@ function closeSale(data) {
               var newQ = Math.max(0, (Number(balData[i][3]) || 0) - pieces);
               balSh.getRange(i+1, 4).setValue(newQ);
               balSh.getRange(i+1, 7).setValue(now);
-              found = true; break;
+              found = true;
+              // ── WMS hooks: ตัด FIFO batch + เช็ค ROP แจ้ง LINE (ไม่ให้ล้มการขาย) ──
+              try { consumeFifo_(it.barcode, whId, pieces); } catch(eF) { Logger.log('FIFO: '+eF); }
+              try { ropAlert_(it.barcode, whId, newQ); }      catch(eR) { Logger.log('ROP: '+eR); }
+              break;
             }
           }
           if (!found) {

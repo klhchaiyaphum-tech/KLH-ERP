@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>KLH สั่งสินค้า</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --co:#06C755; --co2:#05A648; --coral:#F6704C; --coral2:#E2502B; --coral-soft:#FCE6DC;
+    --paper:#FCFBF7; --paper2:#F6F2E9; --ink:#23201C; --ink2:#6C645A; --ink3:#A89E90;
+    --line:#EBE4D6; --line2:#E0D8C7; --green:#2E7D46;
+    --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif; --ffn:"IBM Plex Sans",sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:var(--ff); color:var(--ink); background:var(--paper2); min-height:100vh; }
+  .num{ font-family:var(--ffn); font-variant-numeric:tabular-nums; }
+  .scr{ display:none; min-height:100vh; flex-direction:column; }
+  .scr.on{ display:flex; }
+  /* header */
+  .hd{ background:linear-gradient(120deg,#FF7A2E,#F4701E,#E2502B); color:#fff; padding:14px 16px; display:flex; align-items:center; gap:11px; position:sticky; top:0; z-index:50; box-shadow:0 6px 18px -10px rgba(226,80,43,.6); }
+  .hd .lg{ width:38px; height:38px; border-radius:11px; background:rgba(255,255,255,.2); display:grid; place-items:center; overflow:hidden; flex:0 0 auto; font-weight:800; }
+  .hd .lg img{ width:100%; height:100%; object-fit:cover; }
+  .hd b{ font-size:16px; display:block; line-height:1.2; } .hd span{ font-size:11px; opacity:.9; }
+  .hd .cart-ic{ margin-left:auto; position:relative; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.2); display:grid; place-items:center; color:#fff; border:none; font-size:20px; }
+  .hd .cart-ic .cb{ position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#fff; color:var(--coral2); font-size:11px; font-weight:800; display:grid; place-items:center; }
+  .body{ flex:1; overflow-y:auto; padding:14px; }
+  .pad{ padding:14px; }
+  /* login */
+  .center{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px 22px; text-align:center; gap:14px; }
+  .biglogo{ width:96px; height:96px; border-radius:26px; background:var(--paper); display:grid; place-items:center; overflow:hidden; box-shadow:0 10px 30px -12px rgba(226,80,43,.5); font-size:34px; font-weight:900; color:var(--coral2); }
+  .biglogo img{ width:100%; height:100%; object-fit:contain; }
+  h1{ font-size:22px; } .muted{ color:var(--ink3); font-size:13.5px; }
+  .inp{ width:100%; font-size:16px; border:1.5px solid var(--line2); border-radius:13px; padding:13px 15px; outline:none; background:var(--paper); }
+  .inp:focus{ border-color:var(--coral); }
+  .btn{ width:100%; padding:14px; border:none; border-radius:13px; font-size:15.5px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn.green{ background:linear-gradient(135deg,#16C46A,#05A648); color:#fff; }
+  .btn.coral{ background:linear-gradient(135deg,#FF8A3D,#E2502B); color:#fff; box-shadow:0 10px 22px -11px var(--coral); }
+  .btn.ghost{ background:var(--paper); color:var(--ink2); border:1.5px solid var(--line2); }
+  .btn:disabled{ opacity:.5; }
+  /* category chips */
+  .cats{ display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; }
+  .cats::-webkit-scrollbar{ display:none; }
+  .chip{ flex:0 0 auto; padding:8px 15px; border-radius:999px; background:var(--paper); border:1.5px solid var(--line2); font-size:13.5px; font-weight:600; color:var(--ink2); white-space:nowrap; cursor:pointer; }
+  .chip.on{ background:linear-gradient(135deg,#FF8A3D,#E2502B); color:#fff; border-color:transparent; }
+  /* products */
+  .pgrid{ display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+  .pcard{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:12px; display:flex; flex-direction:column; gap:7px; position:relative; }
+  .pcard .pn{ font-size:13.5px; font-weight:600; line-height:1.3; min-height:35px; }
+  .pcard .pp{ font-size:17px; font-weight:800; color:var(--coral2); } .pcard .pp small{ font-size:11px; color:var(--ink3); font-weight:400; }
+  .addb{ position:absolute; top:10px; right:10px; width:32px; height:32px; border-radius:10px; background:linear-gradient(135deg,#16C46A,#05A648); color:#fff; border:none; font-size:20px; display:grid; place-items:center; }
+  .uchips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .uchip{ font-size:11px; font-weight:600; color:var(--coral2); background:var(--coral-soft); border:1px solid var(--coral); border-radius:7px; padding:3px 7px; cursor:pointer; }
+  .qbar{ display:flex; align-items:center; gap:8px; }
+  .stp{ display:flex; align-items:center; gap:10px; background:var(--paper2); border-radius:10px; padding:3px; }
+  .stp button{ width:28px; height:28px; border-radius:8px; border:none; background:var(--paper); font-size:16px; font-weight:700; color:var(--coral2); cursor:pointer; }
+  /* cart bar */
+  .cartbar{ position:sticky; bottom:0; background:var(--paper); border-top:1px solid var(--line); padding:12px 14px calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center; gap:12px; box-shadow:0 -8px 22px -16px rgba(0,0,0,.3); }
+  .cartbar .ct{ flex:1; } .cartbar .ct b{ font-size:18px; } .cartbar .ct span{ font-size:12px; color:var(--ink3); display:block; }
+  /* cart rows */
+  .crow{ display:flex; align-items:center; gap:11px; background:var(--paper); border:1px solid var(--line); border-radius:13px; padding:11px; margin-bottom:9px; }
+  .crow .ci{ flex:1; min-width:0; } .crow .ci b{ font-size:14px; font-weight:600; } .crow .ci span{ font-size:12px; color:var(--ink3); }
+  /* fulfil */
+  .opt{ display:flex; gap:10px; margin-bottom:12px; }
+  .optb{ flex:1; padding:15px; border-radius:13px; border:1.5px solid var(--line2); background:var(--paper); text-align:center; font-weight:600; cursor:pointer; font-size:14px; }
+  .optb.on{ border-color:var(--coral); background:var(--coral-soft); color:var(--coral2); }
+  /* qr */
+  .qrwrap{ text-align:center; padding:18px; }
+  .qrimg{ width:230px; height:230px; border:8px solid #fff; border-radius:16px; box-shadow:0 10px 30px -12px rgba(0,0,0,.3); background:#fff; }
+  .amt{ font-size:30px; font-weight:800; color:var(--coral2); margin:10px 0; }
+  .card{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:15px; margin-bottom:12px; }
+  .label{ font-size:12px; color:var(--ink2); font-weight:600; margin-bottom:6px; display:block; }
+  .ok-check{ width:72px; height:72px; border-radius:50%; background:#16C46A; color:#fff; display:grid; place-items:center; font-size:40px; margin:0 auto 14px; }
+  .toast{ position:fixed; left:50%; bottom:84px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:999px; font-size:13.5px; font-weight:600; z-index:99; opacity:0; transition:opacity .2s; }
+  .toast.show{ opacity:1; }
+  .empty{ text-align:center; color:var(--ink3); padding:50px 20px; }
+  .spin{ width:34px; height:34px; border:4px solid var(--line); border-top-color:var(--coral); border-radius:50%; animation:sp .7s linear infinite; margin:30px auto; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  .back{ background:none; border:none; color:#fff; font-size:22px; cursor:pointer; padding:0; }
+  /* member card */
+  .mcard{ background:linear-gradient(135deg,#2B2A28,#3A332C 55%,#5A4632); color:#fff; border-radius:20px; padding:20px; position:relative; box-shadow:0 14px 34px -16px rgba(0,0,0,.6); overflow:hidden; }
+  .mcard::after{ content:""; position:absolute; top:-30%; right:-12%; width:160px; height:160px; border-radius:50%; background:radial-gradient(circle,rgba(246,112,76,.35),transparent 70%); }
+  .mc-top{ display:flex; justify-content:space-between; align-items:center; }
+  .mc-brand{ font-size:12px; letter-spacing:.16em; font-weight:700; opacity:.85; }
+  .mc-lv{ font-size:11px; font-weight:700; background:linear-gradient(135deg,#FF8A3D,#E2502B); padding:3px 10px; border-radius:999px; text-transform:uppercase; }
+  .mc-name{ font-size:21px; font-weight:700; margin-top:18px; }
+  .mc-id{ font-size:13px; opacity:.7; letter-spacing:.08em; margin-top:3px; }
+  .mc-qr{ width:96px; height:96px; background:#fff; border-radius:12px; padding:5px; position:absolute; bottom:18px; right:18px; }
+  .mstats{ display:flex; gap:10px; margin:14px 0; }
+  .mstat{ flex:1; background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center; }
+  .mstat b{ font-size:19px; color:var(--coral2); display:block; } .mstat span{ font-size:11.5px; color:var(--ink3); }
+  .minfo{ display:flex; justify-content:space-between; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .minfo:last-child{ border-bottom:none; } .minfo span{ color:var(--ink3); }
+</style>
+</head>
+<body>
+
+<!-- ===== SCREEN: LOGIN ===== -->
+<div class="scr on" id="scrLogin">
+  <div class="center">
+    <div class="biglogo"><img id="loginLogo" style="display:none">KLH</div>
+    <h1 id="shopName">KLH สั่งสินค้า</h1>
+    <div class="muted">กรอกเบอร์โทรเพื่อเข้าสู่ร้าน<br>ลูกค้าเก่าจะได้ราคาสมาชิกอัตโนมัติ</div>
+    <input class="inp num" id="phoneInp" type="tel" inputmode="numeric" placeholder="เบอร์โทรศัพท์ (เช่น 0812345678)" style="margin-top:6px;text-align:center">
+    <button class="btn green" onclick="doLogin()">เข้าสู่ร้าน</button>
+    <button class="btn coral" onclick="openSignup()">สมัครสมาชิกใหม่</button>
+    <button class="btn ghost" onclick="guestEnter()">ดูสินค้าก่อน (ลูกค้าใหม่)</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: SIGNUP ===== -->
+<div class="scr" id="scrSignup">
+  <div class="hd"><button class="back" onclick="show('scrLogin')">←</button><div><b>สมัครสมาชิก</b><span>รับสิทธิ์ราคาสมาชิก + สะสมแต้ม</span></div></div>
+  <div class="body">
+    <div class="card">
+      <span class="label">ประเภทสมาชิก</span>
+      <div class="opt">
+        <div class="optb on" id="mtPerson" onclick="setMemberType('person')">👤 บุคคลทั่วไป</div>
+        <div class="optb" id="mtShop" onclick="setMemberType('shop')">🏪 ร้านค้า</div>
+      </div>
+      <span class="label" style="margin-top:6px">ชื่อ-นามสกุล / ชื่อร้าน <span style="color:var(--coral2)">*</span></span>
+      <input class="inp" id="suName" placeholder="ชื่อของคุณ">
+      <span class="label" style="margin-top:12px">เบอร์โทรศัพท์ <span style="color:var(--coral2)">*</span></span>
+      <input class="inp num" id="suPhone" type="tel" inputmode="numeric" placeholder="08xxxxxxxx">
+      <label class="dozen-chk" style="display:flex;align-items:center;gap:9px;margin-top:14px;cursor:pointer;font-weight:600;font-size:14px">
+        <input type="checkbox" id="suWantTax" onchange="document.getElementById('taxWrap').style.display=this.checked?'block':'none'" style="width:18px;height:18px;accent-color:var(--coral)">
+        ขอใบกำกับภาษี
+      </label>
+      <div id="taxWrap" style="display:none;margin-top:10px">
+        <span class="label">เลขประจำตัวผู้เสียภาษี</span>
+        <input class="inp num" id="suTaxId" placeholder="13 หลัก">
+      </div>
+      <span class="label" style="margin-top:12px">ที่อยู่</span>
+      <textarea class="inp" id="suAddr" rows="2" placeholder="บ้านเลขที่ / ถนน / ตำบล / อำเภอ / จังหวัด"></textarea>
+      <label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;cursor:pointer;font-size:12.5px;color:var(--ink2)">
+        <input type="checkbox" id="suPdpa" style="width:17px;height:17px;margin-top:1px;accent-color:var(--coral)">
+        ยินยอมให้เก็บข้อมูลเพื่อให้บริการสมาชิกตาม PDPA
+      </label>
+    </div>
+  </div>
+  <div class="cartbar">
+    <button class="btn coral" id="suBtn" onclick="doRegister()">สมัครสมาชิก</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: MEMBER CARD ===== -->
+<div class="scr" id="scrMember">
+  <div class="hd"><button class="back" onclick="show('scrBrowse')">←</button><div><b>บัตรสมาชิก</b></div></div>
+  <div class="body">
+    <div class="mcard">
+      <div class="mc-top"><span class="mc-brand" id="mcBrand">KLH MEMBER</span><span class="mc-lv" id="mcLevel">retail</span></div>
+      <div class="mc-name" id="mcName">—</div>
+      <div class="mc-id num" id="mcId">CUST-0000</div>
+      <img class="mc-qr" id="mcQr" alt="QR">
+    </div>
+    <div class="mstats">
+      <div class="mstat"><b class="num" id="mcPoints">0</b><span>แต้มสะสม</span></div>
+      <div class="mstat"><b class="num" id="mcOrders">0</b><span>ออเดอร์</span></div>
+      <div class="mstat"><b class="num" id="mcSpent">฿0</b><span>ยอดซื้อรวม</span></div>
+    </div>
+    <div class="card">
+      <span class="label">ข้อมูลของฉัน</span>
+      <div class="minfo"><span>เบอร์โทร</span><b class="num" id="mcPhone">—</b></div>
+      <div class="minfo"><span>ที่อยู่</span><b id="mcAddr" style="text-align:right;max-width:60%">—</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: BROWSE ===== -->
+<div class="scr" id="scrBrowse">
+  <div class="hd">
+    <div class="lg"><img id="hdLogo" style="display:none">K</div>
+    <div><b id="hdName">KLH</b><span id="hdMember">ลูกค้าทั่วไป</span></div>
+    <button class="cart-ic" id="memBtn" onclick="openMember()" style="margin-left:auto;display:none">🪪</button>
+    <button class="cart-ic" onclick="goCart()">🛒<span class="cb" id="cartBadge" style="display:none">0</span></button>
+  </div>
+  <div class="body">
+    <input class="inp" id="searchInp" placeholder="🔍 ค้นหาสินค้า..." oninput="onSearch(this.value)" style="margin-bottom:12px">
+    <div class="cats" id="catRail"></div>
+    <div id="prodList"><div class="spin"></div></div>
+  </div>
+  <div class="cartbar" id="cartBar" style="display:none">
+    <div class="ct"><b class="num" id="cbTotal">฿0</b><span id="cbCount">0 ชิ้น</span></div>
+    <button class="btn green" style="width:auto;padding:14px 26px" onclick="goCart()">ดูตะกร้า →</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: CART ===== -->
+<div class="scr" id="scrCart">
+  <div class="hd"><button class="back" onclick="show('scrBrowse')">←</button><div><b>ตะกร้าสินค้า</b></div></div>
+  <div class="body" id="cartItems"></div>
+  <div class="cartbar">
+    <div class="ct"><b class="num" id="cartTotal">฿0</b><span>รวมทั้งหมด</span></div>
+    <button class="btn green" style="width:auto;padding:14px 26px" id="toFulfilBtn" onclick="show('scrFulfil')">ถัดไป →</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: FULFIL / CHECKOUT ===== -->
+<div class="scr" id="scrFulfil">
+  <div class="hd"><button class="back" onclick="show('scrCart')">←</button><div><b>รับสินค้า + ยืนยัน</b></div></div>
+  <div class="body">
+    <div class="card">
+      <span class="label">รับสินค้าแบบ</span>
+      <div class="opt">
+        <div class="optb on" id="optPickup" onclick="setDelivery('pickup')">🏪 รับเองที่ร้าน</div>
+        <div class="optb" id="optDelivery" onclick="setDelivery('delivery')">🚚 จัดส่ง</div>
+      </div>
+      <div id="addrWrap" style="display:none">
+        <span class="label">ที่อยู่จัดส่ง</span>
+        <textarea class="inp" id="addrInp" rows="2" placeholder="บ้านเลขที่ / ถนน / ตำบล..."></textarea>
+      </div>
+      <span class="label" style="margin-top:12px">ชื่อผู้สั่ง</span>
+      <input class="inp" id="nameInp" placeholder="ชื่อ-นามสกุล">
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span class="muted">จำนวนสินค้า</span><span class="num" id="sumCount">0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800"><span>รวมชำระ</span><span class="num" id="sumTotal" style="color:var(--coral2)">฿0</span></div>
+    </div>
+  </div>
+  <div class="cartbar">
+    <button class="btn coral" onclick="placeOrder()" id="placeBtn">ยืนยันสั่งซื้อ → ชำระเงิน</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: PAYMENT (QR + slip) ===== -->
+<div class="scr" id="scrPay">
+  <div class="hd"><div><b>ชำระเงิน</b><span id="payOrderId"></span></div></div>
+  <div class="body">
+    <div class="qrwrap">
+      <div class="muted">สแกนจ่ายผ่านแอปธนาคาร (KTB ถุงเงิน)</div>
+      <div class="amt num" id="payAmt">฿0</div>
+      <img class="qrimg" id="qrImg" alt="QR">
+    </div>
+    <div class="card">
+      <span class="label">โอนแล้ว → แนบสลิปเพื่อยืนยัน</span>
+      <input type="file" id="slipInp" accept="image/*" capture="environment" onchange="onSlip(this)" style="display:none">
+      <button class="btn coral" onclick="document.getElementById('slipInp').click()">📷 แนบสลิปโอนเงิน</button>
+      <div id="slipStatus" style="margin-top:10px;text-align:center;font-size:13.5px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: SUCCESS ===== -->
+<div class="scr" id="scrDone">
+  <div class="center">
+    <div class="ok-check">✓</div>
+    <h1>สั่งซื้อสำเร็จ!</h1>
+    <div class="muted" id="doneMsg"></div>
+    <button class="btn green" onclick="restart()">สั่งสินค้าอีกครั้ง</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var LIFF_ID = '2010316243-qBWR42sj';
+var S = {
+  cfg:null, profile:null, member:null, priceLevel:'retail',
+  products:[], cat:'', searchQ:'',
+  cart:{},   // key barcode|unit -> line
+  delivery:'pickup', order:null, ktbQr:''
+};
+
+// ---------- boot ----------
+window.onload = function(){
+  // LIFF init (degrade gracefully ในเบราว์เซอร์)
+  if (window.liff) {
+    liff.init({ liffId: LIFF_ID }).then(function(){
+      if (liff.isLoggedIn && liff.isLoggedIn()) {
+        liff.getProfile().then(function(p){ S.profile = p; }).catch(function(){});
+      }
+    }).catch(function(e){ console.log('liff init', e); });
+  }
+  loadConfig();
+};
+
+function loadConfig(){
+  google.script.run.withSuccessHandler(function(res){
+    S.cfg = res || {};
+    S.ktbQr = (res && res.ktbQr) || '';
+    if (res && res.logoUrl) {
+      ['loginLogo','hdLogo'].forEach(function(id){ var el=document.getElementById(id); el.src=res.logoUrl; el.style.display='block'; });
+    }
+    if (res && res.company){ document.getElementById('shopName').textContent = res.company + ' สั่งสินค้า'; document.getElementById('hdName').textContent = res.company; }
+    buildCats((res && res.categories) || []);
+  }).withFailureHandler(function(e){ toast('โหลดค่าไม่สำเร็จ'); }).getLineShopConfig();
+}
+
+// ---------- login ----------
+function doLogin(){
+  var ph = document.getElementById('phoneInp').value.trim();
+  if (ph.replace(/[^0-9]/g,'').length < 6){ toast('กรอกเบอร์ให้ถูกต้อง'); return; }
+  var uid = S.profile ? S.profile.userId : '';
+  google.script.run.withSuccessHandler(function(res){
+    if (res && res.ok && res.found){
+      S.member = res.member; S.priceLevel = res.member.priceLevel || 'retail';
+      document.getElementById('hdMember').textContent = 'สมาชิก: ' + res.member.name + ' · ' + S.priceLevel;
+      document.getElementById('nameInp').value = res.member.name;
+      document.getElementById('memBtn').style.display = 'grid';
+    } else {
+      S.member = { phone: ph, custId:'', name:'' };
+      document.getElementById('hdMember').textContent = 'ลูกค้าใหม่ · ' + ph;
+    }
+    enterShop();
+  }).withFailureHandler(function(){ S.member={phone:ph}; enterShop(); }).lineFindMember(ph, uid);
+}
+function guestEnter(){ S.member=null; document.getElementById('hdMember').textContent='ลูกค้าทั่วไป'; enterShop(); }
+function enterShop(){ show('scrBrowse'); loadProducts(); }
+
+// ---------- products ----------
+function buildCats(cats){
+  var rail = document.getElementById('catRail');
+  var html = '<div class="chip on" data-c="" onclick="pickCat(this,\'\')">ทั้งหมด</div>';
+  cats.forEach(function(c){ html += '<div class="chip" data-c="'+esc(c.name)+'" onclick="pickCat(this,\''+esc(c.name)+'\')">'+c.name+'</div>'; });
+  rail.innerHTML = html;
+}
+function pickCat(el,c){
+  S.cat = c;
+  var ch = document.querySelectorAll('.chip'); for (var i=0;i<ch.length;i++) ch[i].classList.remove('on');
+  el.classList.add('on');
+  loadProducts();
+}
+var _sT;
+function onSearch(v){ S.searchQ=v; clearTimeout(_sT); _sT=setTimeout(loadProducts,350); }
+function loadProducts(){
+  document.getElementById('prodList').innerHTML = '<div class="spin"></div>';
+  google.script.run.withSuccessHandler(function(rows){
+    S.products = rows || []; renderProducts();
+  }).withFailureHandler(function(){ document.getElementById('prodList').innerHTML='<div class="empty">โหลดสินค้าไม่ได้</div>'; }).lineSearchProducts(S.searchQ, S.cat);
+}
+function priceOf(p){ return (S.priceLevel==='wholesale' && p.wholesalePrice>0) ? p.retailPrice||0 : (p.retailPrice||0); }
+function unitInfo(p,unit){
+  if (unit==='โหล') return { price:p.dozenPrice||0, ppu:12, label:'โหล', unitBig:'โหล' };
+  if (unit==='ลัง') return { price:p.wholesalePrice||0, ppu:p.convRate||1, label:(p.unitBig||'ลัง'), unitBig:(p.unitBig||'ลัง') };
+  return { price:p.retailPrice||0, ppu:1, label:'ชิ้น', unitBig:'' };
+}
+function renderProducts(){
+  var el = document.getElementById('prodList');
+  if (!S.products.length){ el.innerHTML='<div class="empty">ไม่พบสินค้า</div>'; return; }
+  el.innerHTML = '<div class="pgrid">' + S.products.map(function(p){
+    var bc = esc(p.barcode);
+    var q = (S.cart[p.barcode+'|ชิ้น']||{}).qty || 0;
+    var chips='';
+    if (p.dozenPrice>0) chips += '<span class="uchip" onclick="addUnit(\''+bc+'\',\'โหล\')">+โหล ฿'+fmt(p.dozenPrice)+'</span>';
+    if (p.wholesalePrice>0 && p.convRate>1) chips += '<span class="uchip" onclick="addUnit(\''+bc+'\',\'ลัง\')">+'+(p.unitBig||'ลัง')+' ฿'+fmt(p.wholesalePrice)+'</span>';
+    var right = q>0
+      ? '<div class="stp"><button onclick="addUnit(\''+bc+'\',\'ชิ้น\',-1)">−</button><span class="num">'+q+'</span><button onclick="addUnit(\''+bc+'\',\'ชิ้น\',1)">+</button></div>'
+      : '<button class="addb" onclick="addUnit(\''+bc+'\',\'ชิ้น\',1)">+</button>';
+    return '<div class="pcard">'
+      + (q>0?'':'<button class="addb" onclick="addUnit(\''+bc+'\',\'ชิ้น\',1)">+</button>')
+      + '<div class="pn">'+p.name+'</div>'
+      + '<div class="pp num">฿'+fmt(p.retailPrice||0)+'<small> /ชิ้น</small></div>'
+      + (chips?'<div class="uchips">'+chips+'</div>':'')
+      + (q>0?'<div class="qbar">'+right+'</div>':'')
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+// ---------- cart ----------
+function findProd(bc){ for (var i=0;i<S.products.length;i++) if (S.products[i].barcode===bc) return S.products[i]; return null; }
+function addUnit(bc, unit, delta){
+  if (delta===undefined) delta=1;
+  var p = findProd(bc); if (!p) return;
+  var ui = unitInfo(p, unit);
+  if (ui.price<=0 && delta>0){ toast('สินค้านี้ยังไม่มีราคา'+unit); return; }
+  var key = bc+'|'+unit, it = S.cart[key];
+  if (!it){ if (delta<=0) return; S.cart[key]={ key:key, barcode:bc, name:p.name, unit:ui.label, unitPrice:ui.price, ppu:ui.ppu, convRate:ui.ppu, unitBig:ui.unitBig, qty:delta, lineTotal:delta*ui.price }; }
+  else { var nq=it.qty+delta; if (nq<=0) delete S.cart[key]; else { it.qty=nq; it.lineTotal=nq*it.unitPrice; } }
+  updateCartBar(); renderProducts();
+}
+function cartArr(){ return Object.keys(S.cart).map(function(k){ return S.cart[k]; }); }
+function cartTotal(){ return cartArr().reduce(function(s,it){ return s+it.lineTotal; },0); }
+function cartCount(){ return cartArr().reduce(function(s,it){ return s+it.qty*(it.ppu||1); },0); }
+function updateCartBar(){
+  var n=cartCount(), t=cartTotal();
+  var bar=document.getElementById('cartBar'), badge=document.getElementById('cartBadge');
+  if (n>0){ bar.style.display='flex'; badge.style.display='grid'; badge.textContent=n;
+    document.getElementById('cbTotal').textContent='฿'+fmt(t); document.getElementById('cbCount').textContent=n+' ชิ้น'; }
+  else { bar.style.display='none'; badge.style.display='none'; }
+}
+function goCart(){
+  var arr=cartArr();
+  if (!arr.length){ toast('ตะกร้าว่าง'); return; }
+  document.getElementById('cartItems').innerHTML = arr.map(function(it){
+    var pcs = it.ppu>1 ? ' · '+(it.qty*it.ppu)+' ชิ้น' : '';
+    return '<div class="crow"><div class="ci"><b>'+it.name+'</b><span> '+it.unit+pcs+' · ฿'+fmt(it.unitPrice)+'</span></div>'
+      + '<div class="stp"><button onclick="cartStep(\''+esc(it.key)+'\',-1)">−</button><span class="num">'+it.qty+'</span><button onclick="cartStep(\''+esc(it.key)+'\',1)">+</button></div>'
+      + '<b class="num" style="width:64px;text-align:right">฿'+fmt(it.lineTotal)+'</b></div>';
+  }).join('');
+  document.getElementById('cartTotal').textContent='฿'+fmt(cartTotal());
+  show('scrCart');
+}
+function cartStep(key,delta){
+  var it=S.cart[key]; if(!it) return;
+  var nq=it.qty+delta; if(nq<=0) delete S.cart[key]; else { it.qty=nq; it.lineTotal=nq*it.unitPrice; }
+  updateCartBar();
+  if (!cartArr().length){ show('scrBrowse'); renderProducts(); return; }
+  goCart();
+}
+
+// ---------- fulfil ----------
+function setDelivery(t){
+  S.delivery=t;
+  document.getElementById('optPickup').classList.toggle('on', t==='pickup');
+  document.getElementById('optDelivery').classList.toggle('on', t==='delivery');
+  document.getElementById('addrWrap').style.display = t==='delivery'?'block':'none';
+}
+function syncFulfil(){
+  document.getElementById('sumCount').textContent = cartCount()+' ชิ้น';
+  document.getElementById('sumTotal').textContent = '฿'+fmt(cartTotal());
+}
+
+// ---------- place order ----------
+function placeOrder(){
+  if (S.delivery==='delivery' && !document.getElementById('addrInp').value.trim()){ toast('กรอกที่อยู่จัดส่ง'); return; }
+  var btn=document.getElementById('placeBtn'); btn.disabled=true; btn.textContent='กำลังสร้างออเดอร์...';
+  var items = cartArr().map(function(it){ return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.unit, unitPrice:it.unitPrice, lineTotal:it.lineTotal, convRate:it.ppu, unitBig:it.unitBig }; });
+  var payload = {
+    customerCode: S.member&&S.member.custId?S.member.custId:'',
+    customerName: document.getElementById('nameInp').value.trim() || (S.member&&S.member.name) || 'ลูกค้า LINE',
+    phone: S.member&&S.member.phone?S.member.phone:'',
+    lineUid: S.profile?S.profile.userId:'',
+    deliveryType: S.delivery,
+    address: document.getElementById('addrInp').value.trim(),
+    items: items, subtotal: cartTotal(), total: cartTotal()
+  };
+  google.script.run.withSuccessHandler(function(res){
+    btn.disabled=false; btn.textContent='ยืนยันสั่งซื้อ → ชำระเงิน';
+    if (!res || !res.ok){ toast('สร้างออเดอร์ไม่สำเร็จ: '+((res&&res.msg)||'')); return; }
+    S.order = { orderId:res.orderId, total:cartTotal() };
+    openPay();
+  }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='ยืนยันสั่งซื้อ → ชำระเงิน'; toast('ผิดพลาด: '+e.message); }).createLineOrder(payload);
+}
+
+// ---------- payment ----------
+function openPay(){
+  document.getElementById('payOrderId').textContent = ' #'+S.order.orderId;
+  document.getElementById('payAmt').textContent = '฿'+fmt(S.order.total);
+  var qr = genKtbQr(S.order.total);
+  document.getElementById('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data=' + encodeURIComponent(qr);
+  document.getElementById('slipStatus').textContent='';
+  show('scrPay');
+}
+function onSlip(input){
+  var f = input.files[0]; if (!f) return;
+  var st = document.getElementById('slipStatus'); st.innerHTML='<div class="spin"></div>กำลังตรวจสลิป...';
+  var r = new FileReader();
+  r.onload = function(e){
+    var b64 = e.target.result.split(',')[1];
+    google.script.run.withSuccessHandler(function(res){
+      var v = res && res.verify ? res.verify : {};
+      var amt = v.amount || 0;
+      if (res && res.ok){
+        if (amt && Math.abs(amt - S.order.total) < 1){ st.innerHTML='✅ ยอดตรง ฿'+fmt(amt)+' — ยืนยันแล้ว'; setTimeout(finishOrder, 900); }
+        else if (amt){ st.innerHTML='⚠️ ยอดในสลิป ฿'+fmt(amt)+' ไม่ตรงกับ ฿'+fmt(S.order.total)+' — แอดมินจะตรวจอีกครั้ง'; setTimeout(finishOrder, 1600); }
+        else { st.innerHTML='📤 รับสลิปแล้ว — แอดมินจะตรวจสอบ'; setTimeout(finishOrder, 1400); }
+      } else { st.textContent='ตรวจสลิปไม่สำเร็จ ลองใหม่'; }
+    }).withFailureHandler(function(){ st.textContent='อัปโหลดไม่สำเร็จ'; }).lineAttachSlip(S.order.orderId, b64, f.type, S.order.total);
+  };
+  r.readAsDataURL(f);
+}
+function finishOrder(){
+  document.getElementById('doneMsg').innerHTML = 'เลขออเดอร์ <b>#'+S.order.orderId+'</b><br>'
+    + (S.delivery==='delivery'?'เราจะจัดส่งให้เร็วที่สุด':'มารับสินค้าได้ที่ร้าน') + ' ขอบคุณค่ะ 🙏';
+  show('scrDone');
+}
+function restart(){ S.cart={}; S.order=null; updateCartBar(); show('scrBrowse'); renderProducts(); }
+
+// ---------- signup / member card ----------
+var _mtype = 'person';
+function openSignup(){
+  var ph = document.getElementById('phoneInp').value.trim();
+  if (ph) document.getElementById('suPhone').value = ph;
+  show('scrSignup');
+}
+function setMemberType(t){
+  _mtype = t;
+  document.getElementById('mtPerson').classList.toggle('on', t==='person');
+  document.getElementById('mtShop').classList.toggle('on', t==='shop');
+}
+function doRegister(){
+  var name  = document.getElementById('suName').value.trim();
+  var phone = document.getElementById('suPhone').value.trim();
+  if (!name){ toast('กรอกชื่อ'); return; }
+  if (phone.replace(/[^0-9]/g,'').length < 6){ toast('กรอกเบอร์ให้ถูกต้อง'); return; }
+  if (!document.getElementById('suPdpa').checked){ toast('กรุณายินยอม PDPA'); return; }
+  var btn = document.getElementById('suBtn'); btn.disabled=true; btn.textContent='กำลังสมัคร...';
+  var data = {
+    name:name, phone:phone, memberType:_mtype,
+    taxId: document.getElementById('suWantTax').checked ? document.getElementById('suTaxId').value.trim() : '',
+    address: document.getElementById('suAddr').value.trim(),
+    lineUid: S.profile ? S.profile.userId : ''
+  };
+  google.script.run.withSuccessHandler(function(res){
+    btn.disabled=false; btn.textContent='สมัครสมาชิก';
+    if (!res || !res.ok){ toast('สมัครไม่สำเร็จ: '+((res&&res.msg)||'')); return; }
+    S.member = { custId:res.custId, name:name, phone:phone, priceLevel:'retail' };
+    S.priceLevel = 'retail';
+    document.getElementById('hdMember').textContent = 'สมาชิก: ' + name;
+    document.getElementById('nameInp').value = name;
+    document.getElementById('memBtn').style.display = 'grid';
+    toast('สมัครสำเร็จ! รหัส ' + res.custId);
+    enterShop();
+  }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='สมัครสมาชิก'; toast('ผิดพลาด: '+e.message); }).lineRegisterMember(data);
+}
+function openMember(){
+  if (!S.member || !S.member.custId){ toast('ยังไม่ได้เป็นสมาชิก'); return; }
+  show('scrMember');
+  document.getElementById('mcName').textContent = 'กำลังโหลด...';
+  google.script.run.withSuccessHandler(function(r){
+    if (!r || !r.ok){ toast('โหลดโปรไฟล์ไม่ได้'); return; }
+    document.getElementById('mcName').textContent   = r.name;
+    document.getElementById('mcId').textContent     = r.custId;
+    document.getElementById('mcLevel').textContent  = r.priceLevel;
+    document.getElementById('mcPhone').textContent  = r.phone || '—';
+    document.getElementById('mcAddr').textContent   = r.address || '—';
+    document.getElementById('mcPoints').textContent = fmt(r.points);
+    document.getElementById('mcOrders').textContent = fmt(r.orders);
+    document.getElementById('mcSpent').textContent  = '฿'+fmt(r.spent);
+    document.getElementById('mcQr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data='+encodeURIComponent(r.custId);
+    if (S.cfg && S.cfg.company) document.getElementById('mcBrand').textContent = (S.cfg.company+' MEMBER').toUpperCase();
+  }).withFailureHandler(function(){ toast('โหลดโปรไฟล์ไม่ได้'); }).lineGetMyProfile(S.member.custId);
+}
+
+// ---------- KTB dynamic QR ----------
+function crc16(s){ var c=0xFFFF; for(var i=0;i<s.length;i++){ c^=s.charCodeAt(i)<<8; for(var j=0;j<8;j++){ if(c&0x8000)c=(c<<1)^0x1021; else c<<=1; c&=0xFFFF; } } return c; }
+function genKtbQr(amt){
+  if (!amt||amt<=0||!S.ktbQr) return S.ktbQr;
+  var b = S.ktbQr.replace('010211','010212').slice(0,-8);
+  var a = Number(amt).toFixed(2);
+  b = b.replace('5802TH','54'+String(a.length).padStart(2,'0')+a+'5802TH') + '6304';
+  return b + crc16(b).toString(16).toUpperCase().padStart(4,'0');
+}
+
+// ---------- util ----------
+function show(id){
+  var on = document.getElementById(id);
+  var all = document.querySelectorAll('.scr'); for (var i=0;i<all.length;i++) all[i].classList.remove('on');
+  on.classList.add('on'); window.scrollTo(0,0);
+  if (id==='scrFulfil') syncFulfil();
+}
+function esc(s){ return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function fmt(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+var _tT;
+function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(_tT); _tT=setTimeout(function(){ t.classList.remove('show'); },2200); }
+</script>
+</body>
+</html>

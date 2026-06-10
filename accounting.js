@@ -169,6 +169,146 @@ function getMonthEndStockByEntity(yyyymm) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+//  ประมาณการ สรรพากร (ภพ.30) — ตามที่ตกลง:
+//  • ภาษีซื้อ = ใบกำกับจาก OCR ที่ผู้ซื้อ = KLH (INVOICE_HEADER)
+//  • ภาษีขาย = ฐานยอดขาย (เป้า = ภาษีซื้อ + % ผู้บริหาร, ต้อง > ซื้อ)
+//  • แจ้ง LINE รายสัปดาห์ ถ้ายอดจริงต่ำ/เกินเป้า
+// ════════════════════════════════════════════════════════════
+
+var SH_TAXEST = 'TAX_ESTIMATE';
+var H_TAXEST  = ['MONTH','INPUT_VAT','EXEC_PERCENT','TARGET_SALES','TARGET_VAT','LAST_YEAR_AVG','UPDATED_BY','UPDATED_AT'];
+
+function taxEstSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName(SH_TAXEST);
+  if (!s) {
+    s = ss.insertSheet(SH_TAXEST);
+    s.getRange(1,1,1,H_TAXEST.length).setValues([H_TAXEST])
+      .setBackground('#00695C').setFontColor('#fff').setFontWeight('bold');
+    s.setFrozenRows(1);
+  }
+  return s;
+}
+
+// สรุป ภพ.30 ประจำเดือน (yyyymm = 'YYYY-MM')
+function getPP30(yyyymm) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ym = yyyymm || Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM');
+
+    // 1) ภาษีซื้อ: INVOICE_HEADER (4 TAX_ENTITY, 2 INVOICE_DATE, 5 SUBTOTAL, 6 VAT_AMT, 7 TOTAL)
+    var inputVat = 0, inputBase = 0, inputCount = 0, purchaseAll = 0;
+    var inv = ss.getSheetByName('INVOICE_HEADER');
+    if (inv && inv.getLastRow() > 1) {
+      inv.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (ymOf_(r[2]) !== ym) return;
+        purchaseAll += Number(r[7]) || 0;                 // ยอดซื้อทุกนิติ (เจ้าหนี้)
+        if (isKlhEntity_(r[4]) && (Number(r[6])||0) > 0) { // เฉพาะบิลชื่อ KLH ที่มี VAT
+          inputVat  += Number(r[6]) || 0;
+          inputBase += Number(r[5]) || 0;
+          inputCount++;
+        }
+      });
+    }
+
+    // 2) ยอดขายจริง KLH เดือนนี้ (SALES_HEADER: 2 PAID_DATE, 4 ENTITY, 9 TOTAL)
+    var actualSales = 0;
+    var sal = ss.getSheetByName('SALES_HEADER');
+    if (sal && sal.getLastRow() > 1) {
+      sal.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (ymOf_(r[2]) === ym && isKlhEntity_(r[4])) actualSales += Number(r[9]) || 0;
+      });
+    }
+
+    // 3) ประมาณการของผู้บริหาร (TAX_ESTIMATE)
+    var est = null;
+    var es = taxEstSheet_();
+    if (es.getLastRow() > 1) {
+      es.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (String(r[0]) === ym) est = {
+          execPercent: Number(r[2])||0, targetSales: Number(r[3])||0,
+          targetVat: Number(r[4])||0, lastYearAvg: Number(r[5])||0
+        };
+      });
+    }
+
+    // ภาษีขายจากยอดจริง = ยอดขาย × 7/107 (ราคารวม VAT)
+    var outputVatActual = actualSales * 7 / 107;
+    var netVat = outputVatActual - inputVat;
+
+    return {
+      ok: true, month: ym,
+      input:  { vat: inputVat, base: inputBase, count: inputCount },
+      purchaseAllEntities: purchaseAll,
+      actualSales: actualSales,
+      outputVatActual: outputVatActual,
+      netVat: netVat,
+      estimate: est,
+      // ยอดขายขั้นต่ำที่ทำให้ VAT ขาย > VAT ซื้อ (ไม่ขอคืนภาษี)
+      minSalesRequired: inputVat * 107 / 7
+    };
+  } catch(e) { return { ok:false, error: e.toString() }; }
+}
+
+// ผู้บริหารบันทึกประมาณการ: % เหนือภาษีซื้อ → เป้ายอดขาย/VAT
+function saveTaxEstimate(yyyymm, execPercent, lastYearAvg) {
+  try {
+    var ym  = yyyymm;
+    var pct = Number(execPercent) || 0;
+    if (pct <= 0) return { ok:false, msg:'% ต้องมากกว่า 0 (ภาษีขายต้องเกินภาษีซื้อ)' };
+    var pp = getPP30(ym);
+    if (!pp.ok) return pp;
+    var targetVat   = pp.input.vat * (1 + pct/100);          // VAT ขายเป้า > VAT ซื้อ
+    var targetSales = targetVat * 107 / 7;                   // ยอดขาย (รวม VAT) ที่ต้องมี
+    var s = taxEstSheet_();
+    var rows = s.getDataRange().getValues();
+    var rowIdx = -1;
+    for (var i = 1; i < rows.length; i++) if (String(rows[i][0]) === ym) { rowIdx = i+1; break; }
+    var rec = [ym, pp.input.vat, pct, targetSales, targetVat, Number(lastYearAvg)||0,
+               Session.getActiveUser().getEmail(),
+               Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm')];
+    if (rowIdx > 0) s.getRange(rowIdx,1,1,H_TAXEST.length).setValues([rec]);
+    else s.appendRow(rec);
+    return { ok:true, targetSales: targetSales, targetVat: targetVat };
+  } catch(e) { return { ok:false, msg: e.toString() }; }
+}
+
+// เช็ครายสัปดาห์: ยอดจริงสะสม vs เป้าตามสัดส่วนวัน → แจ้ง LINE
+function checkWeeklySalesTarget() {
+  try {
+    var now = new Date();
+    var ym  = Utilities.formatDate(now,'Asia/Bangkok','yyyy-MM');
+    var pp  = getPP30(ym);
+    if (!pp.ok || !pp.estimate || !pp.estimate.targetSales) {
+      Logger.log('ยังไม่ตั้งเป้าเดือน ' + ym); return 'no-target';
+    }
+    var day = now.getDate();
+    var daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    var expected = pp.estimate.targetSales * (day / daysInMonth);
+    var diff = pp.actualSales - expected;
+    var msg = '📊 เช็คเป้าภาษีขาย KLH (' + ym + ')\n'
+      + 'เป้าเดือน: ฿' + Math.round(pp.estimate.targetSales).toLocaleString() + '\n'
+      + 'ควรได้ถึงวันนี้ (' + day + '/' + daysInMonth + '): ฿' + Math.round(expected).toLocaleString() + '\n'
+      + 'ยอดจริงสะสม: ฿' + Math.round(pp.actualSales).toLocaleString() + '\n'
+      + (diff < 0
+          ? '⚠️ ต่ำกว่าเป้า ฿' + Math.round(-diff).toLocaleString() + '\n→ ควรนำเงินเข้าบัญชี KTB เพิ่ม เพื่อสร้างฐานภาษีขาย'
+          : '✅ เกินเป้า ฿' + Math.round(diff).toLocaleString());
+    sendWmsLine_(msg);
+    return msg;
+  } catch(e) { Logger.log('checkWeeklySalesTarget: '+e); return 'error: '+e; }
+}
+
+// ตั้ง trigger รายสัปดาห์ (รันครั้งเดียวใน GAS Editor)
+function setupWeeklyTaxTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'checkWeeklySalesTarget') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkWeeklySalesTarget')
+    .timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(19).create();
+  return 'ตั้ง trigger ทุกอาทิตย์ 19:00 แล้ว';
+}
+
 // ────────────────────────────────────────────────────────────
 //  ข้อ 5 (ส่วน B): สร้างยอดขาย KLH "จำลอง" จากยอด statement
 //  → กระจายยอดขายเป้าหมายลงสินค้า KLH ตามน้ำหนักมูลค่าขายปลีก
