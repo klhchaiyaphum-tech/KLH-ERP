@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH งบกำไรขาดทุน</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-soft:#FCE6DC;
+  --blue:#3A37C9; --blue-soft:#E7E7FA; --green:#2E9E55; --green-soft:#E6F5EC;
+  --amber:#D98A0B; --amber-soft:#FBF1DA; --red:#D9512B; --red-soft:#FBE5DD;
+  --paper:#FFFFFF; --paper-2:#F8F4EC; --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90;
+  --line:#ECE6DA; --line-2:#E0D8C7;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif;
+  --ffn:"IBM Plex Sans",-apple-system,sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--ff); color:var(--ink); min-height:100vh; padding:18px 14px 40px; -webkit-font-smoothing:antialiased;
+  background:radial-gradient(900px 600px at 8% 2%,#FBDAC6 0%,transparent 55%),radial-gradient(800px 600px at 94% 6%,#F6E7CD 0%,transparent 52%),linear-gradient(160deg,#F1EBDE 0%,#ECE4D5 100%); }
+.num{ font-variant-numeric:tabular-nums; font-family:var(--ffn); }
+button{ font-family:inherit; cursor:pointer; border:none; }
+.win{ max-width:980px; margin:0 auto; background:var(--paper); border:1px solid var(--line-2); border-radius:16px; overflow:hidden; box-shadow:0 30px 70px -30px rgba(60,40,25,.5); }
+.titlebar{ display:flex; align-items:center; gap:13px; padding:11px 16px; background:var(--paper-2); border-bottom:1px solid var(--line); }
+.lights{ display:flex; gap:8px; } .lights i{ width:12px; height:12px; border-radius:50%; display:block; }
+.lights .r{ background:#FF5F57; } .lights .y{ background:#FEBC2E; } .lights .g{ background:#28C840; }
+.tt{ font-size:13px; color:var(--ink-2); font-weight:600; }
+.phead{ display:flex; align-items:center; gap:14px; padding:16px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.phead .pic{ width:46px; height:46px; border-radius:13px; display:grid; place-items:center; font-size:21px; color:#fff; background:linear-gradient(135deg,#5B86E5,#3A37C9); box-shadow:0 8px 16px -8px var(--blue); }
+.phead h1{ font-size:19px; } .phead p{ font-size:12.5px; color:var(--ink-2); margin-top:2px; }
+.phead .actions{ margin-left:auto; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+.btn{ display:inline-flex; align-items:center; gap:7px; padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600; border:1px solid var(--line-2); background:var(--paper); color:var(--ink); }
+.btn.primary{ background:var(--coral); border-color:var(--coral); color:#fff; box-shadow:0 6px 14px -7px var(--coral); }
+input[type=month]{ padding:9px 11px; border-radius:11px; border:1.5px solid var(--line-2); font-size:14px; font-family:inherit; outline:none; }
+input:focus{ border-color:var(--coral); }
+.body{ padding:18px 20px 22px; }
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:13px; margin-bottom:16px; }
+.kpi{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:15px 17px; }
+.kpi .kv{ font-family:var(--ffn); font-size:23px; font-weight:800; line-height:1; }
+.kpi .kk{ font-size:12.5px; color:var(--ink-2); margin-top:7px; }
+.sec{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:17px; margin-bottom:14px; }
+.sec h2{ font-size:15px; margin-bottom:11px; }
+.plrow{ display:flex; justify-content:space-between; padding:10px 2px; border-bottom:1px dashed var(--line); font-size:14.5px; }
+.plrow:last-child{ border-bottom:none; }
+.plrow.total{ border-top:2px solid var(--line-2); font-weight:800; font-size:16px; }
+.plrow .ind{ padding-left:18px; color:var(--ink-2); }
+table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+th{ text-align:right; padding:10px 12px; font-size:12px; font-weight:700; color:var(--ink-2); background:var(--paper-2); border-bottom:1px solid var(--line); }
+th.l{ text-align:left; }
+td{ padding:10px 12px; border-bottom:1px solid var(--line); text-align:right; }
+td.l{ text-align:left; font-weight:600; }
+tr:hover{ background:var(--coral-soft); }
+.err{ background:var(--red-soft); color:var(--red); padding:11px 13px; border-radius:11px; margin-bottom:12px; font-size:13.5px; }
+.loading{ text-align:center; padding:40px; color:var(--ink-3); }
+.hint{ font-size:12px; color:var(--ink-3); margin-top:8px; }
+.pos{ color:var(--green); } .neg{ color:var(--red); }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+    <div class="tt">KLH · งบกำไรขาดทุน</div>
+  </div>
+  <div class="phead">
+    <div class="pic">📊</div>
+    <div><h1>งบกำไรขาดทุน (P&amp;L)</h1><p>รายได้จาก POS · ต้นทุนขายจากต้นทุนจริง (KLH DATA) · แยก KLH กับนิติอื่น</p></div>
+    <div class="actions">
+      <button class="btn" onclick="goBack()">← หน้าหลัก</button>
+      <input type="month" id="month">
+      <button class="btn primary" onclick="load()">โหลดงบ</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="msg"></div>
+    <div id="content"><div class="loading">เลือกเดือนแล้วกด "โหลดงบ"</div></div>
+  </div>
+</div>
+
+<script>
+function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+(function(){ var d=new Date(); document.getElementById('month').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); })();
+
+function load(){
+  document.getElementById('content').innerHTML='<div class="loading">กำลังคำนวณ...</div>';
+  document.getElementById('msg').innerHTML='';
+  google.script.run.withSuccessHandler(function(r){
+    if (!r || !r.ok){ document.getElementById('msg').innerHTML='<div class="err">'+((r&&r.error)||'ผิดพลาด')+'</div>'; document.getElementById('content').innerHTML=''; return; }
+    render(r);
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .getProfitLoss(document.getElementById('month').value);
+}
+
+function render(r){
+  var t = r.totals;
+  var h = '<div class="kpis">'
+    +'<div class="kpi"><div class="kv num" style="color:var(--blue)">฿'+nf(t.revenue)+'</div><div class="kk">รายได้รวม</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:var(--ink-3)">฿'+nf(t.cogs)+'</div><div class="kk">ต้นทุนขาย (COGS)</div></div>'
+    +'<div class="kpi"><div class="kv num '+(t.gross>=0?'pos':'neg')+'">฿'+nf(t.gross)+'</div><div class="kk">กำไรขั้นต้น</div></div>'
+    +'<div class="kpi"><div class="kv num '+(t.margin>=0?'pos':'neg')+'">'+nf(t.margin)+'%</div><div class="kk">อัตรากำไรขั้นต้น</div></div>'
+    +'</div>';
+
+  h += '<div class="sec"><h2>📋 งบกำไรขาดทุน — '+r.month+'</h2>'
+    +'<div class="plrow"><span>รายได้จากการขาย</span><b class="num">฿'+nf(t.revenue)+'</b></div>'
+    +'<div class="plrow"><span class="ind">— ขายสินค้า KLH (หจก.)</span><span class="num">฿'+nf(r.revenue.klh)+'</span></div>'
+    +'<div class="plrow"><span class="ind">— ขายสินค้านิติอื่น</span><span class="num">฿'+nf(r.revenue.other)+'</span></div>'
+    +'<div class="plrow"><span>หัก ต้นทุนขาย</span><b class="num">(฿'+nf(t.cogs)+')</b></div>'
+    +'<div class="plrow"><span class="ind">— ต้นทุนสินค้า KLH</span><span class="num">(฿'+nf(r.cogs.klh)+')</span></div>'
+    +'<div class="plrow"><span class="ind">— ต้นทุนสินค้านิติอื่น</span><span class="num">(฿'+nf(r.cogs.other)+')</span></div>'
+    +'<div class="plrow total"><span>กำไรขั้นต้น</span><b class="num '+(t.gross>=0?'pos':'neg')+'">฿'+nf(t.gross)+'</b></div>'
+    +(r.itemsNoCost>0?'<div class="hint">⚠️ มี '+r.itemsNoCost+' รายการขายที่ยังไม่มีต้นทุนใน KLH DATA (ไม่ถูกนับใน COGS) — ไปกรอกต้นทุนใน Survey</div>':'')
+    +'</div>';
+
+  h += '<div class="sec"><h2>🧾 ยอดซื้อเข้าเดือนนี้ (อ้างอิงกระแสเงิน)</h2>'
+    +'<div class="plrow"><span>ซื้อในชื่อ KLH (หจก.)</span><b class="num">฿'+nf(r.purchases.klh)+'</b></div>'
+    +'<div class="plrow"><span>ซื้อในชื่อนิติอื่น</span><b class="num">฿'+nf(r.purchases.other)+'</b></div>'
+    +'</div>';
+
+  if (r.byEntity && r.byEntity.length){
+    h += '<div class="sec"><h2>🏪 แยกตามกิจการ</h2><table>'
+      +'<tr><th class="l">กิจการ</th><th>รายได้</th><th>ต้นทุนขาย</th><th>กำไรขั้นต้น</th><th>มาร์จิ้น</th></tr>'
+      + r.byEntity.map(function(e){
+          return '<tr><td class="l">'+e.entity+'</td><td class="num">฿'+nf(e.revenue)+'</td><td class="num">฿'+nf(e.cogs)+'</td>'
+            +'<td class="num '+(e.gross>=0?'pos':'neg')+'" style="font-weight:700">฿'+nf(e.gross)+'</td>'
+            +'<td class="num">'+nf(e.margin)+'%</td></tr>';
+        }).join('')
+      +'</table></div>';
+  }
+  document.getElementById('content').innerHTML = h;
+}
+</script>
+</body>
+</html>

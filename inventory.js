@@ -519,6 +519,129 @@ function checkAllRop() {
   return 'ROP check done';
 }
 
+// ════════════════════════════════════════════════════════════
+//  WMS ANALYTICS — หลักวิชาการคลัง (ตาม WMS_DESIGN ข้อ 5)
+//  ABC (Pareto 80/95) · Velocity · Safety Stock · ROP อัตโนมัติ ·
+//  EOQ · Turnover/DOH · Dead stock
+//  แหล่งข้อมูล: STOCK_LOG (Type=OUT) + STOCK_BALANCE + CONFIG
+// ════════════════════════════════════════════════════════════
+function wmsAnalytics(days) {
+  try {
+    days = Number(days) || 90;
+    const cutoff = new Date(Date.now() - days * 86400000);
+    const cfgAll = {};
+    try {
+      const cs = ss_().getSheetByName('CONFIG');
+      if (cs) cs.getDataRange().getValues().forEach(r => { if (r[0]) cfgAll[String(r[0]).trim().toUpperCase()] = r[1]; });
+    } catch(e) {}
+    const LT        = Number(cfgAll.LEAD_TIME_DAYS) || 7;     // วันสั่ง→รับ
+    const ORDER_COST= Number(cfgAll.ORDER_COST)     || 100;   // ค่าใช้จ่าย/การสั่ง 1 ครั้ง
+    const HOLD_RATE = Number(cfgAll.HOLDING_RATE)   || 0.20;  // %ถือครอง/ปี
+    const Z         = 1.65;                                    // service level 95%
+
+    // 1) ยอดขายออก (OUT) ย้อนหลัง — รวมทุกคลัง ต่อ SKU + bucket รายวันไว้คำนวณ σ
+    const sold = {};  // sku → { qty, value, name, daily:{ymd:qty} }
+    const logSh = sh_(SH_LOG);
+    if (logSh && logSh.getLastRow() > 1) {
+      logSh.getDataRange().getValues().slice(1).forEach(r => {
+        if (String(r[2]) !== 'OUT') return;
+        let d = r[0] instanceof Date ? r[0] : new Date(r[0]);
+        if (isNaN(d) || d < cutoff) return;
+        const sku = String(r[3] || '').trim(); if (!sku) return;
+        const q   = Math.abs(Number(r[7]) || 0);
+        const amt = Math.abs(Number(r[10]) || 0) || q * (Number(r[9]) || 0);
+        if (!sold[sku]) sold[sku] = { qty: 0, value: 0, name: String(r[4] || sku), daily: {} };
+        sold[sku].qty += q; sold[sku].value += amt;
+        const ymd = fmt_(d, 'yyyy-MM-dd');
+        sold[sku].daily[ymd] = (sold[sku].daily[ymd] || 0) + q;
+      });
+    }
+
+    // 2) สต๊อกคงเหลือ + ต้นทุนเฉลี่ย (รวมทุกคลัง)
+    const bal = {};   // sku → { onHand, cost, name }
+    sh_(SH_BAL).getDataRange().getValues().slice(1).forEach(r => {
+      const sku = String(r[0] || '').trim(); if (!sku) return;
+      if (!bal[sku]) bal[sku] = { onHand: 0, cost: 0, name: String(r[1] || sku) };
+      bal[sku].onHand += Number(r[3]) || 0;
+      if (Number(r[5]) > 0) bal[sku].cost = Number(r[5]);
+    });
+
+    // 3) รวมเป็นรายการวิเคราะห์
+    const skus = {};
+    Object.keys(sold).forEach(k => skus[k] = 1);
+    Object.keys(bal).forEach(k => skus[k] = 1);
+    let rows = Object.keys(skus).map(sku => {
+      const s = sold[sku] || { qty: 0, value: 0, daily: {}, name: '' };
+      const b = bal[sku]  || { onHand: 0, cost: 0, name: '' };
+      const velocity = s.qty / days;                          // ชิ้น/วัน
+      // σ รายวัน (รวมวันที่ขาย 0 ด้วย)
+      const dailyVals = Object.values(s.daily);
+      const mean = s.qty / days;
+      let variance = 0;
+      dailyVals.forEach(q => variance += Math.pow(q - mean, 2));
+      variance += (days - dailyVals.length) * Math.pow(0 - mean, 2);
+      const sigma = Math.sqrt(variance / Math.max(1, days - 1));
+      const safety = Z * sigma * Math.sqrt(LT);
+      const rop    = velocity * LT + safety;
+      const annualD = velocity * 365;
+      const H = Math.max(0.01, (b.cost || 1) * HOLD_RATE);
+      const eoq = annualD > 0 ? Math.sqrt(2 * annualD * ORDER_COST / H) : 0;
+      const stockValue = b.onHand * b.cost;
+      const annualCogs = (s.value / days) * 365;
+      const turnover = stockValue > 0 ? annualCogs / stockValue : 0;
+      const doh = velocity > 0 ? b.onHand / velocity : (b.onHand > 0 ? 9999 : 0);
+      return {
+        sku: sku, name: s.name || b.name,
+        soldQty: s.qty, soldValue: s.value, velocity: velocity,
+        onHand: b.onHand, cost: b.cost, stockValue: stockValue,
+        safety: Math.ceil(safety), rop: Math.ceil(rop), eoq: Math.ceil(eoq),
+        turnover: turnover, doh: Math.round(doh),
+        dead: (s.qty === 0 && b.onHand > 0)
+      };
+    });
+
+    // 4) ABC ตามมูลค่าขายสะสม (80/95)
+    rows.sort((a, b2) => b2.soldValue - a.soldValue);
+    const totalValue = rows.reduce((t, r) => t + r.soldValue, 0) || 1;
+    let cum = 0;
+    rows.forEach(r => {
+      cum += r.soldValue;
+      r.abc = r.soldValue <= 0 ? 'C' : (cum / totalValue <= 0.80 ? 'A' : (cum / totalValue <= 0.95 ? 'B' : 'C'));
+    });
+
+    const deadRows = rows.filter(r => r.dead);
+    return {
+      ok: true, days: days, leadTime: LT, orderCost: ORDER_COST, holdRate: HOLD_RATE,
+      summary: {
+        skuCount: rows.length,
+        a: rows.filter(r => r.abc === 'A').length,
+        b: rows.filter(r => r.abc === 'B').length,
+        c: rows.filter(r => r.abc === 'C').length,
+        totalSold: totalValue,
+        totalStockValue: rows.reduce((t, r) => t + r.stockValue, 0),
+        deadCount: deadRows.length,
+        deadValue: deadRows.reduce((t, r) => t + r.stockValue, 0)
+      },
+      rows: rows.slice(0, 300)
+    };
+  } catch(e) { return { ok: false, error: e.toString() }; }
+}
+
+// เขียน ROP/ROQ ที่คำนวณได้ ลง SKU_WH_CONFIG ของคลังหน้าร้าน (W1)
+function applyCalculatedRop(days, whId) {
+  try {
+    const res = wmsAnalytics(days);
+    if (!res.ok) return res;
+    const target = whId || 'W1';
+    const cfgs = res.rows
+      .filter(r => r.velocity > 0)
+      .map(r => ({ sku: r.sku, wh: target, rop: r.rop, roq: r.eoq, maxStock: 0, active: true }));
+    if (!cfgs.length) return { ok: false, msg: 'ไม่มีสินค้าที่มียอดขายในช่วงที่เลือก' };
+    const sv = saveRopConfigs(cfgs);
+    return { ok: sv.ok, applied: cfgs.length, msg: 'ตั้ง ROP/ROQ อัตโนมัติ ' + cfgs.length + ' SKU → คลัง ' + target };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
 // ── Seed Test Data ────────────────────────────────────────────
 function seedTestData() {
   const ss = ss_();

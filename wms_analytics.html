@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH วิเคราะห์คลัง</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-soft:#FCE6DC; --honey:#EBA13C;
+  --blue:#3A37C9; --blue-soft:#E7E7FA; --green:#2E9E55; --green-soft:#E6F5EC;
+  --amber:#D98A0B; --amber-soft:#FBF1DA; --red:#D9512B; --red-soft:#FBE5DD;
+  --cream:#F1EBDE; --paper:#FFFFFF; --paper-2:#F8F4EC;
+  --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90; --line:#ECE6DA; --line-2:#E0D8C7;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif;
+  --ffn:"IBM Plex Sans",-apple-system,sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--ff); color:var(--ink); min-height:100vh; padding:18px 14px 40px; -webkit-font-smoothing:antialiased;
+  background:radial-gradient(900px 600px at 8% 2%,#FBDAC6 0%,transparent 55%),radial-gradient(800px 600px at 94% 6%,#F6E7CD 0%,transparent 52%),linear-gradient(160deg,#F1EBDE 0%,#ECE4D5 100%); }
+.num{ font-variant-numeric:tabular-nums; font-family:var(--ffn); }
+button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+.win{ max-width:1240px; margin:0 auto; background:var(--paper); border:1px solid var(--line-2); border-radius:16px; overflow:hidden; box-shadow:0 30px 70px -30px rgba(60,40,25,.5); }
+.titlebar{ display:flex; align-items:center; gap:13px; padding:11px 16px; background:var(--paper-2); border-bottom:1px solid var(--line); }
+.lights{ display:flex; gap:8px; } .lights i{ width:12px; height:12px; border-radius:50%; display:block; }
+.lights .r{ background:#FF5F57; } .lights .y{ background:#FEBC2E; } .lights .g{ background:#28C840; }
+.tt{ font-size:13px; color:var(--ink-2); font-weight:600; }
+.phead{ display:flex; align-items:center; gap:14px; padding:16px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.phead .pic{ width:46px; height:46px; border-radius:13px; display:grid; place-items:center; color:#fff; font-size:21px; background:linear-gradient(135deg,#F6B53C,#E08A2E); box-shadow:0 8px 16px -8px #E08A2E; }
+.phead h1{ font-size:19px; } .phead p{ font-size:12.5px; color:var(--ink-2); margin-top:2px; }
+.phead .actions{ margin-left:auto; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.btn{ display:inline-flex; align-items:center; gap:7px; padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600; border:1px solid var(--line-2); background:var(--paper); color:var(--ink); }
+.btn.primary{ background:var(--coral); border-color:var(--coral); color:#fff; box-shadow:0 6px 14px -7px var(--coral); }
+.btn.green{ background:var(--green); border-color:var(--green); color:#fff; }
+.sel select{ appearance:none; padding:9px 30px 9px 13px; border-radius:11px; border:1px solid var(--line-2); background:var(--paper); font-size:13.5px; font-weight:600; outline:none; font-family:inherit; }
+.body{ padding:18px 20px 22px; }
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:13px; margin-bottom:16px; }
+.kpi{ background:var(--paper); border:1px solid var(--line); border-radius:15px; padding:15px 17px; }
+.kpi .kv{ font-family:var(--ffn); font-size:24px; font-weight:800; line-height:1; }
+.kpi .kk{ font-size:12.5px; color:var(--ink-2); margin-top:7px; }
+.kv.coral{ color:var(--coral-2); } .kv.green{ color:var(--green); } .kv.red{ color:var(--red); } .kv.blue{ color:var(--blue); }
+.tbl{ background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+.tbl .scroll{ overflow-x:auto; }
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+thead th{ text-align:right; padding:10px 12px; font-size:11.5px; font-weight:700; color:var(--ink-2); background:var(--paper-2); border-bottom:1px solid var(--line); white-space:nowrap; }
+thead th.l{ text-align:left; }
+tbody td{ padding:9px 12px; border-bottom:1px solid var(--line); text-align:right; }
+tbody td.l{ text-align:left; }
+tbody tr:hover{ background:var(--coral-soft); }
+.pill{ display:inline-flex; padding:2px 10px; border-radius:999px; font-size:11.5px; font-weight:700; }
+.pill.A{ background:var(--green-soft); color:var(--green); }
+.pill.B{ background:var(--amber-soft); color:var(--amber); }
+.pill.C{ background:var(--paper-2); color:var(--ink-3); border:1px solid var(--line); }
+.pill.dead{ background:var(--red-soft); color:var(--red); }
+.note{ background:var(--blue-soft); border:1px solid #D2D2F2; border-radius:12px; padding:11px 14px; font-size:12.5px; color:var(--blue); margin-bottom:14px; line-height:1.6; }
+.err{ background:var(--red-soft); color:var(--red); padding:11px 13px; border-radius:11px; font-size:13.5px; margin-bottom:12px; }
+.loading{ text-align:center; padding:46px; color:var(--ink-3); }
+.seg{ display:flex; gap:4px; background:var(--paper-2); border:1px solid var(--line); border-radius:11px; padding:3px; }
+.seg button{ padding:7px 13px; border-radius:8px; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+.seg button.on{ background:var(--coral); color:#fff; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+    <div class="tt">KLH · วิเคราะห์คลังสินค้า</div>
+  </div>
+  <div class="phead">
+    <div class="pic">📈</div>
+    <div><h1>วิเคราะห์คลังสินค้า</h1><p>ABC · Safety Stock · ROP/EOQ อัตโนมัติ · Turnover · Dead stock — จากยอดขายจริง (STOCK_LOG)</p></div>
+    <div class="actions">
+      <button class="btn" onclick="goBack()">← หน้าหลัก</button>
+      <div class="sel"><select id="days" onchange="load()">
+        <option value="30">ย้อนหลัง 30 วัน</option>
+        <option value="90" selected>ย้อนหลัง 90 วัน</option>
+        <option value="180">ย้อนหลัง 180 วัน</option>
+        <option value="365">ย้อนหลัง 1 ปี</option>
+      </select></div>
+      <button class="btn primary" onclick="load()">วิเคราะห์</button>
+      <button class="btn green" onclick="applyRop()" id="applyBtn">⚙️ ตั้ง ROP/ROQ อัตโนมัติ → W1</button>
+    </div>
+  </div>
+  <div class="body">
+    <div class="note">สูตร: Safety = 1.65×σ×√LT · ROP = ขายเฉลี่ย/วัน×LT + Safety · EOQ = √(2DS/H) — ตั้งค่า LEAD_TIME_DAYS / ORDER_COST / HOLDING_RATE ได้ใน CONFIG (ค่าเริ่มต้น 7 วัน / ฿100 / 20%)</div>
+    <div id="msg"></div>
+    <div class="kpis" id="kpis"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px;flex-wrap:wrap">
+      <div class="seg" id="filterSeg">
+        <button class="on" data-f="all" onclick="setF(this)">ทั้งหมด</button>
+        <button data-f="A" onclick="setF(this)">A</button>
+        <button data-f="B" onclick="setF(this)">B</button>
+        <button data-f="C" onclick="setF(this)">C</button>
+        <button data-f="dead" onclick="setF(this)">Dead stock</button>
+        <button data-f="reorder" onclick="setF(this)">ต้องสั่งซื้อ</button>
+      </div>
+      <span style="font-size:12.5px;color:var(--ink-3)" id="cnt"></span>
+    </div>
+    <div class="tbl"><div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="l">SKU</th><th class="l">สินค้า</th><th>ABC</th>
+          <th>ขาย(ชิ้น)</th><th>มูลค่าขาย</th><th>ชิ้น/วัน</th>
+          <th>คงเหลือ</th><th>มูลค่าสต๊อก</th>
+          <th>Safety</th><th>ROP</th><th>EOQ</th>
+          <th>DOH(วัน)</th><th>Turn/ปี</th>
+        </tr></thead>
+        <tbody id="tb"><tr><td colspan="13"><div class="loading">กด "วิเคราะห์" เพื่อเริ่ม</div></td></tr></tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+<script>
+var _rows = [], _filter = 'all';
+function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
+function nf(n,d){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:d===undefined?0:d}); }
+
+function load(){
+  document.getElementById('tb').innerHTML = '<tr><td colspan="13"><div class="loading">กำลังวิเคราะห์...</div></td></tr>';
+  document.getElementById('msg').innerHTML = '';
+  google.script.run.withSuccessHandler(function(res){
+    if (!res || !res.ok){ document.getElementById('msg').innerHTML = '<div class="err">'+((res&&res.error)||'ผิดพลาด')+'</div>'; return; }
+    _rows = res.rows || [];
+    var s = res.summary;
+    document.getElementById('kpis').innerHTML =
+      '<div class="kpi"><div class="kv num">'+nf(s.skuCount)+'</div><div class="kk">SKU ทั้งหมด</div></div>'
+      +'<div class="kpi"><div class="kv green num">'+nf(s.a)+'</div><div class="kk">Class A (80% มูลค่า)</div></div>'
+      +'<div class="kpi"><div class="kv num" style="color:var(--amber)">'+nf(s.b)+'</div><div class="kk">Class B</div></div>'
+      +'<div class="kpi"><div class="kv num" style="color:var(--ink-3)">'+nf(s.c)+'</div><div class="kk">Class C</div></div>'
+      +'<div class="kpi"><div class="kv coral num">฿'+nf(s.totalStockValue)+'</div><div class="kk">มูลค่าสต๊อกรวม</div></div>'
+      +'<div class="kpi"><div class="kv red num">'+nf(s.deadCount)+' · ฿'+nf(s.deadValue)+'</div><div class="kk">Dead stock (เงินจม)</div></div>';
+    render();
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .wmsAnalytics(Number(document.getElementById('days').value));
+}
+
+function setF(el){
+  _filter = el.getAttribute('data-f');
+  var bs = document.querySelectorAll('#filterSeg button');
+  for (var i=0;i<bs.length;i++) bs[i].classList.remove('on');
+  el.classList.add('on');
+  render();
+}
+
+function render(){
+  var rows = _rows.filter(function(r){
+    if (_filter==='all') return true;
+    if (_filter==='dead') return r.dead;
+    if (_filter==='reorder') return r.velocity>0 && r.onHand <= r.rop;
+    return r.abc === _filter;
+  });
+  document.getElementById('cnt').textContent = rows.length + ' รายการ';
+  if (!rows.length){ document.getElementById('tb').innerHTML='<tr><td colspan="13"><div class="loading">ไม่มีรายการ</div></td></tr>'; return; }
+  document.getElementById('tb').innerHTML = rows.map(function(r){
+    var reorder = r.velocity>0 && r.onHand <= r.rop;
+    return '<tr'+(reorder?' style="background:var(--amber-soft)"':'')+'>'
+      +'<td class="l num" style="color:var(--ink-3);font-size:12px">'+r.sku+'</td>'
+      +'<td class="l" style="font-weight:600">'+(r.name||'')+(r.dead?' <span class="pill dead">DEAD</span>':'')+(reorder?' <span class="pill B">สั่งซื้อ!</span>':'')+'</td>'
+      +'<td><span class="pill '+r.abc+'">'+r.abc+'</span></td>'
+      +'<td class="num">'+nf(r.soldQty)+'</td>'
+      +'<td class="num">฿'+nf(r.soldValue)+'</td>'
+      +'<td class="num">'+nf(r.velocity,2)+'</td>'
+      +'<td class="num" style="font-weight:700">'+nf(r.onHand)+'</td>'
+      +'<td class="num">฿'+nf(r.stockValue)+'</td>'
+      +'<td class="num">'+nf(r.safety)+'</td>'
+      +'<td class="num" style="color:var(--coral-2);font-weight:700">'+nf(r.rop)+'</td>'
+      +'<td class="num">'+nf(r.eoq)+'</td>'
+      +'<td class="num">'+(r.doh>=9999?'∞':nf(r.doh))+'</td>'
+      +'<td class="num">'+nf(r.turnover,1)+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function applyRop(){
+  if (!_rows.length){ alert('กดวิเคราะห์ก่อน'); return; }
+  if (!confirm('เขียน ROP/ROQ ที่คำนวณได้ ทับค่าใน SKU_WH_CONFIG (คลัง W1) ?')) return;
+  var btn = document.getElementById('applyBtn'); btn.disabled = true;
+  google.script.run.withSuccessHandler(function(res){
+    btn.disabled = false;
+    document.getElementById('msg').innerHTML = res.ok
+      ? '<div class="note" style="background:var(--green-soft);border-color:#CDEBD5;color:var(--green)">✅ '+res.msg+'</div>'
+      : '<div class="err">'+(res.msg||'ผิดพลาด')+'</div>';
+  }).withFailureHandler(function(e){ btn.disabled=false; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .applyCalculatedRop(Number(document.getElementById('days').value), 'W1');
+}
+</script>
+</body>
+</html>

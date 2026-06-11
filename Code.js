@@ -20,7 +20,9 @@ function doGet(e) {
     shelf_print: 'shelf_print',    // Shared shelf label print (Survey + Label)
     stock_month: 'stock_month',    // สิ้นเดือน: แยกสต๊อก KLH vs ร้านอื่น + ขายจำลอง (ข้อ 5)
     line_shop:   'line_shop',      // LINE OA Shop (LIFF) — สั่งสินค้าผ่าน LINE
-    tax:         'tax_estimate'    // ประมาณการ สรรพากร (ภพ.30)
+    tax:         'tax_estimate',   // ประมาณการ สรรพากร (ภพ.30)
+    wms_analytics: 'wms_analytics',// วิเคราะห์คลัง ABC/EOQ/ROP/Dead stock
+    pl:          'pl'              // งบกำไรขาดทุน (Phase 6.3)
   };
   const tpl = pageMap[page] || 'main';
   const titles = {
@@ -36,7 +38,9 @@ function doGet(e) {
     customer:'KLH Customer & AR',
     stock_month: 'KLH สต๊อกสิ้นเดือน',
     line_shop: 'KLH สั่งสินค้า',
-    tax: 'KLH ประมาณการ สรรพากร'
+    tax: 'KLH ประมาณการ สรรพากร',
+    wms_analytics: 'KLH วิเคราะห์คลัง',
+    pl: 'KLH งบกำไรขาดทุน'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
   tmpl.fromPage = (e && e.parameter && e.parameter.from) || '';

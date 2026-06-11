@@ -170,6 +170,94 @@ function getMonthEndStockByEntity(yyyymm) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  งบกำไรขาดทุน (P&L) — Phase 6.3
+//  รายได้ = SALES_HEADER · ต้นทุนขาย = SALES_DETAIL × ต้นทุน (KLH DATA R)
+//  ซื้อเข้า = INVOICE_HEADER · แยก KLH vs นิติอื่น
+// ════════════════════════════════════════════════════════════
+function getProfitLoss(yyyymm) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ym = yyyymm || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
+
+    // ต้นทุน/ชิ้นจาก KLH DATA (R=17) + fallback ราคาปลีก×0.8
+    var costMap = {};
+    var dSh = ss.getSheetByName('KLH DATA');
+    if (dSh) {
+      dSh.getDataRange().getValues().slice(1).forEach(function(r) {
+        var bc = String(r[0] || '').trim();
+        if (bc) costMap[bc] = Number(r[17]) || 0;
+      });
+    }
+
+    // ยอดขาย: SALES_HEADER (0 SALE_ID, 2 PAID_DATE, 4 ENTITY, 9 TOTAL)
+    var saleMonth = {}, revenue = { klh: 0, other: 0 }, byEntity = {};
+    var hSh = ss.getSheetByName('SALES_HEADER');
+    if (hSh && hSh.getLastRow() > 1) {
+      hSh.getDataRange().getValues().slice(1).forEach(function(r) {
+        var sid = String(r[0] || '').trim();
+        if (!sid || ymOf_(r[2]) !== ym) return;
+        saleMonth[sid] = true;
+        var ent = String(r[4] || 'ไม่ระบุ').trim() || 'ไม่ระบุ';
+        var tot = Number(r[9]) || 0;
+        if (isKlhEntity_(ent)) revenue.klh += tot; else revenue.other += tot;
+        if (!byEntity[ent]) byEntity[ent] = { entity: ent, revenue: 0, cogs: 0 };
+        byEntity[ent].revenue += tot;
+      });
+    }
+
+    // ต้นทุนขาย: SALES_DETAIL (0 SALE_ID, 2 BARCODE, 4 QTY_PIECE, 8 ENTITY)
+    var cogs = { klh: 0, other: 0 }, unkCost = 0;
+    var dtSh = ss.getSheetByName('SALES_DETAIL');
+    if (dtSh && dtSh.getLastRow() > 1) {
+      dtSh.getDataRange().getValues().slice(1).forEach(function(r) {
+        var sid = String(r[0] || '').trim();
+        if (!saleMonth[sid]) return;
+        var bc = String(r[2] || '').trim();
+        var q  = Number(r[4]) || 0;
+        var c  = costMap[bc] || 0;
+        if (c <= 0) { unkCost++; return; }
+        var ent = String(r[8] || '').trim();
+        var amt = q * c;
+        if (isKlhEntity_(ent)) cogs.klh += amt; else cogs.other += amt;
+        if (byEntity[ent]) byEntity[ent].cogs += amt;
+      });
+    }
+
+    // ยอดซื้อเข้าเดือนนี้ (INVOICE_HEADER: 2 INVOICE_DATE, 4 TAX_ENTITY, 7 TOTAL)
+    var purchases = { klh: 0, other: 0 };
+    var inv = ss.getSheetByName('INVOICE_HEADER');
+    if (inv && inv.getLastRow() > 1) {
+      inv.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (ymOf_(r[2]) !== ym) return;
+        var t = Number(r[7]) || 0;
+        if (isKlhEntity_(r[4])) purchases.klh += t; else purchases.other += t;
+      });
+    }
+
+    var entityRows = [];
+    for (var e in byEntity) {
+      var x = byEntity[e];
+      entityRows.push({ entity: x.entity, revenue: x.revenue, cogs: x.cogs,
+                        gross: x.revenue - x.cogs,
+                        margin: x.revenue > 0 ? (x.revenue - x.cogs) / x.revenue * 100 : 0 });
+    }
+    entityRows.sort(function(a, b) { return b.revenue - a.revenue; });
+
+    var totalRev  = revenue.klh + revenue.other;
+    var totalCogs = cogs.klh + cogs.other;
+    return {
+      ok: true, month: ym,
+      revenue: revenue, cogs: cogs, purchases: purchases,
+      totals: { revenue: totalRev, cogs: totalCogs, gross: totalRev - totalCogs,
+                margin: totalRev > 0 ? (totalRev - totalCogs) / totalRev * 100 : 0 },
+      klh: { revenue: revenue.klh, cogs: cogs.klh, gross: revenue.klh - cogs.klh },
+      byEntity: entityRows,
+      itemsNoCost: unkCost
+    };
+  } catch(e) { return { ok: false, error: e.toString() }; }
+}
+
+// ════════════════════════════════════════════════════════════
 //  ประมาณการ สรรพากร (ภพ.30) — ตามที่ตกลง:
 //  • ภาษีซื้อ = ใบกำกับจาก OCR ที่ผู้ซื้อ = KLH (INVOICE_HEADER)
 //  • ภาษีขาย = ฐานยอดขาย (เป้า = ภาษีซื้อ + % ผู้บริหาร, ต้อง > ซื้อ)
