@@ -104,9 +104,9 @@ tbody tr:hover{ background:var(--coral-soft); }
           <th>ขาย(ชิ้น)</th><th>มูลค่าขาย</th><th>ชิ้น/วัน</th>
           <th>คงเหลือ</th><th>มูลค่าสต๊อก</th>
           <th>Safety</th><th>ROP</th><th>EOQ</th>
-          <th>DOH(วัน)</th><th>Turn/ปี</th>
+          <th>DOH(วัน)</th><th>Turn/ปี</th><th>คลังแนะนำ</th>
         </tr></thead>
-        <tbody id="tb"><tr><td colspan="13"><div class="loading">กด "วิเคราะห์" เพื่อเริ่ม</div></td></tr></tbody>
+        <tbody id="tb"><tr><td colspan="14"><div class="loading">กด "วิเคราะห์" เพื่อเริ่ม</div></td></tr></tbody>
       </table>
     </div></div>
   </div>
@@ -118,7 +118,7 @@ function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.
 function nf(n,d){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:d===undefined?0:d}); }
 
 function load(){
-  document.getElementById('tb').innerHTML = '<tr><td colspan="13"><div class="loading">กำลังวิเคราะห์...</div></td></tr>';
+  document.getElementById('tb').innerHTML = '<tr><td colspan="14"><div class="loading">กำลังวิเคราะห์...</div></td></tr>';
   document.getElementById('msg').innerHTML = '';
   google.script.run.withSuccessHandler(function(res){
     if (!res || !res.ok){ document.getElementById('msg').innerHTML = '<div class="err">'+((res&&res.error)||'ผิดพลาด')+'</div>'; return; }
@@ -152,7 +152,7 @@ function render(){
     return r.abc === _filter;
   });
   document.getElementById('cnt').textContent = rows.length + ' รายการ';
-  if (!rows.length){ document.getElementById('tb').innerHTML='<tr><td colspan="13"><div class="loading">ไม่มีรายการ</div></td></tr>'; return; }
+  if (!rows.length){ document.getElementById('tb').innerHTML='<tr><td colspan="14"><div class="loading">ไม่มีรายการ</div></td></tr>'; return; }
   document.getElementById('tb').innerHTML = rows.map(function(r){
     var reorder = r.velocity>0 && r.onHand <= r.rop;
     return '<tr'+(reorder?' style="background:var(--amber-soft)"':'')+'>'
@@ -169,6 +169,7 @@ function render(){
       +'<td class="num">'+nf(r.eoq)+'</td>'
       +'<td class="num">'+(r.doh>=9999?'∞':nf(r.doh))+'</td>'
       +'<td class="num">'+nf(r.turnover,1)+'</td>'
+      +'<td title="'+(r.recWhy||'')+'"><span class="pill '+(r.recWh==='W4'?'C':(r.recWh==='W3'?'B':'A'))+'">'+(r.recWh||'-')+'</span></td>'
       +'</tr>';
   }).join('');
 }

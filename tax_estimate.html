@@ -59,6 +59,16 @@ input:focus{ border-color:var(--coral); }
   <div id="msg"></div>
   <div id="content"><div class="loading">เลือกเดือนแล้วกด "โหลดข้อมูล"</div></div>
 
+  <!-- ยอดเงินเข้าธนาคาร (จากอีเมล KTB/กรุงศรี) -->
+  <div class="sec" id="bankSec" style="display:none">
+    <h2>🏦 ยอดเงินเข้าธนาคาร (จากอีเมลแจ้งเตือน)</h2>
+    <div id="bankBody"><div class="loading">—</div></div>
+    <div class="bar" style="margin:10px 0 0;border:none;padding:0;background:none">
+      <button class="btn" onclick="fetchBank()" id="fetchBtn">📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 7 วัน)</button>
+    </div>
+    <div class="hint">ระบบอ่านอีเมลจาก krungthai.com / krungsri.com อัตโนมัติทุกวัน 06:00 (รัน setupDailyBankTrigger ใน GAS Editor ครั้งเดียว) · ยอด KTB↔กรุงศรี ที่เท่ากันวันเดียวกัน = โยกเงิน ไม่นับขาย · เปลี่ยนผู้ส่งได้ใน CONFIG: BANK_EMAIL_KTB / BANK_EMAIL_BAY</div>
+  </div>
+
   <!-- ผู้บริหารกรอกประมาณการ -->
   <div class="sec" id="estSec" style="display:none">
     <h2>🎯 ตั้งเป้าผู้บริหาร (เดือนนี้)</h2>
@@ -88,6 +98,7 @@ function load(){
     if(!res || !res.ok){ document.getElementById('msg').innerHTML='<div class="err">ผิดพลาด: '+((res&&res.error)||'')+'</div>'; document.getElementById('content').innerHTML=''; return; }
     _pp = res; render(res);
     document.getElementById('estSec').style.display='block';
+    loadBank(ym);
     if (res.estimate){ document.getElementById('pct').value = res.estimate.execPercent||''; document.getElementById('lastYear').value = res.estimate.lastYearAvg||''; }
   }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; }).getPP30(ym);
 }
@@ -112,6 +123,29 @@ function render(r){
   }
   h += '</div>';
   document.getElementById('content').innerHTML = h;
+}
+
+function loadBank(ym){
+  var sec = document.getElementById('bankSec'); sec.style.display='block';
+  google.script.run.withSuccessHandler(function(b){
+    if (!b || !b.ok){ document.getElementById('bankBody').innerHTML='<div class="hint">'+((b&&b.msg)||'โหลดไม่ได้')+'</div>'; return; }
+    document.getElementById('bankBody').innerHTML =
+      '<div class="row"><span>🟦 กรุงไทย (KTB) เงินเข้า</span><b class="num">฿'+nf(b.ktbIn)+'</b></div>'
+      +'<div class="row"><span>🟧 กรุงศรี (BAY) เงินเข้า</span><b class="num">฿'+nf(b.bayIn)+'</b></div>'
+      +'<div class="row"><span>🔁 โยกเงินระหว่างบัญชี (ไม่นับขาย)</span><b class="num" style="color:var(--ink-3)">฿'+nf(b.transfer)+'</b></div>'
+      +'<div class="row"><span><b>💰 ฐานยอดขายภาษีจากธนาคาร</b></span><b class="num" style="color:var(--coral-2)">฿'+nf(b.salesBase)+'</b></div>'
+      +(b.count===0?'<div class="hint">ยังไม่มีข้อมูล — กดปุ่ม "ดึงอีเมลธนาคาร" ด้านล่าง</div>':'')
+      +(_pp&&_pp.actualSales?'<div class="row"><span>เทียบยอดขาย POS</span><b class="num">฿'+nf(_pp.actualSales)+' (ต่าง ฿'+nf(b.salesBase-_pp.actualSales)+')</b></div>':'');
+  }).withFailureHandler(function(){ document.getElementById('bankBody').innerHTML='<div class="hint">โหลดไม่ได้</div>'; }).getBankSummary(ym);
+}
+function fetchBank(){
+  var btn=document.getElementById('fetchBtn'); btn.disabled=true; btn.textContent='กำลังอ่านอีเมล...';
+  google.script.run.withSuccessHandler(function(r){
+    btn.disabled=false; btn.textContent='📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 7 วัน)';
+    document.getElementById('msg').innerHTML = r.ok?'':'<div class="err">'+r.msg+'</div>';
+    loadBank(document.getElementById('month').value);
+  }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='📥 ดึงอีเมลธนาคาร'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .fetchBankEmails(7);
 }
 
 function saveEst(){

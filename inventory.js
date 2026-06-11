@@ -609,6 +609,26 @@ function wmsAnalytics(days) {
       r.abc = r.soldValue <= 0 ? 'C' : (cum / totalValue <= 0.80 ? 'A' : (cum / totalValue <= 0.95 ? 'B' : 'C'));
     });
 
+    // 5) Slotting advisor — แนะนำคลังตามกฎที่ตกลง (WMS_DESIGN ข้อ 3)
+    //    KLH→W3 (แยกบัญชีสรรพากร) · A เร็ว→W1+W3 · B→W2 buffer · C/Dead→W4 โรงสี
+    const entityMap = {};
+    try {
+      const kd = ss_().getSheetByName('KLH DATA');
+      if (kd) kd.getDataRange().getValues().slice(1).forEach(r => {
+        const bc = String(r[0] || '').trim();
+        if (bc) entityMap[bc] = String(r[29] || '').trim();
+      });
+    } catch(e) {}
+    rows.forEach(r => {
+      const ent = entityMap[r.sku] || '';
+      const isKlh = ent.indexOf('เคแอลเอช') >= 0 || /klh/i.test(ent);
+      if (r.dead)            { r.recWh = 'W4'; r.recWhy = 'Dead stock — เก็บโรงสี/พิจารณาระบาย'; }
+      else if (isKlh)        { r.recWh = 'W3'; r.recWhy = 'สินค้า KLH — แยกคลังซอยโทรศัพท์ (บัญชีสรรพากร)'; }
+      else if (r.abc === 'A'){ r.recWh = 'W1+W3'; r.recWhy = 'Class A หมุนเร็ว — หน้าร้านเต็ม + สำรองใกล้'; }
+      else if (r.abc === 'B'){ r.recWh = 'W2'; r.recWhy = 'Class B — buffer ข้างบ้าน เติมไว'; }
+      else                   { r.recWh = 'W4'; r.recWhy = 'Class C ช้า — เก็บโรงสี ไม่ตุนหน้าร้าน'; }
+    });
+
     const deadRows = rows.filter(r => r.dead);
     return {
       ok: true, days: days, leadTime: LT, orderCost: ORDER_COST, holdRate: HOLD_RATE,
@@ -625,6 +645,30 @@ function wmsAnalytics(days) {
       rows: rows.slice(0, 300)
     };
   } catch(e) { return { ok: false, error: e.toString() }; }
+}
+
+// ตั้งคลัง 5 แห่งจริง + คุณสมบัติ (Role/Fetch_Cost/Priority) — รันครั้งเดียวใน Editor
+// เพิ่มคอลัมน์ G-J ต่อท้าย header เดิม (ไม่กระทบโค้ดที่อ่าน A-F)
+function initWarehouseMaster() {
+  const s = sh_(SH_WH);
+  s.getRange(1, 7, 1, 4).setValues([['ROLE','FETCH_COST','PRIORITY','NOTE']])
+    .setBackground('#E65100').setFontColor('#fff').setFontWeight('bold');
+  const whs = [
+    ['W1','คลังหน้าร้าน',     'หจก.เค แอล เอช','ชัยภูมิ','',true,'FRONT', 0, 1,'pick-face ขายหน้าร้าน เก็บ 3-5 วันพอขาย'],
+    ['W2','ข้างบ้าน+บนบ้าน',  'หจก.เค แอล เอช','ชัยภูมิ','',true,'BUFFER',1, 2,'ของเบาเท่านั้น buffer/ขายส่งบ่อย'],
+    ['W3','ซอยโทรศัพท์',      'หจก.เค แอล เอช','ชัยภูมิ','',true,'FAST',  2, 3,'ของขายเร็ว + สินค้าชื่อ KLH (บัญชีสรรพากร)'],
+    ['W4','โรงสี',            'หจก.เค แอล เอช','ชัยภูมิ','',true,'BULK',  5, 4,'ใหญ่/หนักได้ แต่ไกล รวมรอบไปเอา'],
+    ['W5','ศูนย์กระจาย (อนาคต)','หจก.เค แอล เอช','',     '',false,'DC',   3, 5,'เปิดเมื่อขยายสาขา'],
+  ];
+  const d = s.getDataRange().getValues();
+  whs.forEach(w => {
+    let found = false;
+    for (let i = 1; i < d.length; i++) {
+      if (String(d[i][0]) === w[0]) { s.getRange(i+1, 1, 1, 10).setValues([w]); found = true; break; }
+    }
+    if (!found) s.appendRow(w);
+  });
+  return 'ตั้งคลัง 5 แห่ง (W1 หน้าร้าน / W2 ข้างบ้าน / W3 ซอยโทรศัพท์ / W4 โรงสี / W5 ศูนย์กระจาย) แล้ว';
 }
 
 // เขียน ROP/ROQ ที่คำนวณได้ ลง SKU_WH_CONFIG ของคลังหน้าร้าน (W1)
