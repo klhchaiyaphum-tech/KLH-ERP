@@ -59,26 +59,66 @@ function fetchBankEmails(daysBack) {
 
     var since = Utilities.formatDate(new Date(Date.now() - daysBack*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
     var added = 0, skipped = 0;
-    [[ktbFrom, 'KTB'], [bayFrom, 'BAY']].forEach(function(pair) {
-      var threads = GmailApp.search('from:' + pair[0] + ' after:' + since, 0, 50);
-      threads.forEach(function(th) {
-        th.getMessages().forEach(function(msg) {
-          var id = msg.getId();
-          if (seen[id]) { skipped++; return; }
-          var subject = msg.getSubject() || '';
-          var body = '';
-          try { body = msg.getPlainBody().slice(0, 3000); } catch(e) {}
-          var amt = extractAmount_(subject + '\n' + body);
-          if (amt <= 0) return;                              // ข้ามอีเมลที่ไม่มียอดเงิน
-          var dir = isIncoming_(subject + ' ' + body) ? 'IN' : 'OUT';
-          s.appendRow([
-            Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd'),
-            pair[1], dir, amt, '', subject.slice(0, 120),
-            Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'),
-            id, ''
-          ]);
-          seen[id] = 1; added++;
-        });
+
+    // ── กรุงไทย: ใช้ "ไฟล์ statement แนบ (MT940 ใน ZIP)" เป็นแหล่งหลัก ──
+    // อีเมลข้อความใช้เฉพาะ "โอนไปกรุงศรี" → บันทึกฝั่ง BAY IN (TRANSFER)
+    GmailApp.search('from:' + ktbFrom + ' after:' + since, 0, 50).forEach(function(th) {
+      th.getMessages().forEach(function(msg) {
+        var id = msg.getId();
+        if (seen[id]) { skipped++; return; }
+        var subject = msg.getSubject() || '';
+        var body = '';
+        try { body = msg.getPlainBody().slice(0, 4000); } catch(e) {}
+
+        // 1) ไฟล์แนบ statement (.zip → .txt MT940 หรือ .txt ตรงๆ)
+        var gotStmt = 0;
+        try {
+          msg.getAttachments().forEach(function(att) {
+            var nm = att.getName();
+            if (/\.zip$/i.test(nm)) {
+              Utilities.unzip(att.copyBlob()).forEach(function(b) {
+                gotStmt += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
+              });
+            } else if (/\.txt$/i.test(nm)) {
+              gotStmt += parseMt940_(att.getDataAsString('UTF-8'), s, seen);
+            }
+          });
+        } catch(eA) { Logger.log('attachment: ' + eA); }
+        if (gotStmt > 0) { seen[id] = 1; added += gotStmt; return; }
+
+        // 2) อีเมลแจ้งโอน KTB→กรุงศรี (เงิน "ออก" จาก KTB ไม่ใช่เงินเข้า)
+        if (/ไปยังเลขที่บัญชี:\s*กรุงศรี/.test(body) || /credited[\s\S]{0,120}krungsri/i.test(body)) {
+          var amtT = extractAmount_(body);
+          if (amtT > 0) {
+            var dT = Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd');
+            // บันทึกฝั่ง BAY IN = โยกเงิน (ฝั่ง KTB OUT จะมาจาก statement เอง)
+            s.appendRow([dT, 'BAY', 'IN', amtT, 'TRANSFER', 'โยกเงินจาก KTB (อีเมลแจ้งโอน)',
+                         Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), id, '', '']);
+            seen[id] = 1; added++;
+          }
+          return;
+        }
+        // อีเมลกรุงไทยอื่นๆ (แจ้งเงินเข้า ฯลฯ) ข้าม — statement ครอบคลุมแล้ว กันยอดซ้ำ
+      });
+    });
+
+    // ── กรุงศรี: อีเมล = PromptPay ลูกค้าเข้า (ยอดขาย + เตือน 0.5%) ──
+    GmailApp.search('from:' + bayFrom + ' after:' + since, 0, 50).forEach(function(th) {
+      th.getMessages().forEach(function(msg) {
+        var id = msg.getId();
+        if (seen[id]) { skipped++; return; }
+        var subject = msg.getSubject() || '';
+        var body = '';
+        try { body = msg.getPlainBody().slice(0, 3000); } catch(e) {}
+        var amt = extractAmount_(subject + '\n' + body);
+        if (amt <= 0) return;
+        s.appendRow([
+          Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd'),
+          'BAY', 'IN', amt, '', subject.slice(0, 120),
+          Utilities.formatDate(msg.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'),
+          id, '', ''
+        ]);
+        seen[id] = 1; added++;
       });
     });
 
@@ -183,6 +223,22 @@ function importBayStatements() {
       var grid = null, tempId = null;
       try {
         var mime = f.getMimeType();
+        // ZIP (statement กรุงไทย MT940) หรือ .txt MT940 → อ่านตรง
+        if (/\.zip$/i.test(name)) {
+          var n0 = 0;
+          Utilities.unzip(f.getBlob()).forEach(function(b) {
+            n0 += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
+          });
+          imported += n0; fileCount++;
+          f.moveTo(done);
+          continue;
+        }
+        if (/\.txt$/i.test(name)) {
+          var n1 = parseMt940_(f.getBlob().getDataAsString('UTF-8'), s, seen);
+          imported += n1; fileCount++;
+          f.moveTo(done);
+          continue;
+        }
         if (mime === MimeType.CSV || /\.csv$/i.test(name)) {
           grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8'));
         } else if (mime === MimeType.GOOGLE_SHEETS) {
@@ -205,6 +261,61 @@ function importBayStatements() {
     return { ok: errs.length === 0, files: fileCount, imported: imported,
              msg: 'นำเข้า ' + fileCount + ' ไฟล์ / ' + imported + ' รายการ' + (errs.length ? ' · ผิดพลาด: ' + errs.join(' | ') : '') };
   } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// ── MT940 (SWIFT) — รูปแบบ statement กรุงไทย Business ──────────────
+// :25:เลขบัญชี → ระบุธนาคาร · :61:YYMMDD..C/D + ยอด(จุลภาค=ทศนิยม) · :86:คำอธิบาย
+function parseMt940_(text, s, seen) {
+  if (!text || text.indexOf(':61:') < 0) return 0;
+  var cfg = {};
+  try { cfg = getConfig(); } catch(e) {}
+  // map เลขบัญชี → ธนาคาร (เพิ่มได้ใน CONFIG: ACCT_KTB / ACCT_BAY / ACCT_BAYC)
+  var acctMap = {};
+  acctMap[String(cfg.ACCT_KTB  || '3070404782').replace(/[^0-9]/g, '')] = 'KTB';
+  if (cfg.ACCT_BAY)  acctMap[String(cfg.ACCT_BAY).replace(/[^0-9]/g, '')]  = 'BAY';
+  if (cfg.ACCT_BAYC) acctMap[String(cfg.ACCT_BAYC).replace(/[^0-9]/g, '')] = 'BAYC';
+
+  var lines = String(text).split(/\r?\n/);
+  var bank = 'KTB';
+  var count = 0;
+  var cur = null;   // { date, dir, amt, ref, desc[] }
+
+  function flush() {
+    if (!cur) return;
+    var key = 'STMT-' + bank + '-' + cur.date + '-' + cur.dir + '-' + cur.amt + '-' + cur.ref;
+    if (!seen[key]) {
+      var desc = cur.desc.join(' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+      s.appendRow([cur.date, bank, cur.dir, cur.amt, '', desc || ('MT940 ' + cur.ref),
+                   Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', '']);
+      seen[key] = 1; count++;
+    }
+    cur = null;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var L = lines[i];
+    var mAcc = L.match(/^:25:.*?(\d{6,})/);
+    if (mAcc) { var an = mAcc[1].replace(/[^0-9]/g, ''); if (acctMap[an]) bank = acctMap[an]; continue; }
+    var m61 = L.match(/^:61:(\d{2})(\d{2})(\d{2})\d{0,4}(C|D)(\d+,\d{2})\S*?(\S{0,16})$/);
+    if (m61) {
+      flush();
+      cur = {
+        date: '20' + m61[1] + '-' + m61[2] + '-' + m61[3],
+        dir:  m61[4] === 'C' ? 'IN' : 'OUT',
+        amt:  parseFloat(m61[5].replace(',', '.')) || 0,
+        ref:  m61[6] || ('L' + i),
+        desc: []
+      };
+      continue;
+    }
+    if (cur) {
+      if (L.indexOf(':86:') === 0) { cur.desc.push(L.slice(4)); continue; }
+      if (L.charAt(0) !== ':' && L.charAt(0) !== '-' && L.charAt(0) !== '{') { cur.desc.push(L); continue; }
+      if (L.indexOf(':6') === 0 || L.indexOf('-}') === 0) flush();
+    }
+  }
+  flush();
+  return count;
 }
 
 // หา header แล้วอ่านแถว: วันที่ / ถอน(เดบิต) / ฝาก(เครดิต) / รายละเอียด
