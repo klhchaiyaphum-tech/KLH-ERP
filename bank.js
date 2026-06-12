@@ -140,6 +140,105 @@ function dailyBankJob() {
   return res;
 }
 
+// ════════════════════════════════════════════════════════════
+//  หน้าสมุดเงินธนาคาร (?page=bank) — ดู/แก้/เพิ่ม BANK_TRANSACTIONS
+//  CATEGORY: SALE=ยอดขาย · TRANSFER=โยกเงิน · PAYMENT=ชำระหนี้ · EXPENSE=ค่าใช้จ่าย
+// ════════════════════════════════════════════════════════════
+
+// รายการเดือนนั้น พร้อมเลขแถวจริง (ไว้แก้ไขกลับ)
+function getBankTxns(yyyymm) {
+  try {
+    var ym = yyyymm || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
+    var s = bankSheet_();
+    var out = [];
+    if (s.getLastRow() > 1) {
+      var rows = s.getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) {
+        var d = rows[i][0] instanceof Date
+          ? Utilities.formatDate(rows[i][0], 'Asia/Bangkok', 'yyyy-MM-dd')
+          : String(rows[i][0]);
+        if (d.slice(0, 7) !== ym) continue;
+        out.push({
+          row: i + 1, date: d,
+          bank: String(rows[i][1] || ''), dir: String(rows[i][2] || ''),
+          amount: Number(rows[i][3]) || 0, cat: String(rows[i][4] || ''),
+          subject: String(rows[i][5] || ''), note: String(rows[i][8] || '')
+        });
+      }
+    }
+    out.sort(function(a, b) { return a.date < b.date ? 1 : -1; });
+    return { ok: true, month: ym, txns: out };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// แก้หมวด + หมายเหตุ (ชำระหนี้ใคร / ค่าใช้จ่ายอะไร)
+function updateBankTxn(row, cat, note) {
+  try {
+    var s = bankSheet_();
+    if (row < 2 || row > s.getLastRow()) return { ok: false, msg: 'แถวไม่ถูกต้อง' };
+    s.getRange(row, 5).setValue(String(cat || ''));
+    s.getRange(row, 9).setValue(String(note || ''));
+    return { ok: true };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// เพิ่มรายการมือ (คีย์จาก statement เองได้)
+function addBankTxn(d) {
+  try {
+    if (!d || !d.date || !(Number(d.amount) > 0)) return { ok: false, msg: 'กรอกวันที่และยอดเงิน' };
+    var s = bankSheet_();
+    s.appendRow([String(d.date), String(d.bank || 'KTB'), String(d.dir || 'IN'),
+                 Number(d.amount), String(d.cat || ''), String(d.subject || 'คีย์มือ'),
+                 Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'),
+                 'MANUAL-' + Date.now(), String(d.note || '')]);
+    categorizeBankTxns_();
+    return { ok: true };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+function deleteBankTxn(row) {
+  try {
+    var s = bankSheet_();
+    if (row < 2 || row > s.getLastRow()) return { ok: false, msg: 'แถวไม่ถูกต้อง' };
+    s.deleteRow(row);
+    return { ok: true };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// จับคู่โยกเงินใหม่ทั้งเดือน (หลังแก้ข้อมูล)
+function recategorizeBank() {
+  try { categorizeBankTxns_(); return { ok: true }; }
+  catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// ── DEBUG: สแกนหาอีเมลธนาคารจริง 14 วัน — รันใน GAS Editor แล้วดู Log ──
+// ใช้ปรับ BANK_EMAIL_KTB / BANK_EMAIL_BAY และ regex ให้ตรงรูปแบบจริง
+function debugBankEmails() {
+  var queries = [
+    'from:krungthai.com', 'from:ktb.co.th', 'from:krungsri.com', 'from:bay.co.th',
+    'กรุงไทย', 'กรุงศรี', 'Krungthai', 'Krungsri', 'เงินเข้า', 'รับโอนเงิน'
+  ];
+  var since = Utilities.formatDate(new Date(Date.now() - 14*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+  var out = [];
+  queries.forEach(function(q) {
+    try {
+      var threads = GmailApp.search(q + ' after:' + since, 0, 5);
+      threads.forEach(function(th) {
+        var m = th.getMessages()[0];
+        var body = ''; try { body = m.getPlainBody().slice(0, 200).replace(/\s+/g, ' '); } catch(e) {}
+        var att = 0; try { att = m.getAttachments().length; } catch(e) {}
+        out.push('Q[' + q + '] FROM: ' + m.getFrom()
+          + '\n  SUBJ: ' + m.getSubject()
+          + '\n  ATT: ' + att + ' | AMT-PARSE: ' + extractAmount_(m.getSubject() + ' ' + body)
+          + '\n  BODY: ' + body.slice(0, 150));
+      });
+    } catch(e) { out.push('Q[' + q + '] ERROR: ' + e); }
+  });
+  var txt = out.length ? out.join('\n----------------\n') : 'ไม่พบอีเมลธนาคารใน 14 วัน — เช็คว่า Gmail บัญชีนี้รับอีเมลแจ้งเตือนธนาคารหรือไม่';
+  Logger.log(txt);
+  return txt;
+}
+
 // ตั้ง trigger รายวัน 06:00 (รันครั้งเดียวใน GAS Editor)
 function setupDailyBankTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t){

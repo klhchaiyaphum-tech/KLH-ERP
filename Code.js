@@ -22,7 +22,8 @@ function doGet(e) {
     line_shop:   'line_shop',      // LINE OA Shop (LIFF) — สั่งสินค้าผ่าน LINE
     tax:         'tax_estimate',   // ประมาณการ สรรพากร (ภพ.30)
     wms_analytics: 'wms_analytics',// วิเคราะห์คลัง ABC/EOQ/ROP/Dead stock
-    pl:          'pl'              // งบกำไรขาดทุน (Phase 6.3)
+    pl:          'pl',             // งบกำไรขาดทุน (Phase 6.3)
+    bank:        'bank_ledger'     // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
   };
   const tpl = pageMap[page] || 'main';
   const titles = {
@@ -40,7 +41,8 @@ function doGet(e) {
     line_shop: 'KLH สั่งสินค้า',
     tax: 'KLH ประมาณการ สรรพากร',
     wms_analytics: 'KLH วิเคราะห์คลัง',
-    pl: 'KLH งบกำไรขาดทุน'
+    pl: 'KLH งบกำไรขาดทุน',
+    bank: 'KLH สมุดเงินธนาคาร'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
   tmpl.fromPage = (e && e.parameter && e.parameter.from) || '';

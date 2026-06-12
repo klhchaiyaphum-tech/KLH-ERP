@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH สมุดเงินธนาคาร</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-soft:#FCE6DC;
+  --blue:#3A37C9; --blue-soft:#E7E7FA; --green:#2E9E55; --green-soft:#E6F5EC;
+  --amber:#D98A0B; --amber-soft:#FBF1DA; --red:#D9512B; --red-soft:#FBE5DD; --purple:#6A1B9A; --purple-soft:#EDE7F6;
+  --paper:#FFFFFF; --paper-2:#F8F4EC; --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90;
+  --line:#ECE6DA; --line-2:#E0D8C7;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif;
+  --ffn:"IBM Plex Sans",-apple-system,sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--ff); color:var(--ink); min-height:100vh; padding:18px 14px 40px; -webkit-font-smoothing:antialiased;
+  background:radial-gradient(900px 600px at 8% 2%,#FBDAC6 0%,transparent 55%),radial-gradient(800px 600px at 94% 6%,#F6E7CD 0%,transparent 52%),linear-gradient(160deg,#F1EBDE 0%,#ECE4D5 100%); }
+.num{ font-variant-numeric:tabular-nums; font-family:var(--ffn); }
+button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+input,select{ font-family:inherit; font-size:13.5px; border:1.5px solid var(--line-2); border-radius:10px; padding:8px 10px; outline:none; background:var(--paper); }
+input:focus,select:focus{ border-color:var(--coral); box-shadow:0 0 0 3px var(--coral-soft); }
+.win{ max-width:1100px; margin:0 auto; background:var(--paper); border:1px solid var(--line-2); border-radius:16px; overflow:hidden; box-shadow:0 30px 70px -30px rgba(60,40,25,.5); }
+.titlebar{ display:flex; align-items:center; gap:13px; padding:11px 16px; background:var(--paper-2); border-bottom:1px solid var(--line); }
+.lights{ display:flex; gap:8px; } .lights i{ width:12px; height:12px; border-radius:50%; display:block; }
+.lights .r{ background:#FF5F57; } .lights .y{ background:#FEBC2E; } .lights .g{ background:#28C840; }
+.tt{ font-size:13px; color:var(--ink-2); font-weight:600; }
+.phead{ display:flex; align-items:center; gap:14px; padding:16px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.phead .pic{ width:46px; height:46px; border-radius:13px; display:grid; place-items:center; color:#fff; font-size:21px; background:linear-gradient(135deg,#5B86E5,#3A37C9); }
+.phead h1{ font-size:19px; } .phead p{ font-size:12.5px; color:var(--ink-2); margin-top:2px; }
+.phead .actions{ margin-left:auto; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+.btn{ display:inline-flex; align-items:center; gap:6px; padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600; border:1px solid var(--line-2); background:var(--paper); color:var(--ink); }
+.btn.primary{ background:var(--coral); border-color:var(--coral); color:#fff; box-shadow:0 6px 14px -7px var(--coral); }
+.btn.green{ background:var(--green); border-color:var(--green); color:#fff; }
+.btn.sm{ padding:5px 10px; font-size:12px; border-radius:8px; }
+.body{ padding:16px 20px 22px; }
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px; margin-bottom:15px; }
+.kpi{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:13px 15px; }
+.kpi .kv{ font-family:var(--ffn); font-size:19px; font-weight:800; line-height:1; }
+.kpi .kk{ font-size:11.5px; color:var(--ink-2); margin-top:6px; }
+/* section (collapsible) */
+.sec{ border:1px solid var(--line); border-radius:14px; margin-bottom:11px; overflow:hidden; background:var(--paper); }
+.sec-h{ display:flex; align-items:center; gap:10px; padding:12px 15px; cursor:pointer; background:var(--paper-2); }
+.sec-h .dot{ width:11px; height:11px; border-radius:3px; flex:0 0 auto; }
+.sec-h b{ font-size:14px; flex:1; }
+.sec-h .sum{ font-family:var(--ffn); font-weight:800; font-size:15px; }
+.sec-h .cv{ color:var(--ink-3); transition:transform .15s; font-size:12px; }
+.sec.open .sec-h .cv{ transform:rotate(180deg); }
+.sec-b{ display:none; }
+.sec.open .sec-b{ display:block; }
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; padding:8px 11px; font-size:11px; font-weight:700; color:var(--ink-2); background:var(--paper-2); border-top:1px solid var(--line); border-bottom:1px solid var(--line); white-space:nowrap; }
+th.r{ text-align:right; }
+td{ padding:7px 11px; border-bottom:1px solid var(--line); vertical-align:middle; }
+td.r{ text-align:right; }
+tr:last-child td{ border-bottom:none; }
+tr:hover{ background:#FCE6DC44; }
+td input.note{ width:100%; min-width:140px; padding:5px 8px; font-size:12px; border-radius:8px; }
+td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
+.pill{ display:inline-flex; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+.pill.SALE{ background:var(--green-soft); color:var(--green); }
+.pill.TRANSFER{ background:var(--blue-soft); color:var(--blue); }
+.pill.PAYMENT{ background:var(--amber-soft); color:var(--amber); }
+.pill.EXPENSE{ background:var(--purple-soft); color:var(--purple); }
+.addbox{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 15px; margin-bottom:15px; }
+.addbox h2{ font-size:14px; margin-bottom:10px; }
+.addrow{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.err{ background:var(--red-soft); color:var(--red); padding:10px 13px; border-radius:11px; font-size:13px; margin-bottom:11px; }
+.okmsg{ background:var(--green-soft); color:var(--green); padding:10px 13px; border-radius:11px; font-size:13px; margin-bottom:11px; }
+.loading{ text-align:center; padding:36px; color:var(--ink-3); }
+.muted{ color:var(--ink-3); }
+.hint{ font-size:11.5px; color:var(--ink-3); margin-top:6px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+    <div class="tt">KLH · สมุดเงินธนาคาร</div>
+  </div>
+  <div class="phead">
+    <div class="pic">🏦</div>
+    <div><h1>สมุดเงินธนาคาร</h1><p>ตรวจทุกการเคลื่อนไหว · จับคู่โยกเงิน · เติมหมายเหตุ ชำระหนี้ใคร/ค่าใช้จ่ายอะไร</p></div>
+    <div class="actions">
+      <button class="btn" onclick="goBack()">← หน้าหลัก</button>
+      <input type="month" id="month">
+      <button class="btn primary" onclick="load()">โหลด</button>
+      <button class="btn" onclick="fetchEmails()" id="fetchBtn">📥 ดึงอีเมล</button>
+      <button class="btn" onclick="recat()" title="จับคู่ KTB ออก ↔ BAY เข้า ใหม่">🔁 จับคู่โยกเงิน</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="msg"></div>
+    <div class="kpis" id="kpis"></div>
+
+    <!-- เพิ่มรายการมือ (คีย์จาก statement) -->
+    <div class="addbox">
+      <h2>➕ เพิ่มรายการมือ (คีย์จาก statement ได้เลย)</h2>
+      <div class="addrow">
+        <input type="date" id="aDate">
+        <select id="aBank"><option value="KTB">กรุงไทย (KTB)</option><option value="BAY">กรุงศรี (BAY)</option></select>
+        <select id="aDir"><option value="IN">เงินเข้า</option><option value="OUT">เงินออก</option></select>
+        <input type="number" id="aAmt" placeholder="ยอดเงิน" style="width:120px">
+        <select id="aCat">
+          <option value="">หมวด (auto)</option><option value="SALE">ยอดขาย</option>
+          <option value="TRANSFER">โยกเงิน</option><option value="PAYMENT">ชำระหนี้</option><option value="EXPENSE">ค่าใช้จ่าย</option>
+        </select>
+        <input type="text" id="aNote" placeholder="หมายเหตุ เช่น จ่ายเจ้าหนี้ร้าน..." style="flex:1;min-width:160px">
+        <button class="btn green" onclick="addTxn()">บันทึก</button>
+      </div>
+      <div class="hint">เงินเข้า KTB = ฐานยอดขายภาษีอัตโนมัติ · ถ้า BAY เงินเข้ายอดเท่ากับ KTB เงินออกวันเดียวกัน → ระบบติ๊กเป็น "โยกเงิน" ให้เอง</div>
+    </div>
+
+    <div id="secs"><div class="loading">เลือกเดือนแล้วกด "โหลด"</div></div>
+  </div>
+</div>
+
+<script>
+var CATS = { SALE:'ยอดขาย', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย' };
+var _open = {};   // จำสถานะ ซ่อน/แสดง ต่อกลุ่ม
+
+function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+(function(){ var d=new Date();
+  document.getElementById('month').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
+  document.getElementById('aDate').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+})();
+
+function load(){
+  document.getElementById('secs').innerHTML='<div class="loading">กำลังโหลด...</div>';
+  google.script.run.withSuccessHandler(function(res){
+    if(!res||!res.ok){ document.getElementById('msg').innerHTML='<div class="err">'+((res&&res.msg)||'ผิดพลาด')+'</div>'; return; }
+    render(res.txns||[]);
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .getBankTxns(document.getElementById('month').value);
+}
+
+// แบ่ง 5 กลุ่มตามที่ตกลง
+function groupOf(t){
+  if (t.bank==='KTB' && t.dir==='IN')  return 'k_in';
+  if (t.bank==='KTB' && t.dir==='OUT') return 'k_out';
+  if (t.bank==='BAY' && t.dir==='IN')  return t.cat==='TRANSFER' ? 'b_tf' : 'b_in';
+  return 'b_out';
+}
+var GROUPS = [
+  { id:'k_in',  name:'KTB เงินเข้า (ฐานยอดขายภาษี)',          color:'#3A37C9' },
+  { id:'k_out', name:'KTB เงินออก (ทวนว่าโยกไป BAY ไหม)',      color:'#D98A0B' },
+  { id:'b_tf',  name:'BAY เงินเข้า = โยกเงินจาก KTB (ไม่นับขาย)', color:'#6A1B9A' },
+  { id:'b_in',  name:'BAY เงินโอนเข้าอื่น (นับเป็นยอดขาย)',     color:'#2E9E55' },
+  { id:'b_out', name:'BAY โยกออก/เช็คจ่าย (เติมหมายเหตุ: จ่ายใคร/ค่าอะไร)', color:'#D9512B' }
+];
+
+function render(txns){
+  // KPI
+  var sums = { k_in:0, k_out:0, b_tf:0, b_in:0, b_out:0 };
+  var grp  = { k_in:[], k_out:[], b_tf:[], b_in:[], b_out:[] };
+  txns.forEach(function(t){ var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount; });
+  document.getElementById('kpis').innerHTML =
+    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">KTB เข้า</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#D98A0B">฿'+nf(sums.k_out)+'</div><div class="kk">KTB ออก</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">BAY เข้า (โยกเงิน)</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_in)+'</div><div class="kk">BAY เข้าอื่น (ขาย)</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(sums.b_out)+'</div><div class="kk">BAY ออก/เช็คจ่าย</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_in)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>';
+
+  // sections
+  var h = '';
+  GROUPS.forEach(function(g){
+    var rows = grp[g.id];
+    var open = _open[g.id]!==false;   // เปิดเป็นค่าเริ่มต้น
+    h += '<div class="sec'+(open?' open':'')+'" id="sec-'+g.id+'">'
+      +'<div class="sec-h" onclick="toggleSec(\''+g.id+'\')">'
+      +'<span class="dot" style="background:'+g.color+'"></span><b>'+g.name+'</b>'
+      +'<span class="muted" style="font-size:12px">'+rows.length+' รายการ</span>'
+      +'<span class="sum num" style="color:'+g.color+'">฿'+nf(sums[g.id])+'</span><span class="cv">▼</span></div>'
+      +'<div class="sec-b">';
+    if (!rows.length) h += '<div class="loading" style="padding:18px">ไม่มีรายการ</div>';
+    else {
+      h += '<table><tr><th>วันที่</th><th class="r">ยอดเงิน</th><th>หมวด</th><th style="width:34%">หมายเหตุ (จ่ายใคร/ค่าอะไร)</th><th>ที่มา</th><th></th></tr>';
+      rows.forEach(function(t){
+        h += '<tr>'
+          +'<td class="num">'+t.date+'</td>'
+          +'<td class="r num" style="font-weight:700">฿'+nf(t.amount)+'</td>'
+          +'<td><select class="cat" id="cat-'+t.row+'">'
+            +Object.keys(CATS).map(function(c){ return '<option value="'+c+'"'+(t.cat===c?' selected':'')+'>'+CATS[c]+'</option>'; }).join('')
+          +'</select></td>'
+          +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
+          +'<td class="muted" style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
+          +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
+          +'<button class="btn sm" style="color:var(--red)" onclick="delTxn('+t.row+')">ลบ</button></td>'
+          +'</tr>';
+      });
+      h += '</table>';
+    }
+    h += '</div></div>';
+  });
+  document.getElementById('secs').innerHTML = h;
+}
+
+function toggleSec(id){
+  var el = document.getElementById('sec-'+id);
+  el.classList.toggle('open');
+  _open[id] = el.classList.contains('open');
+}
+
+function saveTxn(row){
+  google.script.run.withSuccessHandler(function(r){
+    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">✅ บันทึกแถวแล้ว</div>' : '<div class="err">'+r.msg+'</div>';
+    if (r.ok) load();
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .updateBankTxn(row, document.getElementById('cat-'+row).value, document.getElementById('note-'+row).value);
+}
+
+function delTxn(row){
+  if (!confirm('ลบรายการนี้?')) return;
+  google.script.run.withSuccessHandler(function(r){ if(r.ok) load(); else document.getElementById('msg').innerHTML='<div class="err">'+r.msg+'</div>'; })
+  .deleteBankTxn(row);
+}
+
+function addTxn(){
+  var d = {
+    date: document.getElementById('aDate').value,
+    bank: document.getElementById('aBank').value,
+    dir:  document.getElementById('aDir').value,
+    amount: Number(document.getElementById('aAmt').value)||0,
+    cat:  document.getElementById('aCat').value,
+    note: document.getElementById('aNote').value
+  };
+  google.script.run.withSuccessHandler(function(r){
+    if (!r.ok){ document.getElementById('msg').innerHTML='<div class="err">'+r.msg+'</div>'; return; }
+    document.getElementById('aAmt').value=''; document.getElementById('aNote').value='';
+    load();
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .addBankTxn(d);
+}
+
+function fetchEmails(){
+  var b=document.getElementById('fetchBtn'); b.disabled=true; b.textContent='กำลังอ่านอีเมล...';
+  google.script.run.withSuccessHandler(function(r){
+    b.disabled=false; b.textContent='📥 ดึงอีเมล';
+    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">'+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
+    load();
+  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📥 ดึงอีเมล'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .fetchBankEmails(7);
+}
+
+function recat(){
+  google.script.run.withSuccessHandler(function(){ load(); }).recategorizeBank();
+}
+</script>
+</body>
+</html>
