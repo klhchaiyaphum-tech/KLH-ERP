@@ -245,11 +245,22 @@ function getProfitLoss(yyyymm) {
 
     var totalRev  = revenue.klh + revenue.other;
     var totalCogs = cogs.klh + cogs.other;
+
+    // ค่าใช้จ่ายดำเนินงานจากสมุดเงินธนาคาร (EXPENSE/PAYMENT ตามผังบัญชี — ผังเงินข้อ 5)
+    var opex = { total: 0, rows: [], unspecified: 0 };
+    try {
+      var be = getBankExpenses(ym);
+      if (be && be.ok) opex = { total: be.total, rows: be.rows, unspecified: be.unspecified };
+    } catch(e2) {}
+
+    var gross = totalRev - totalCogs;
     return {
       ok: true, month: ym,
       revenue: revenue, cogs: cogs, purchases: purchases,
-      totals: { revenue: totalRev, cogs: totalCogs, gross: totalRev - totalCogs,
-                margin: totalRev > 0 ? (totalRev - totalCogs) / totalRev * 100 : 0 },
+      totals: { revenue: totalRev, cogs: totalCogs, gross: gross,
+                margin: totalRev > 0 ? gross / totalRev * 100 : 0,
+                opex: opex.total, net: gross - opex.total },
+      opex: opex,
       klh: { revenue: revenue.klh, cogs: cogs.klh, gross: revenue.klh - cogs.klh },
       byEntity: entityRows,
       itemsNoCost: unkCost

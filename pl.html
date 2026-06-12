@@ -110,7 +110,11 @@ function render(r){
     +'<div class="plrow"><span class="ind">— ต้นทุนสินค้า KLH</span><span class="num">(฿'+nf(r.cogs.klh)+')</span></div>'
     +'<div class="plrow"><span class="ind">— ต้นทุนสินค้านิติอื่น</span><span class="num">(฿'+nf(r.cogs.other)+')</span></div>'
     +'<div class="plrow total"><span>กำไรขั้นต้น</span><b class="num '+(t.gross>=0?'pos':'neg')+'">฿'+nf(t.gross)+'</b></div>'
+    +'<div class="plrow"><span>หัก ค่าใช้จ่ายดำเนินงาน (จากสมุดเงินธนาคาร)</span><b class="num">(฿'+nf(t.opex||0)+')</b></div>'
+    +(r.opex&&r.opex.rows?r.opex.rows.map(function(x){ return '<div class="plrow"><span class="ind">— '+x.account+'</span><span class="num">(฿'+nf(x.amount)+')</span></div>'; }).join(''):'')
+    +'<div class="plrow total"><span>กำไรสุทธิ</span><b class="num '+((t.net||0)>=0?'pos':'neg')+'">฿'+nf(t.net||0)+'</b></div>'
     +(r.itemsNoCost>0?'<div class="hint">⚠️ มี '+r.itemsNoCost+' รายการขายที่ยังไม่มีต้นทุนใน KLH DATA (ไม่ถูกนับใน COGS) — ไปกรอกต้นทุนใน Survey</div>':'')
+    +(r.opex&&r.opex.unspecified>0?'<div class="hint">⚠️ ค่าใช้จ่าย ฿'+nf(r.opex.unspecified)+' ยังไม่ระบุผังบัญชี — ไประบุในสมุดเงินธนาคาร</div>':'')
     +'</div>';
 
   h += '<div class="sec"><h2>🧾 ยอดซื้อเข้าเดือนนี้ (อ้างอิงกระแสเงิน)</h2>'

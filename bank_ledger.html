@@ -89,7 +89,8 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <input type="month" id="month">
       <button class="btn primary" onclick="load()">โหลด</button>
       <button class="btn" onclick="fetchEmails()" id="fetchBtn">📥 ดึงอีเมล</button>
-      <button class="btn" onclick="recat()" title="จับคู่ KTB ออก ↔ BAY เข้า ใหม่">🔁 จับคู่โยกเงิน</button>
+      <button class="btn" onclick="importStmt()" id="stmtBtn">📂 นำเข้า statement</button>
+      <button class="btn" onclick="recat()" title="จับคู่โยกเงินใหม่ทั้ง 3 บัญชี">🔁 จับคู่โยกเงิน</button>
     </div>
   </div>
   <div class="body">
@@ -101,7 +102,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <h2>➕ เพิ่มรายการมือ (คีย์จาก statement ได้เลย)</h2>
       <div class="addrow">
         <input type="date" id="aDate">
-        <select id="aBank"><option value="KTB">กรุงไทย (KTB)</option><option value="BAY">กรุงศรี (BAY)</option></select>
+        <select id="aBank"><option value="KTB">กรุงไทย ออมทรัพย์</option><option value="BAY">กรุงศรี ออมทรัพย์</option><option value="BAYC">กรุงศรี กระแสรายวัน</option></select>
         <select id="aDir"><option value="IN">เงินเข้า</option><option value="OUT">เงินออก</option></select>
         <input type="number" id="aAmt" placeholder="ยอดเงิน" style="width:120px">
         <select id="aCat">
@@ -119,7 +120,8 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 </div>
 
 <script>
-var CATS = { SALE:'ยอดขาย', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย' };
+var CATS = { SALE:'ยอดขาย', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
+var ACCTS = ['', 'ชำระเจ้าหนี้การค้า', 'ค่าธรรมเนียมธนาคาร', 'ค่าน้ำประปา', 'ค่าไฟฟ้า', 'ค่าโทรศัพท์/เน็ต', 'เงินเดือน/ค่าแรง', 'ค่าขนส่ง', 'ค่าเช่า', 'ภาษี', 'อื่นๆ'];
 var _open = {};   // จำสถานะ ซ่อน/แสดง ต่อกลุ่ม
 
 function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
@@ -139,33 +141,37 @@ function load(){
   .getBankTxns(document.getElementById('month').value);
 }
 
-// แบ่ง 5 กลุ่มตามที่ตกลง
+// แบ่ง 7 กลุ่มตามผังเงิน (KTB / กรุงศรีออมทรัพย์ / กรุงศรีกระแสรายวัน)
 function groupOf(t){
-  if (t.bank==='KTB' && t.dir==='IN')  return 'k_in';
-  if (t.bank==='KTB' && t.dir==='OUT') return 'k_out';
-  if (t.bank==='BAY' && t.dir==='IN')  return t.cat==='TRANSFER' ? 'b_tf' : 'b_in';
-  return 'b_out';
+  if (t.bank==='KTB')  return t.dir==='IN' ? 'k_in' : 'k_out';
+  if (t.bank==='BAY')  {
+    if (t.dir==='IN') return t.cat==='TRANSFER' ? 'b_tf' : 'b_pp';
+    return 'b_out';
+  }
+  return t.dir==='IN' ? 'bc_in' : 'bc_out';   // BAYC กระแสรายวัน
 }
 var GROUPS = [
-  { id:'k_in',  name:'KTB เงินเข้า (ฐานยอดขายภาษี)',          color:'#3A37C9' },
-  { id:'k_out', name:'KTB เงินออก (ทวนว่าโยกไป BAY ไหม)',      color:'#D98A0B' },
-  { id:'b_tf',  name:'BAY เงินเข้า = โยกเงินจาก KTB (ไม่นับขาย)', color:'#6A1B9A' },
-  { id:'b_in',  name:'BAY เงินโอนเข้าอื่น (นับเป็นยอดขาย)',     color:'#2E9E55' },
-  { id:'b_out', name:'BAY โยกออก/เช็คจ่าย (เติมหมายเหตุ: จ่ายใคร/ค่าอะไร)', color:'#D9512B' }
+  { id:'k_in',  name:'KTB เงินเข้า (ยอดขาย KLH ทั้งหมด)',                    color:'#3A37C9' },
+  { id:'k_out', name:'KTB เงินออก (โยกไป BAY · ไม่ตรง = ค่าธรรมเนียม/ค่าบัญชี)', color:'#D98A0B' },
+  { id:'b_pp',  name:'BAY PromptPay เข้า = ลูกค้าโอน (⚠️ เสีย 0.5% — แจ้งย้ายไป KTB)', color:'#2E9E55' },
+  { id:'b_tf',  name:'BAY เงินเข้า = โยกเงินจาก KTB (ไม่นับขาย)',              color:'#6A1B9A' },
+  { id:'b_out', name:'BAY ออมทรัพย์ ออก (โยกไปกระแสฯ · ไม่ตรง = ค่าน้ำ/อื่นๆ)',  color:'#EBA13C' },
+  { id:'bc_in', name:'กรุงศรีกระแสฯ เข้า (โยกจากออมทรัพย์)',                   color:'#1565C0' },
+  { id:'bc_out',name:'กรุงศรีกระแสฯ จ่ายออก (ชำระหนี้/ค่าใช้จ่าย — ระบุผังบัญชี)', color:'#D9512B' }
 ];
 
 function render(txns){
   // KPI
-  var sums = { k_in:0, k_out:0, b_tf:0, b_in:0, b_out:0 };
-  var grp  = { k_in:[], k_out:[], b_tf:[], b_in:[], b_out:[] };
+  var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0 };
+  var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[] };
   txns.forEach(function(t){ var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount; });
   document.getElementById('kpis').innerHTML =
-    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">KTB เข้า</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D98A0B">฿'+nf(sums.k_out)+'</div><div class="kk">KTB ออก</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">BAY เข้า (โยกเงิน)</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_in)+'</div><div class="kk">BAY เข้าอื่น (ขาย)</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(sums.b_out)+'</div><div class="kk">BAY ออก/เช็คจ่าย</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_in)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>';
+    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">KTB เข้า (ขาย)</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">BAY PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน KTB→BAY</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#1565C0">฿'+nf(sums.bc_in)+'</div><div class="kk">เข้ากระแสรายวัน</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(sums.bc_out+sums.b_out)+'</div><div class="kk">จ่ายออก/ค่าใช้จ่าย</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_pp)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>';
 
   // sections
   var h = '';
@@ -180,7 +186,7 @@ function render(txns){
       +'<div class="sec-b">';
     if (!rows.length) h += '<div class="loading" style="padding:18px">ไม่มีรายการ</div>';
     else {
-      h += '<table><tr><th>วันที่</th><th class="r">ยอดเงิน</th><th>หมวด</th><th style="width:34%">หมายเหตุ (จ่ายใคร/ค่าอะไร)</th><th>ที่มา</th><th></th></tr>';
+      h += '<table><tr><th>วันที่</th><th class="r">ยอดเงิน</th><th>หมวด</th><th>ผังบัญชี</th><th style="width:26%">หมายเหตุ (จ่ายใคร/ค่าอะไร)</th><th>ที่มา</th><th></th></tr>';
       rows.forEach(function(t){
         h += '<tr>'
           +'<td class="num">'+t.date+'</td>'
@@ -188,8 +194,11 @@ function render(txns){
           +'<td><select class="cat" id="cat-'+t.row+'">'
             +Object.keys(CATS).map(function(c){ return '<option value="'+c+'"'+(t.cat===c?' selected':'')+'>'+CATS[c]+'</option>'; }).join('')
           +'</select></td>'
+          +'<td><select class="cat" id="acc-'+t.row+'">'
+            +ACCTS.map(function(a){ return '<option value="'+a+'"'+(t.account===a?' selected':'')+'>'+(a||'—')+'</option>'; }).join('')
+          +'</select></td>'
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
-          +'<td class="muted" style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
+          +'<td class="muted" style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
           +'<button class="btn sm" style="color:var(--red)" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
@@ -212,7 +221,7 @@ function saveTxn(row){
     document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">✅ บันทึกแถวแล้ว</div>' : '<div class="err">'+r.msg+'</div>';
     if (r.ok) load();
   }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
-  .updateBankTxn(row, document.getElementById('cat-'+row).value, document.getElementById('note-'+row).value);
+  .updateBankTxn(row, document.getElementById('cat-'+row).value, document.getElementById('note-'+row).value, document.getElementById('acc-'+row).value);
 }
 
 function delTxn(row){
@@ -250,6 +259,16 @@ function fetchEmails(){
 
 function recat(){
   google.script.run.withSuccessHandler(function(){ load(); }).recategorizeBank();
+}
+
+function importStmt(){
+  var b=document.getElementById('stmtBtn'); b.disabled=true; b.textContent='กำลังนำเข้า...';
+  google.script.run.withSuccessHandler(function(r){
+    b.disabled=false; b.textContent='📂 นำเข้า statement';
+    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">✅ '+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
+    load();
+  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📂 นำเข้า statement'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .importBayStatements();
 }
 </script>
 </body>
