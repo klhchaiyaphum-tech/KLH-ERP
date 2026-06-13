@@ -242,7 +242,8 @@ function importBayStatements() {
           continue;
         }
         if (mime === MimeType.CSV || /\.csv$/i.test(name)) {
-          grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8'));
+          // ตัด BOM (กรุงศรี export มี U+FEFF นำหน้า ทำให้ parse เพี้ยน)
+          grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8').replace(/^﻿/, ''));
         } else if (mime === MimeType.GOOGLE_SHEETS) {
           grid = SpreadsheetApp.openById(f.getId()).getSheets()[0].getDataRange().getValues();
         } else if (/\.xlsx?$/i.test(name) || mime === MimeType.MICROSOFT_EXCEL) {
@@ -251,12 +252,13 @@ function importBayStatements() {
           grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
         } else { continue; }   // ข้ามไฟล์ชนิดอื่น
 
-        // เลือก parser: Krungsri StatementInquiry (ไม่มี header, มีแถว B/F) หรือแบบมี header
-        var isKrungsri = false;
-        for (var gi = 0; gi < Math.min(grid.length, 4); gi++) {
-          var g4 = String((grid[gi] || [])[4] || '');
-          var g0 = String((grid[gi] || [])[0] || '');
-          if (g4 === 'B/F' || /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:/.test(g0)) { isKrungsri = true; break; }
+        // เลือก parser: ชื่อไฟล์ StatementInquiry = กรุงศรี · หรือเจอ B/F / วันเวลา ในไฟล์
+        var isKrungsri = /statement\s*inquiry|inquiry/i.test(name);
+        if (!isKrungsri) {
+          for (var gi = 0; gi < Math.min(grid.length, 6); gi++) {
+            var rowStr = (grid[gi] || []).join('|');
+            if (/B\/F/.test(rowStr) || /\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/.test(rowStr)) { isKrungsri = true; break; }
+          }
         }
         var n = isKrungsri
           ? parseKrungsriCsv_(grid, name, s, seen, alerts)
@@ -421,7 +423,8 @@ function parseStatementGrid_(grid, bankCode, fileName, s, seen) {
     }
     if (hRow >= 0 && (cOut >= 0 || cIn >= 0)) break;
   }
-  if (hRow < 0 || cDate < 0) throw new Error('หา header วันที่/ฝาก/ถอน ไม่เจอ');
+  // fallback: ถ้าไม่เจอ header → ลอง parser กรุงศรี (กันไฟล์รูปแบบไม่คาดคิด) ไม่ throw ให้ batch ล้ม
+  if (hRow < 0 || cDate < 0) return parseKrungsriCsv_(grid, fileName, s, seen, []);
 
   var count = 0;
   for (var r = hRow + 1; r < grid.length; r++) {
