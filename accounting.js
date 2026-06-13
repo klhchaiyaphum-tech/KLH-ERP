@@ -398,6 +398,69 @@ function checkWeeklySalesTarget() {
   } catch(e) { Logger.log('checkWeeklySalesTarget: '+e); return 'error: '+e; }
 }
 
+// ════════════════════════════════════════════════════════════
+//  รายงานยอดขายรายวัน → LINE (แทนสคริปต์เก่า รายงานยอดเงิน)
+//  ยอดขาย POS เมื่อวาน (แยกนิติ) + เงินเข้าธนาคารเมื่อวาน + ยอดสะสมเดือนนี้
+// ════════════════════════════════════════════════════════════
+function dailySalesReport() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var tz = 'Asia/Bangkok';
+    var now  = new Date();
+    var yest = new Date(now.getTime() - 86400000);
+    var yStr = Utilities.formatDate(yest, tz, 'yyyy-MM-dd');
+    var today= Utilities.formatDate(now,  tz, 'yyyy-MM-dd');
+    var ym   = today.slice(0, 7);
+
+    function dOf(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v||'').slice(0,10); }
+
+    // ── ยอดขาย POS (SALES_HEADER: 2 PAID_DATE, 4 ENTITY, 9 TOTAL) ──
+    var dayPos = 0, mtdPos = 0, byEnt = {};
+    var sh = ss.getSheetByName('SALES_HEADER');
+    if (sh && sh.getLastRow() > 1) {
+      sh.getDataRange().getValues().slice(1).forEach(function(r){
+        var pd = dOf(r[2]); var tot = Number(r[9]) || 0;
+        if (pd === yStr) { dayPos += tot; var e = String(r[4]||'ไม่ระบุ'); byEnt[e] = (byEnt[e]||0) + tot; }
+        if (pd.slice(0,7) === ym && pd <= today) mtdPos += tot;
+      });
+    }
+
+    // ── เงินเข้าธนาคารเมื่อวาน (BANK_TRANSACTIONS IN ที่เป็นขาย) ──
+    var dayBankKtb = 0, dayBankBay = 0, mtdBank = 0;
+    var bk = ss.getSheetByName('BANK_TRANSACTIONS');
+    if (bk && bk.getLastRow() > 1) {
+      bk.getDataRange().getValues().slice(1).forEach(function(r){
+        var pd = dOf(r[0]); if (r[2] !== 'IN') return;
+        var cat = String(r[4]||''); if (cat === 'TRANSFER') return;
+        var amt = Number(r[3]) || 0;
+        if (pd === yStr) { if (r[1]==='KTB') dayBankKtb += amt; else dayBankBay += amt; }
+        if (pd.slice(0,7) === ym && pd <= today && (cat==='SALE'||cat==='AR')) mtdBank += amt;
+      });
+    }
+
+    var rnd = function(n){ return Math.round(n).toLocaleString(); };
+    var msg = '📊 รายงานยอดขาย KLH\n📅 เมื่อวาน ' + yStr + '\n――――――――\n'
+      + '💵 ยอดขาย POS: ฿' + rnd(dayPos) + '\n';
+    Object.keys(byEnt).forEach(function(e){ msg += '   • ' + e + ': ฿' + rnd(byEnt[e]) + '\n'; });
+    msg += '🏦 เงินเข้าธนาคาร: กรุงไทย ฿' + rnd(dayBankKtb) + ' · กรุงศรี ฿' + rnd(dayBankBay) + '\n'
+      + '――――――――\n'
+      + '📈 สะสมเดือนนี้ (' + ym + ')\n'
+      + '   ยอดขาย POS: ฿' + rnd(mtdPos) + '\n'
+      + '   เงินเข้าธนาคาร(ขาย): ฿' + rnd(mtdBank);
+    sendWmsLine_(msg);
+    return msg;
+  } catch(e) { Logger.log('dailySalesReport: ' + e); return 'error: ' + e; }
+}
+
+// ตั้ง trigger รายงานยอดขายทุกเช้า (ค่าเริ่มต้น 08:00 — เปลี่ยนเลขชั่วโมงได้)
+function setupDailySalesTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if (t.getHandlerFunction() === 'dailySalesReport') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('dailySalesReport').timeBased().everyDays(1).atHour(8).create();
+  return 'ตั้งรายงานยอดขายเข้า LINE ทุกวัน 08:00 แล้ว';
+}
+
 // ตั้ง trigger รายสัปดาห์ (รันครั้งเดียวใน GAS Editor)
 function setupWeeklyTaxTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t){
