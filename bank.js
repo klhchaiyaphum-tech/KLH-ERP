@@ -26,6 +26,73 @@ function bankSheet_() {
   return s;
 }
 
+// ════════════════════════════════════════════════════════════
+//  ผังบัญชี (CHART_OF_ACCOUNTS) — เลขผัง · ชื่อ · ประเภท · ใช้งาน
+//  TYPE: รายได้ / ค่าใช้จ่าย / หนี้สิน / สินทรัพย์ / ทุน
+//  เฉพาะ TYPE='ค่าใช้จ่าย' เข้างบกำไรขาดทุน · หนี้สิน=งบดุล
+// ════════════════════════════════════════════════════════════
+var SH_COA = 'CHART_OF_ACCOUNTS';
+var H_COA  = ['CODE', 'NAME', 'TYPE', 'ACTIVE'];
+
+function chartSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName(SH_COA);
+  if (!s) {
+    s = ss.insertSheet(SH_COA);
+    s.getRange(1, 1, 1, 4).setValues([H_COA]).setBackground('#00695C').setFontColor('#fff').setFontWeight('bold');
+    s.setFrozenRows(1);
+    var seed = [
+      ['4100', 'รายได้จากการขาย',                'รายได้',     true],
+      ['4200', 'รายได้อื่น/เงินคืน',              'รายได้',     true],
+      ['5100', 'ต้นทุนขาย',                       'ค่าใช้จ่าย',  true],
+      ['5310', 'เงินเดือน/ค่าแรง',                'ค่าใช้จ่าย',  true],
+      ['5311', 'ประกันสังคม (นายจ้าง)',           'ค่าใช้จ่าย',  true],
+      ['5320', 'ค่าน้ำประปา',                     'ค่าใช้จ่าย',  true],
+      ['5321', 'ค่าไฟฟ้า',                        'ค่าใช้จ่าย',  true],
+      ['5322', 'ค่าโทรศัพท์/เน็ต',                'ค่าใช้จ่าย',  true],
+      ['5330', 'ค่าขนส่ง',                        'ค่าใช้จ่าย',  true],
+      ['5340', 'ค่าเช่า',                         'ค่าใช้จ่าย',  true],
+      ['5350', 'ค่าธรรมเนียมธนาคาร',              'ค่าใช้จ่าย',  true],
+      ['5351', 'ดอกเบี้ยธนาคาร',                  'ค่าใช้จ่าย',  true],
+      ['5400', 'ภาษี',                            'ค่าใช้จ่าย',  true],
+      ['5900', 'ค่าใช้จ่ายอื่น',                  'ค่าใช้จ่าย',  true],
+      ['2100', 'ชำระเจ้าหนี้การค้า',              'หนี้สิน',    true],
+      ['2210', 'เงินหักประกันสังคมพนักงาน',       'หนี้สิน',    true]
+    ];
+    s.getRange(2, 1, seed.length, 4).setValues(seed);
+  }
+  return s;
+}
+
+// ดึงผังบัญชี (เฉพาะที่ ACTIVE) → ใช้ในหน้า bank dropdown
+function getChartOfAccounts() {
+  try {
+    var s = chartSheet_();
+    var out = [];
+    if (s.getLastRow() > 1) {
+      s.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (r[3] === false || r[3] === 'FALSE') return;
+        var nm = String(r[1] || '').trim();
+        if (!nm) return;
+        out.push({ code: String(r[0] || ''), name: nm, type: String(r[2] || '') });
+      });
+    }
+    return { ok: true, accounts: out };
+  } catch(e) { return { ok: false, msg: e.toString(), accounts: [] }; }
+}
+
+// map ชื่อผัง → ประเภท (ใช้แยกค่าใช้จ่ายจริง vs หนี้สิน ในงบ P&L)
+function chartTypeMap_() {
+  var m = {};
+  try {
+    chartSheet_().getDataRange().getValues().slice(1).forEach(function(r) {
+      var nm = String(r[1] || '').trim();
+      if (nm) m[nm] = String(r[2] || '');
+    });
+  } catch(e) {}
+  return m;
+}
+
 // ดึงยอดเงินจากข้อความ (รองรับ "จำนวนเงิน 1,234.56 บาท" / "THB 1,234.56" / "1,234.56 บาท")
 function extractAmount_(text) {
   var m = String(text).match(/(?:จำนวนเงิน|ยอดเงิน|amount|THB|฿)[^0-9]{0,12}([0-9,]+\.?[0-9]{0,2})/i)
@@ -263,17 +330,27 @@ function importBayStatements() {
           grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
         } else { continue; }   // ข้ามไฟล์ชนิดอื่น
 
-        // เลือก parser: ชื่อไฟล์ StatementInquiry = กรุงศรี · หรือเจอ B/F / วันเวลา ในไฟล์
+        // KTB statement (ถอดรหัสแล้ว) — ชื่อ Historical_SSKB หรือเจอ "ถอนเงิน/ฝากเงิน" + ยอดคงเหลือยกมา
+        var isKtb = /Historical_SSKB|กรุงไทย/i.test(name);
+        if (!isKtb) {
+          for (var gk = 0; gk < Math.min(grid.length, 20); gk++) {
+            var rk = (grid[gk] || []).join('|');
+            if (/ถอนเงิน\/ฝากเงิน|ยอดคงเหลือยกมา/.test(rk)) { isKtb = true; break; }
+          }
+        }
+        // กรุงศรี: ชื่อ StatementInquiry · หรือเจอ B/F / วันเวลา
         var isKrungsri = /statement\s*inquiry|inquiry/i.test(name);
-        if (!isKrungsri) {
+        if (!isKtb && !isKrungsri) {
           for (var gi = 0; gi < Math.min(grid.length, 6); gi++) {
             var rowStr = (grid[gi] || []).join('|');
             if (/B\/F/.test(rowStr) || /\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/.test(rowStr)) { isKrungsri = true; break; }
           }
         }
-        var n = isKrungsri
-          ? parseKrungsriCsv_(grid, name, s, seen, alerts)
-          : parseStatementGrid_(grid, bankCode, name, s, seen);
+        var n = isKtb
+          ? parseKtbStatementGrid_(grid, name, s, seen)
+          : (isKrungsri
+              ? parseKrungsriCsv_(grid, name, s, seen, alerts)
+              : parseStatementGrid_(grid, bankCode, name, s, seen));
         imported += n; fileCount++;
         f.moveTo(done);
       } catch(e) { errs.push(name + ': ' + e.message); }
@@ -346,6 +423,53 @@ function parseMt940_(text, s, seen) {
     }
   }
   flush();
+  return count;
+}
+
+// ── KTB statement (ถอดรหัสแล้ว xls/csv) — คอลัมน์รวม "ถอนเงิน/ฝากเงิน" + ยอดคงเหลือบอกทิศทาง ──
+// header: วันที่/เวลา | รายการ(code) | รายละเอียด | หมายเลขเช็ค | ถอนเงิน/ฝากเงิน | ภาษี | ยอดคงเหลือ | ช่องทาง
+// ทิศทาง: ยอดคงเหลือเพิ่ม = เข้า · ลด = ออก · PromptPay(MORPSD/NMPSDP/IORSDT) = ขาย · อื่น = รายได้อื่น
+function parseKtbStatementGrid_(grid, fileName, s, seen) {
+  var hRow = -1, cDate = 0, cCode = 1, cDetail = 2, cAmt = 4, cBal = 6;
+  for (var i = 0; i < Math.min(grid.length, 20); i++) {
+    var row = (grid[i] || []).map(function(x){ return String(x || ''); });
+    if (row.some(function(c){ return /ยอดคงเหลือ/.test(c); }) && row.some(function(c){ return /วันที่/.test(c); })) {
+      hRow = i;
+      for (var j = 0; j < row.length; j++) {
+        if (/วันที่/.test(row[j])) cDate = j;
+        if (/ถอน|ฝาก/.test(row[j])) cAmt = j;
+        if (/คงเหลือ/.test(row[j])) cBal = j;
+        if (/รายละเอียด/.test(row[j])) cDetail = j;
+        if (/^รายการ$/.test(row[j].trim())) cCode = j;
+      }
+      break;
+    }
+  }
+  if (hRow < 0) return 0;
+
+  var prev = null, count = 0, now = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm');
+  function num(v){ var n = parseFloat(String(v).replace(/[, ]/g, '')); return isNaN(n) ? null : n; }
+  for (var r = hRow + 1; r < grid.length; r++) {
+    var dtRaw = String(grid[r][cDate] || '').trim();
+    var bal = num(grid[r][cBal]);
+    if (!/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dtRaw)) { if (bal !== null) prev = bal; continue; }  // B/F
+    if (bal === null) continue;
+    var amt = Math.abs(num(grid[r][cAmt]) || 0);
+    var delta = (prev !== null) ? (bal - prev) : 0;
+    var dir = delta > 0 ? 'IN' : (delta < 0 ? 'OUT' : (amt > 0 ? 'IN' : ''));
+    if (!dir) { prev = bal; continue; }
+    if (amt <= 0) amt = Math.abs(delta);
+    var d = parseThaiDate_(dtRaw);
+    var detail = (String(grid[r][cCode] || '') + ' ' + String(grid[r][cDetail] || '')).replace(/\s+/g, ' ').trim().slice(0, 120);
+    var cat = '';
+    if (dir === 'IN') cat = /MORPSD|NMPSDP|IORSDT|promptpay|orft/i.test(detail) ? 'SALE' : 'OTHER';
+    var key = 'STMT-KTB-' + d + '-' + dir + '-' + amt + '-' + bal;   // ยอดคงเหลือ = unique ต่อรายการ
+    if (!seen[key]) {
+      s.appendRow([d, 'KTB', dir, amt, cat, detail, now, key, '', '']);
+      seen[key] = 1; count++;
+    }
+    prev = bal;
+  }
   return count;
 }
 
@@ -571,6 +695,7 @@ function getBankExpenses(yyyymm) {
   try {
     var ym = yyyymm || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
     var s = bankSheet_();
+    var typeMap = chartTypeMap_();
     var by = {}, total = 0, unspecified = 0;
     if (s.getLastRow() > 1) {
       s.getDataRange().getValues().slice(1).forEach(function(r) {
@@ -580,7 +705,8 @@ function getBankExpenses(yyyymm) {
         if (cat !== 'EXPENSE') return;                    // เฉพาะค่าใช้จ่ายจริง (ชำระหนี้/หนี้สิน = งบดุล ไม่เข้า P&L)
         var amt = Number(r[3]) || 0;
         var acc = String(r[9] || '').trim();
-        if (/หนี้สิน/.test(acc)) return;                   // ผังที่เป็นหนี้สิน (เช่น เงินหักประกันสังคมพนักงาน) ไม่ใช่ค่าใช้จ่าย
+        var aType = typeMap[acc] || '';
+        if (aType === 'หนี้สิน' || aType === 'สินทรัพย์' || /หนี้สิน/.test(acc)) return;  // ไม่ใช่ค่าใช้จ่าย P&L
         if (!acc) { acc = 'ค่าใช้จ่ายอื่น (ยังไม่ระบุ)'; unspecified += amt; }
         by[acc] = (by[acc] || 0) + amt;
         total += amt;

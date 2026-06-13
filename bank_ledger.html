@@ -147,8 +147,13 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 
 <script>
 var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/เงินคืน', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
-var ACCTS = ['', 'ชำระเจ้าหนี้การค้า', 'ค่าธรรมเนียมธนาคาร', 'ดอกเบี้ยธนาคาร', 'ค่าน้ำประปา', 'ค่าไฟฟ้า', 'ค่าโทรศัพท์/เน็ต', 'เงินเดือน/ค่าแรง', 'ประกันสังคม (นายจ้าง)', 'เงินหักประกันสังคมพนักงาน (หนี้สิน)', 'ค่าขนส่ง', 'ค่าเช่า', 'ภาษี', 'อื่นๆ'];
-// หมายเหตุ: ผังที่มี "(หนี้สิน)" = งบดุล ไม่นับเป็นค่าใช้จ่ายในงบกำไรขาดทุน
+// ผังบัญชีโหลดจาก Sheet CHART_OF_ACCOUNTS — [{code,name,type}] · value=name (เก็บใน ACCOUNT)
+var ACCTS = [{code:'',name:'',type:''}];
+function loadChart(){
+  google.script.run.withSuccessHandler(function(r){
+    if (r && r.ok && r.accounts && r.accounts.length) ACCTS = [{code:'',name:'',type:''}].concat(r.accounts);
+  }).getChartOfAccounts();
+}
 var _open = {};   // จำสถานะ ซ่อน/แสดง ต่อกลุ่ม
 var _dayFilter = '';   // กรองเฉพาะวัน (จากตารางสรุปรายวัน)
 var _lastTxns = [];    // เก็บ txns ล่าสุด ไว้ re-render ตอนกรองวัน
@@ -160,6 +165,7 @@ function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'
 (function(){ var d=new Date();
   document.getElementById('month').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
   document.getElementById('aDate').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  loadChart();
 })();
 
 function load(){
@@ -260,7 +266,7 @@ function render(txns){
             +Object.keys(CATS).map(function(c){ return '<option value="'+c+'"'+(t.cat===c?' selected':'')+'>'+CATS[c]+'</option>'; }).join('')
           +'</select></td>'
           +'<td><select class="cat" id="acc-'+t.row+'">'
-            +ACCTS.map(function(a){ return '<option value="'+a+'"'+(t.account===a?' selected':'')+'>'+(a||'—')+'</option>'; }).join('')
+            +ACCTS.map(function(a){ var v=a.name||''; var lbl=v?((a.code?a.code+' ':'')+v):'—'; return '<option value="'+esc(v)+'"'+(t.account===v?' selected':'')+'>'+lbl+'</option>'; }).join('')
           +'</select></td>'
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
           +'<td class="muted" style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
