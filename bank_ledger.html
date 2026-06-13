@@ -96,6 +96,31 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
   </div>
   <div class="body">
     <div id="msg"></div>
+
+    <!-- กล่องวิธีใช้ (พับได้) -->
+    <div class="sec" id="sec-help" style="margin-bottom:15px">
+      <div class="sec-h" onclick="toggleSec('help')" style="background:var(--blue-soft)">
+        <span class="dot" style="background:var(--blue)"></span>
+        <b>ℹ️ วิธีใช้ + ปุ่มแต่ละปุ่มทำอะไร</b>
+        <span class="muted" style="font-size:11.5px">กดเพื่อเปิด/ปิด</span><span class="cv">▼</span>
+      </div>
+      <div class="sec-b" style="padding:14px 16px">
+        <div style="font-weight:700;margin-bottom:6px">ขั้นตอนดึงข้อมูล (เลือกเดือน → กดตามลำดับ)</div>
+        <ol style="margin:0 0 12px 18px;font-size:13px;line-height:1.9;color:var(--ink-2)">
+          <li><b>📥 ดึงอีเมล</b> — อ่านอีเมลธนาคารย้อนหลัง 15 วัน <b>กดครั้งเดียวพอ</b> (ดึงทุกฉบับที่ยังไม่เคยอ่าน กันซ้ำให้) · กรุงไทยจะแกะไฟล์ ZIP statement เอง · กรุงศรีจะได้ยอด PromptPay ลูกค้า</li>
+          <li><b>📂 นำเข้า statement</b> — อ่านไฟล์ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> (กรุงศรี ออมทรัพย์/กระแสรายวัน ที่ดาวน์โหลดมาวาง) แล้วย้ายไฟล์ไป "นำเข้าแล้ว"</li>
+          <li><b>🔁 จับคู่โยกเงิน</b> — จับคู่เงินโยกข้ามบัญชี (กรุงไทยออก↔กรุงศรีเข้า, ออมฯออก↔กระแสฯเข้า) ยอด+วันตรงกัน = "โยกเงิน" ไม่นับเป็นขาย</li>
+        </ol>
+        <div style="font-weight:700;margin-bottom:6px">ปุ่มอื่น</div>
+        <ul style="margin:0 0 12px 18px;font-size:13px;line-height:1.9;color:var(--ink-2)">
+          <li><b>โหลด</b> — แสดงรายการของเดือนที่เลือก (ไม่ดึงใหม่ แค่แสดงที่บันทึกไว้)</li>
+          <li><b>➕ เพิ่มรายการมือ</b> — คีย์เองจากกระดาษ statement กรณีไฟล์อ่านไม่ได้</li>
+          <li>ในแต่ละแถว: เลือก <b>หมวด</b> (ขาย/ตัดลูกหนี้/โยกเงิน/ชำระหนี้/ค่าใช้จ่าย) + <b>ผังบัญชี</b> + พิมพ์หมายเหตุ → กดบันทึก → ไหลเข้างบกำไรขาดทุน</li>
+        </ul>
+        <div class="hint" style="margin:0">🤖 อัตโนมัติ: ตั้ง <b>setupDailyBankTrigger()</b> (อีเมลทุก 06:00) + <b>setupDailyStatementTrigger()</b> (โฟลเดอร์ทุก 23:00) ใน GAS Editor ครั้งเดียว — หลังจากนั้น<b>ไม่ต้องกดเลย</b> ระบบดึง+เตือน LINE ให้เอง</div>
+      </div>
+    </div>
+
     <div class="kpis" id="kpis"></div>
 
     <!-- เพิ่มรายการมือ (คีย์จาก statement) -->
@@ -169,14 +194,23 @@ function render(txns){
   // KPI
   var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0 };
   var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[] };
-  txns.forEach(function(t){ var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount; });
+  // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT)
+  var cExp = 0, cPay = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
+  txns.forEach(function(t){
+    var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount;
+    if (t.cat==='EXPENSE') { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
+    else if (t.cat==='PAYMENT') cPay += t.amount;
+  });
+  var bn = { KTB:'กรุงไทย', BAY:'ออมฯ', BAYC:'กระแสฯ' };
+  var expBreak = ['KTB','BAY','BAYC'].filter(function(b){ return expBank[b]>0; })
+    .map(function(b){ return bn[b]+' ฿'+nf(expBank[b]); }).join(' · ') || 'ยังไม่มี';
   document.getElementById('kpis').innerHTML =
-    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">KTB เข้า (ขาย)</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">BAY PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน KTB→BAY</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#1565C0">฿'+nf(sums.bc_in)+'</div><div class="kk">เข้ากระแสรายวัน</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(sums.bc_out+sums.b_out)+'</div><div class="kk">จ่ายออก/ค่าใช้จ่าย</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_pp)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>';
+    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">กรุงไทย เข้า (ขาย)</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">กรุงศรี PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน กรุงไทย→กรุงศรี</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_pp)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(cPay)+'</div><div class="kk">ชำระเจ้าหนี้การค้า</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp)+'</div><div class="kk">ค่าใช้จ่าย<br><span style="font-size:10.5px">'+expBreak+'</span></div></div>';
 
   // ── สรุปรายวัน (overview) — คลิกวันเพื่อกรองดูเฉพาะวันนั้น ──
   var days = {};
@@ -189,7 +223,7 @@ function render(txns){
   });
   var dayKeys = Object.keys(days).sort().reverse();
   var dh = '<div class="sec open" id="sec-daily"><div class="sec-h" onclick="toggleSec(\'daily\')"><span class="dot" style="background:var(--coral)"></span><b>📅 สรุปรายวัน ('+dayKeys.length+' วัน)</b><span class="muted" style="font-size:11.5px">คลิกวันเพื่อดูเฉพาะวันนั้น</span><span class="cv">▼</span></div><div class="sec-b" id="sec-daily-b">'
-    + '<table><tr><th>วันที่</th><th class="r">KTB เข้า</th><th class="r">KTB ออก</th><th class="r">ออมฯ เข้า</th><th class="r">ออมฯ ออก</th><th class="r">กระแสฯ เข้า</th><th class="r">กระแสฯ ออก</th><th class="r">ยอดขายวัน</th></tr>';
+    + '<table><tr><th>วันที่</th><th class="r">กรุงไทย เข้า</th><th class="r">กรุงไทย ออก</th><th class="r">กรุงศรีออมฯ เข้า</th><th class="r">กรุงศรีออมฯ ออก</th><th class="r">กรุงศรีกระแสฯ เข้า</th><th class="r">กรุงศรีกระแสฯ ออก</th><th class="r">ยอดขายวัน</th></tr>';
   dayKeys.forEach(function(dk){ var d=days[dk];
     dh += '<tr style="cursor:pointer" onclick="filterDay(\''+dk+'\')"><td class="num" style="font-weight:600">'+dk+(_dayFilter===dk?' 🔎':'')+'</td>'
       +'<td class="r num" style="color:#3A37C9">'+(d.kIn?nf(d.kIn):'-')+'</td><td class="r num muted">'+(d.kOut?nf(d.kOut):'-')+'</td>'
