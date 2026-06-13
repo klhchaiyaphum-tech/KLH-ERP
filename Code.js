@@ -476,7 +476,7 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(surveySheet);
   const row = info.row === -1 ? sheet.getLastRow() + 1 : info.row;
 
-  const rowData = new Array(33).fill("");
+  const rowData = new Array(35).fill("");   // A–AI (35 คอลัมน์ รวมโหล AH/AI)
   rowData[0]  = barcodeSmall;
   rowData[1]  = info.name;
   rowData[2]  = info.category;
@@ -523,7 +523,7 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
     } catch(err) { Logger.log("Image save error: " + err); }
   }
 
-  sheet.getRange(row, 1, 1, 33).setValues([rowData]);
+  sheet.getRange(row, 1, 1, 35).setValues([rowData]);
 
   // บันทึก STOCK_LOG
   try {

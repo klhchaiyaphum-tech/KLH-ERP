@@ -180,8 +180,9 @@
         </div>
         <div class="ffield mb0">
           <label>ผู้จำหน่าย <span class="col">(G)</span></label>
+          <input class="inp" id="supSearch" placeholder="🔍 พิมพ์ค้นหาผู้จำหน่าย..." oninput="filterSup(this.value)" style="margin-bottom:6px;font-size:13px;">
           <div class="sel-row">
-            <select id="eSupCode"><option value="">-- เลือก --</option></select>
+            <select id="eSupCode" size="1"><option value="">-- เลือก --</option></select>
             <button class="round-btn" onclick="openSupModal()" title="เพิ่มผู้จัดจำหน่ายใหม่">🏢</button>
             <button class="round-btn" onclick="goToSupplierMaster()" title="จัดการ/แก้ไขทั้งหมด">✏️</button>
           </div>
@@ -454,12 +455,38 @@
     if (res.packages)   updateSel('ePackUnit',   res.packages,   'เลือกหน่วย');
     if (res.shops)      updateSel('eTaxEntity',  res.shops,      'เลือกร้าน');
     if (res.suppliers) {
-      const sel = document.getElementById('eSupCode');
-      const cur = sel.value;
-      sel.innerHTML = '<option value="">-- เลือกผู้จำหน่าย --</option>';
-      res.suppliers.forEach(s => sel.add(new Option(s.name, s.code)));
-      if (cur) sel.value = cur;
+      window._allSuppliers = res.suppliers;   // เก็บไว้ filter
+      buildSupOptions(document.getElementById('eSupCode').value, '');
     }
+  }
+
+  // สร้าง options ผู้จำหน่าย (กรองด้วยคำค้น) — คงค่าที่เลือกไว้
+  function buildSupOptions(curVal, q) {
+    const sel = document.getElementById('eSupCode');
+    const list = window._allSuppliers || [];
+    q = (q || '').toLowerCase().trim();
+    sel.innerHTML = '<option value="">-- เลือกผู้จำหน่าย --</option>';
+    let shown = 0;
+    list.forEach(s => {
+      const hay = ((s.name||'') + ' ' + (s.code||'')).toLowerCase();
+      if (!q || hay.indexOf(q) >= 0) { sel.add(new Option(s.name, s.code)); shown++; }
+    });
+    if (curVal) {
+      if (!Array.from(sel.options).some(o => o.value === curVal)) {
+        const f = list.filter(s => s.code === curVal)[0];
+        sel.add(new Option(f ? f.name : curVal, curVal));
+      }
+      sel.value = curVal;
+    }
+    return shown;
+  }
+
+  function filterSup(q) {
+    const n = buildSupOptions('', q);
+    const sel = document.getElementById('eSupCode');
+    // ถ้าเหลือตัวเดียว → เลือกให้เลย / ถ้าหลายตัว → เปิด list ให้เห็น
+    sel.size = (q && n > 1) ? Math.min(n + 1, 8) : 1;
+    if (q && n === 1) { sel.selectedIndex = 1; sel.size = 1; }
   }
 
   function refreshDropdowns(callback) {
@@ -700,9 +727,10 @@
     const K = I * (J/100);
     const N = (L+M) > 0 ? I * (M/(L+M)) : 0;
     document.getElementById('mN').value = N.toFixed(2);
-    const Q = I * vatRate;
+    const net = I - H - K - N;            // ต้นทุนสุทธิหลังหักส่วนลด/แถม (ก่อน VAT)
+    const Q = net * vatRate;              // VAT คิดบนยอดสุทธิ (ไม่ใช่ราคาก่อนลด)
     document.getElementById('mQ').value = Q > 0 ? Q.toFixed(2) : '0';
-    const R = (I - H - K - N) + Q + O;
+    const R = net + Q + O;                // = สุทธิ + VAT + ค่าขนส่ง
     document.getElementById('mResR').innerText = R.toFixed(2);
     document.getElementById('eCostR').value    = R.toFixed(2);
     document.getElementById('mS').value        = selected.wholesale_percent.toFixed(2);

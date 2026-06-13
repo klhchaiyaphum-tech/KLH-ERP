@@ -604,6 +604,19 @@ function recategorizeBank() {
   catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
+// ── TEST: ส่งข้อความทดสอบเข้า LINE — รันใน GAS Editor ดูว่าเข้าห้องไหม ──
+function testLine() {
+  var cfg = getConfig();
+  var dest = String(cfg.LINE_GROUP_ID || '');
+  var msg = '🔔 ทดสอบระบบ KLH\n'
+    + 'เวลา: ' + Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss') + '\n'
+    + 'ปลายทาง: ' + (dest.charAt(0) === 'C' ? 'ห้องกลุ่ม ✓' : (dest.charAt(0) === 'U' ? 'แชทส่วนตัว (U…)' : '?')) + '\n'
+    + 'ถ้าเห็นข้อความนี้ = ระบบส่ง LINE ได้ปกติ';
+  sendWmsLine_(msg);
+  Logger.log('ส่งไป: ' + dest + '\n' + msg);
+  return 'ส่งแล้ว → ' + dest;
+}
+
 // ── DEBUG: สแกนหาอีเมลธนาคารจริง 14 วัน — รันใน GAS Editor แล้วดู Log ──
 // ใช้ปรับ BANK_EMAIL_KTB / BANK_EMAIL_BAY และ regex ให้ตรงรูปแบบจริง
 function debugBankEmails() {
