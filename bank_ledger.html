@@ -254,7 +254,7 @@ function fetchEmails(){
     document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">'+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
     load();
   }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📥 ดึงอีเมล'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
-  .fetchBankEmails(7);
+  .fetchBankEmails(15);
 }
 
 function recat(){

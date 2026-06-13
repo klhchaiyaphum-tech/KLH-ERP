@@ -64,7 +64,7 @@ input:focus{ border-color:var(--coral); }
     <h2>🏦 ยอดเงินเข้าธนาคาร (จากอีเมลแจ้งเตือน)</h2>
     <div id="bankBody"><div class="loading">—</div></div>
     <div class="bar" style="margin:10px 0 0;border:none;padding:0;background:none">
-      <button class="btn" onclick="fetchBank()" id="fetchBtn">📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 7 วัน)</button>
+      <button class="btn" onclick="fetchBank()" id="fetchBtn">📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 15 วัน)</button>
     </div>
     <div class="hint">ระบบอ่านอีเมลจาก krungthai.com / krungsri.com อัตโนมัติทุกวัน 06:00 (รัน setupDailyBankTrigger ใน GAS Editor ครั้งเดียว) · ยอด KTB↔กรุงศรี ที่เท่ากันวันเดียวกัน = โยกเงิน ไม่นับขาย · เปลี่ยนผู้ส่งได้ใน CONFIG: BANK_EMAIL_KTB / BANK_EMAIL_BAY</div>
   </div>
@@ -141,11 +141,11 @@ function loadBank(ym){
 function fetchBank(){
   var btn=document.getElementById('fetchBtn'); btn.disabled=true; btn.textContent='กำลังอ่านอีเมล...';
   google.script.run.withSuccessHandler(function(r){
-    btn.disabled=false; btn.textContent='📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 7 วัน)';
+    btn.disabled=false; btn.textContent='📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 15 วัน)';
     document.getElementById('msg').innerHTML = r.ok?'':'<div class="err">'+r.msg+'</div>';
     loadBank(document.getElementById('month').value);
   }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='📥 ดึงอีเมลธนาคาร'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
-  .fetchBankEmails(7);
+  .fetchBankEmails(15);
 }
 
 function saveEst(){

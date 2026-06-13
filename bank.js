@@ -76,7 +76,9 @@ function fetchBankEmails(daysBack) {
           msg.getAttachments().forEach(function(att) {
             var nm = att.getName();
             if (/\.zip$/i.test(nm)) {
-              Utilities.unzip(att.copyBlob()).forEach(function(b) {
+              // ไฟล์แนบธนาคารมักส่ง content-type ผิด → บังคับเป็น zip ก่อนแกะ
+              var zb = att.copyBlob().setContentType('application/zip');
+              Utilities.unzip(zb).forEach(function(b) {
                 gotStmt += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
               });
             } else if (/\.txt$/i.test(nm)) {
@@ -226,7 +228,7 @@ function importBayStatements() {
         // ZIP (statement กรุงไทย MT940) หรือ .txt MT940 → อ่านตรง
         if (/\.zip$/i.test(name)) {
           var n0 = 0;
-          Utilities.unzip(f.getBlob()).forEach(function(b) {
+          Utilities.unzip(f.getBlob().setContentType('application/zip')).forEach(function(b) {
             n0 += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
           });
           imported += n0; fileCount++;
@@ -249,7 +251,16 @@ function importBayStatements() {
           grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
         } else { continue; }   // ข้ามไฟล์ชนิดอื่น
 
-        var n = parseStatementGrid_(grid, bankCode, name, s, seen);
+        // เลือก parser: Krungsri StatementInquiry (ไม่มี header, มีแถว B/F) หรือแบบมี header
+        var isKrungsri = false;
+        for (var gi = 0; gi < Math.min(grid.length, 4); gi++) {
+          var g4 = String((grid[gi] || [])[4] || '');
+          var g0 = String((grid[gi] || [])[0] || '');
+          if (g4 === 'B/F' || /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:/.test(g0)) { isKrungsri = true; break; }
+        }
+        var n = isKrungsri
+          ? parseKrungsriCsv_(grid, name, s, seen)
+          : parseStatementGrid_(grid, bankCode, name, s, seen);
         imported += n; fileCount++;
         f.moveTo(done);
       } catch(e) { errs.push(name + ': ' + e.message); }
@@ -315,6 +326,49 @@ function parseMt940_(text, s, seen) {
     }
   }
   flush();
+  return count;
+}
+
+// ── Krungsri StatementInquiry CSV (ไม่มี header, แถวแรก B/F ยอดยกมา) ──
+// คอลัมน์: 0 วันเวลา dd/mm/yyyy hh:mm:ss · 1 ถอน · 2 ฝาก · 3 คงเหลือ · 4 รหัส(TN/TW/TD/FE/DN/CL) · 5 รายละเอียด
+// แยกบัญชี: เจอ "รับโอนเงิน BAY K L H บัญชีต้นทาง" = กระแสรายวัน(BAYC) · เจอ "โอนเงิน BAY K L H บัญชีปลายทาง" = ออมทรัพย์(BAY)
+function parseKrungsriCsv_(grid, fileName, s, seen) {
+  var joined = grid.map(function(r){ return r.join('|'); }).join('\n');
+  var bank = 'BAY';
+  if (/กระแส|current|BAYC/i.test(fileName)) bank = 'BAYC';
+  else if (/รับโอนเงิน BAY K L H บัญชีต้นทาง/.test(joined)) bank = 'BAYC';
+  else if (/โอนเงิน BAY K L H บัญชีปลายทาง/.test(joined)) bank = 'BAY';
+
+  var count = 0;
+  for (var r = 0; r < grid.length; r++) {
+    var row = grid[r];
+    if (!row || row.length < 6) continue;
+    var dt = String(row[0] || '').trim();
+    if (!/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dt)) continue;        // ข้าม B/F และแถวว่าง
+    var d = parseThaiDate_(dt);
+    if (!d) continue;
+    var amtOut = Number(String(row[1]).replace(/[, ]/g, '')) || 0;
+    var amtIn  = Number(String(row[2]).replace(/[, ]/g, '')) || 0;
+    var code = String(row[4] || '').trim();
+    var desc = String(row[5] || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+
+    // pre-category จากรหัส/คำอธิบาย
+    var cat = '', acct = '';
+    if (code === 'FE') { cat = 'EXPENSE'; acct = 'ค่าธรรมเนียมธนาคาร'; }
+    else if (/K L H/.test(desc)) cat = 'TRANSFER';              // โยกเงินภายในชื่อตัวเอง
+    else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
+
+    var pair = [];
+    if (amtIn > 0)  pair.push(['IN', amtIn]);
+    if (amtOut > 0) pair.push(['OUT', amtOut]);
+    pair.forEach(function(p) {
+      var key = 'STMT-' + bank + '-' + dt + '-' + p[0] + '-' + p[1];
+      if (seen[key]) return;
+      s.appendRow([d, bank, p[0], p[1], cat, desc || ('statement: ' + fileName),
+                   Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', acct]);
+      seen[key] = 1; count++;
+    });
+  }
   return count;
 }
 
