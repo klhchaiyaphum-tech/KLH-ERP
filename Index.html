@@ -285,13 +285,14 @@
     <div class="sec-card" style="border-left:4px solid var(--dark);">
       <div class="sec-h"><div class="sec-chip" style="background:linear-gradient(135deg,#5A5752,#2B2A28)"><span class="sn">3</span>📷</div><h3>รูปภาพ &amp; บาร์โค้ด</h3></div>
       <div class="row2">
-        <button class="big-btn dark" style="margin-top:0" onclick="document.getElementById('pInp').click()">📸 ถ่ายรูป</button>
-        <button class="big-btn dark" style="margin-top:0" onclick="document.getElementById('bInp').click()">🔍 สแกนบาร์โค้ด</button>
+        <button class="big-btn" style="margin-top:0;background:linear-gradient(135deg,#FF8A3D,#E25E0E);color:#fff" onclick="document.getElementById('pInp').click()">📸 ถ่ายรูปสินค้า</button>
+        <button class="big-btn dark" style="margin-top:0" onclick="document.getElementById('bInp').click()">🔍 สแกนบาร์โค้ด (อ่านเลข)</button>
       </div>
       <input type="file" id="pInp" accept="image/*" capture="environment"
         onchange="handleP(this)" style="display:none">
       <input type="file" id="bInp" accept="image/*" capture="environment"
         onchange="handleB(this)" style="display:none">
+      <div id="photoEmpty" style="margin-top:10px;border:2px dashed var(--hair2);border-radius:14px;padding:22px;text-align:center;color:var(--ink3);font-size:13px;cursor:pointer" onclick="document.getElementById('pInp').click()">📷 ยังไม่มีรูปสินค้า — แตะเพื่อถ่าย</div>
       <img id="preview" class="ph-shot" style="display:none;">
 
       <div class="row2" style="margin-top:13px;">
@@ -609,6 +610,7 @@
     document.getElementById('eDate').value = new Date().toISOString().split('T')[0];
     imgData = null;
     document.getElementById('preview').style.display = 'none';
+    var _pe = document.getElementById('photoEmpty'); if (_pe) _pe.style.display = 'block';
     check();
   }
 
@@ -889,6 +891,7 @@
         imgData = c.toDataURL('image/jpeg', 0.85);
         document.getElementById('preview').src = imgData;
         document.getElementById('preview').style.display = 'block';
+        var pe = document.getElementById('photoEmpty'); if (pe) pe.style.display = 'none';
         check();
       };
       img.src = e.target.result;

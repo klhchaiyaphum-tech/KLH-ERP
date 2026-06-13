@@ -577,10 +577,11 @@ function getBankExpenses(yyyymm) {
         var d = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]);
         if (d.slice(0, 7) !== ym) return;
         var cat = String(r[4] || '');
-        if (cat !== 'EXPENSE' && cat !== 'PAYMENT') return;
+        if (cat !== 'EXPENSE') return;                    // เฉพาะค่าใช้จ่ายจริง (ชำระหนี้/หนี้สิน = งบดุล ไม่เข้า P&L)
         var amt = Number(r[3]) || 0;
         var acc = String(r[9] || '').trim();
-        if (!acc) { acc = cat === 'PAYMENT' ? 'ชำระเจ้าหนี้ (ยังไม่ระบุ)' : 'ค่าใช้จ่ายอื่น (ยังไม่ระบุ)'; unspecified += amt; }
+        if (/หนี้สิน/.test(acc)) return;                   // ผังที่เป็นหนี้สิน (เช่น เงินหักประกันสังคมพนักงาน) ไม่ใช่ค่าใช้จ่าย
+        if (!acc) { acc = 'ค่าใช้จ่ายอื่น (ยังไม่ระบุ)'; unspecified += amt; }
         by[acc] = (by[acc] || 0) + amt;
         total += amt;
       });
