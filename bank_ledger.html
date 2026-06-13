@@ -62,6 +62,7 @@ td input.note{ width:100%; min-width:140px; padding:5px 8px; font-size:12px; bor
 td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 .pill{ display:inline-flex; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
 .pill.SALE{ background:var(--green-soft); color:var(--green); }
+.pill.AR{ background:var(--blue-soft); color:var(--blue); }
 .pill.TRANSFER{ background:var(--blue-soft); color:var(--blue); }
 .pill.PAYMENT{ background:var(--amber-soft); color:var(--amber); }
 .pill.EXPENSE{ background:var(--purple-soft); color:var(--purple); }
@@ -120,7 +121,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 </div>
 
 <script>
-var CATS = { SALE:'ยอดขาย', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
+var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
 var ACCTS = ['', 'ชำระเจ้าหนี้การค้า', 'ค่าธรรมเนียมธนาคาร', 'ค่าน้ำประปา', 'ค่าไฟฟ้า', 'ค่าโทรศัพท์/เน็ต', 'เงินเดือน/ค่าแรง', 'ค่าขนส่ง', 'ค่าเช่า', 'ภาษี', 'อื่นๆ'];
 var _open = {};   // จำสถานะ ซ่อน/แสดง ต่อกลุ่ม
 

@@ -217,7 +217,7 @@ function importBayStatements() {
     if (s.getLastRow() > 1) s.getRange(2, 8, s.getLastRow()-1, 1).getValues().forEach(function(r){ if (r[0]) seen[String(r[0])] = 1; });
 
     var files = folder.getFiles();
-    var imported = 0, fileCount = 0, errs = [];
+    var imported = 0, fileCount = 0, errs = [], alerts = [];
     while (files.hasNext()) {
       var f = files.next();
       var name = f.getName();
@@ -259,7 +259,7 @@ function importBayStatements() {
           if (g4 === 'B/F' || /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:/.test(g0)) { isKrungsri = true; break; }
         }
         var n = isKrungsri
-          ? parseKrungsriCsv_(grid, name, s, seen)
+          ? parseKrungsriCsv_(grid, name, s, seen, alerts)
           : parseStatementGrid_(grid, bankCode, name, s, seen);
         imported += n; fileCount++;
         f.moveTo(done);
@@ -267,8 +267,9 @@ function importBayStatements() {
       finally { if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch(e2) {} } }
     }
 
-    var alerts = imported > 0 ? categorizeBankTxns_() : [];
-    if (alerts.length) sendWmsLine_('🏦 ตรวจ statement กรุงศรี:\n' + alerts.slice(0, 10).join('\n――――\n'));
+    if (imported > 0) alerts = alerts.concat(categorizeBankTxns_());
+    if (alerts.length) sendWmsLine_('🏦 ตรวจ statement ธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n')
+      + (alerts.length > 10 ? '\n…และอีก ' + (alerts.length - 10) + ' รายการ (ดูในสมุดเงินธนาคาร)' : ''));
     return { ok: errs.length === 0, files: fileCount, imported: imported,
              msg: 'นำเข้า ' + fileCount + ' ไฟล์ / ' + imported + ' รายการ' + (errs.length ? ' · ผิดพลาด: ' + errs.join(' | ') : '') };
   } catch(e) { return { ok: false, msg: e.toString() }; }
@@ -332,7 +333,8 @@ function parseMt940_(text, s, seen) {
 // ── Krungsri StatementInquiry CSV (ไม่มี header, แถวแรก B/F ยอดยกมา) ──
 // คอลัมน์: 0 วันเวลา dd/mm/yyyy hh:mm:ss · 1 ถอน · 2 ฝาก · 3 คงเหลือ · 4 รหัส(TN/TW/TD/FE/DN/CL) · 5 รายละเอียด
 // แยกบัญชี: เจอ "รับโอนเงิน BAY K L H บัญชีต้นทาง" = กระแสรายวัน(BAYC) · เจอ "โอนเงิน BAY K L H บัญชีปลายทาง" = ออมทรัพย์(BAY)
-function parseKrungsriCsv_(grid, fileName, s, seen) {
+function parseKrungsriCsv_(grid, fileName, s, seen, alerts) {
+  alerts = alerts || [];
   var joined = grid.map(function(r){ return r.join('|'); }).join('\n');
   var bank = 'BAY';
   if (/กระแส|current|BAYC/i.test(fileName)) bank = 'BAYC';
@@ -340,6 +342,9 @@ function parseKrungsriCsv_(grid, fileName, s, seen) {
   else if (/โอนเงิน BAY K L H บัญชีปลายทาง/.test(joined)) bank = 'BAY';
 
   var count = 0;
+  var fileKeys = {};            // กุญแจทุกแถวในไฟล์นี้ (ไว้เทียบหาเช็คคืน/แก้ไข)
+  var minD = null, maxD = null;
+
   for (var r = 0; r < grid.length; r++) {
     var row = grid[r];
     if (!row || row.length < 6) continue;
@@ -347,6 +352,8 @@ function parseKrungsriCsv_(grid, fileName, s, seen) {
     if (!/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dt)) continue;        // ข้าม B/F และแถวว่าง
     var d = parseThaiDate_(dt);
     if (!d) continue;
+    if (!minD || d < minD) minD = d;
+    if (!maxD || d > maxD) maxD = d;
     var amtOut = Number(String(row[1]).replace(/[, ]/g, '')) || 0;
     var amtIn  = Number(String(row[2]).replace(/[, ]/g, '')) || 0;
     var code = String(row[4] || '').trim();
@@ -354,8 +361,10 @@ function parseKrungsriCsv_(grid, fileName, s, seen) {
 
     // pre-category จากรหัส/คำอธิบาย
     var cat = '', acct = '';
+    var isCustomerIn = false;
     if (code === 'FE') { cat = 'EXPENSE'; acct = 'ค่าธรรมเนียมธนาคาร'; }
     else if (/K L H/.test(desc)) cat = 'TRANSFER';              // โยกเงินภายในชื่อตัวเอง
+    else if (amtIn > 0 && /รับโอนเงิน|จ่ายคิวอาร์|พร้อมเพย์/.test(desc)) { cat = 'SALE'; isCustomerIn = true; }
     else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
 
     var pair = [];
@@ -363,11 +372,38 @@ function parseKrungsriCsv_(grid, fileName, s, seen) {
     if (amtOut > 0) pair.push(['OUT', amtOut]);
     pair.forEach(function(p) {
       var key = 'STMT-' + bank + '-' + dt + '-' + p[0] + '-' + p[1];
+      fileKeys[key] = 1;
       if (seen[key]) return;
       s.appendRow([d, bank, p[0], p[1], cat, desc || ('statement: ' + fileName),
                    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', acct]);
       seen[key] = 1; count++;
+      // ลูกค้าโอนเข้า → เตือนเช็คตัดลูกหนี้ (AR)
+      if (isCustomerIn) {
+        alerts.push('🟧 ลูกค้าโอนเข้า ' + (bank === 'BAY' ? 'กรุงศรีออมฯ' : 'กรุงศรีกระแสฯ')
+          + ' ฿' + p[1].toLocaleString() + ' (' + d + ')\n' + desc.slice(0, 70)
+          + '\n→ เช็คว่าเป็นลูกหนี้ชำระหนี้ไหม → ตัด AR ใน Customer & AR แล้วเปลี่ยนหมวดเป็น "ตัดลูกหนี้"');
+      }
     });
+  }
+
+  // ── เช็คเปลี่ยนแปลง/เช็คคืน: แถวในชีต (ช่วงวันที่เดียวกัน) ที่หายไปจาก statement ล่าสุด ──
+  if (minD && maxD) {
+    var rows = s.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      var mid = String(rows[i][7] || '');
+      if (mid.indexOf('STMT-' + bank + '-') !== 0) continue;
+      var rd = rows[i][0] instanceof Date
+        ? Utilities.formatDate(rows[i][0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(rows[i][0]);
+      if (rd < minD || rd > maxD) continue;
+      if (!fileKeys[mid]) {
+        var note9 = String(rows[i][8] || '');
+        if (note9.indexOf('ไม่พบใน statement') < 0) {
+          s.getRange(i + 1, 9).setValue((note9 ? note9 + ' | ' : '') + '⚠️ไม่พบใน statement ล่าสุด (เช็คคืน/แก้ไข?)');
+          alerts.push('⚠️ รายการ ' + rd + ' ' + rows[i][2] + ' ฿' + Number(rows[i][3]).toLocaleString()
+            + ' (' + bank + ') หายจาก statement ล่าสุด — อาจมีเช็คคืน/ธนาคารแก้รายการ ตรวจในสมุดเงินธนาคาร');
+        }
+      }
+    }
   }
   return count;
 }
@@ -443,7 +479,7 @@ function getBankSummary(yyyymm) {
       if (cat === 'TRANSFER') { out.transfer += amt; return; }
       if (dir === 'IN') {
         if (bank === 'KTB') out.ktbIn += amt; else out.bayIn += amt;
-        if (cat === 'SALE') out.salesBase += amt;
+        if (cat === 'SALE' || cat === 'AR') out.salesBase += amt;   // AR = ลูกหนี้ชำระ ก็เป็นเงินเข้าฐานภาษี
       } else out.payment += amt;
     });
     return out;
