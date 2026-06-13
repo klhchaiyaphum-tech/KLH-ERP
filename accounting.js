@@ -253,14 +253,27 @@ function getProfitLoss(yyyymm) {
       if (be && be.ok) opex = { total: be.total, rows: be.rows, unspecified: be.unspecified };
     } catch(e2) {}
 
+    // รายได้อื่น (OTHER จากสมุดเงินธนาคาร เช่น ADJ FEE เงินคืน)
+    var otherIncome = 0;
+    try {
+      var bkt = ss.getSheetByName('BANK_TRANSACTIONS');
+      if (bkt && bkt.getLastRow() > 1) {
+        bkt.getDataRange().getValues().slice(1).forEach(function(r){
+          var d = r[0] instanceof Date ? Utilities.formatDate(r[0],'Asia/Bangkok','yyyy-MM-dd') : String(r[0]);
+          if (d.slice(0,7) === ym && String(r[4]) === 'OTHER') otherIncome += Number(r[3]) || 0;
+        });
+      }
+    } catch(e3) {}
+
     var gross = totalRev - totalCogs;
     return {
       ok: true, month: ym,
       revenue: revenue, cogs: cogs, purchases: purchases,
       totals: { revenue: totalRev, cogs: totalCogs, gross: gross,
                 margin: totalRev > 0 ? gross / totalRev * 100 : 0,
-                opex: opex.total, net: gross - opex.total },
-      opex: opex,
+                opex: opex.total, otherIncome: otherIncome,
+                net: gross + otherIncome - opex.total },
+      opex: opex, otherIncome: otherIncome,
       klh: { revenue: revenue.klh, cogs: cogs.klh, gross: revenue.klh - cogs.klh },
       byEntity: entityRows,
       itemsNoCost: unkCost

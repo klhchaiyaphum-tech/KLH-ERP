@@ -152,6 +152,17 @@ function categorizeBankTxns_() {
     return false;
   }
 
+  // แก้รายการเก่า: KTB เงินเข้าที่ติดเป็น "ขาย" แต่ไม่ใช่ PromptPay (เช่น ADJ FEE/เงินคืน) → รายได้อื่น
+  for (var z = 1; z < rows.length; z++) {
+    if (rows[z][1] === 'KTB' && rows[z][2] === 'IN'
+        && (rows[z][4] === 'SALE' || !rows[z][4])
+        && !/promptpay|orft|MORPSD|NMPSDP|IORSDT/i.test(String(rows[z][5]||''))) {
+      rows[z][4] = 'OTHER';
+      s.getRange(z+1, 5).setValue('OTHER');
+      if (!rows[z][8]) alerts.push('💡 กรุงไทยเงินเข้า ฿' + Number(rows[z][3]).toLocaleString() + ' (' + String(rows[z][0]).slice(0,10) + ') ไม่ใช่ PromptPay → ตั้งเป็น "รายได้อื่น/เงินคืน" (เช่น ADJ FEE) ตรวจ/ระบุในสมุดเงินธนาคาร');
+    }
+  }
+
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][4]) continue;   // จัดประเภทแล้ว
     var date = String(rows[i][0]), bank = rows[i][1], dir = rows[i][2], amt = Number(rows[i][3]);
@@ -299,7 +310,13 @@ function parseMt940_(text, s, seen) {
     var key = 'STMT-' + bank + '-' + cur.date + '-' + cur.dir + '-' + cur.amt + '-' + cur.ref;
     if (!seen[key]) {
       var desc = cur.desc.join(' ').replace(/\s+/g, ' ').trim().slice(0, 120);
-      s.appendRow([cur.date, bank, cur.dir, cur.amt, '', desc || ('MT940 ' + cur.ref),
+      // จัดหมวด: เงินเข้าที่เป็น PromptPay/ORFT = ยอดขายลูกค้า · นอกนั้น (ADJ FEE/ดอกเบี้ย/เงินคืน) = รายได้อื่น
+      var cat = '';
+      if (cur.dir === 'IN') {
+        var isPP = /promptpay|orft|MORPSD|NMPSDP|IORSDT/i.test(desc);
+        cat = isPP ? 'SALE' : 'OTHER';
+      }
+      s.appendRow([cur.date, bank, cur.dir, cur.amt, cat, desc || ('MT940 ' + cur.ref),
                    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', '']);
       seen[key] = 1; count++;
     }

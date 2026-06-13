@@ -110,6 +110,7 @@ function render(r){
     +'<div class="plrow"><span class="ind">— ต้นทุนสินค้า KLH</span><span class="num">(฿'+nf(r.cogs.klh)+')</span></div>'
     +'<div class="plrow"><span class="ind">— ต้นทุนสินค้านิติอื่น</span><span class="num">(฿'+nf(r.cogs.other)+')</span></div>'
     +'<div class="plrow total"><span>กำไรขั้นต้น</span><b class="num '+(t.gross>=0?'pos':'neg')+'">฿'+nf(t.gross)+'</b></div>'
+    +((t.otherIncome||0)>0?'<div class="plrow"><span>บวก รายได้อื่น/เงินคืน (จากสมุดเงินธนาคาร)</span><b class="num pos">฿'+nf(t.otherIncome)+'</b></div>':'')
     +'<div class="plrow"><span>หัก ค่าใช้จ่ายดำเนินงาน (จากสมุดเงินธนาคาร)</span><b class="num">(฿'+nf(t.opex||0)+')</b></div>'
     +(r.opex&&r.opex.rows?r.opex.rows.map(function(x){ return '<div class="plrow"><span class="ind">— '+x.account+'</span><span class="num">(฿'+nf(x.amount)+')</span></div>'; }).join(''):'')
     +'<div class="plrow total"><span>กำไรสุทธิ</span><b class="num '+((t.net||0)>=0?'pos':'neg')+'">฿'+nf(t.net||0)+'</b></div>'

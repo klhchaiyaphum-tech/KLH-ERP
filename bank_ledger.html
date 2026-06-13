@@ -146,7 +146,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 </div>
 
 <script>
-var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
+var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/เงินคืน', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
 var ACCTS = ['', 'ชำระเจ้าหนี้การค้า', 'ค่าธรรมเนียมธนาคาร', 'ค่าน้ำประปา', 'ค่าไฟฟ้า', 'ค่าโทรศัพท์/เน็ต', 'เงินเดือน/ค่าแรง', 'ค่าขนส่ง', 'ค่าเช่า', 'ภาษี', 'อื่นๆ'];
 var _open = {};   // จำสถานะ ซ่อน/แสดง ต่อกลุ่ม
 var _dayFilter = '';   // กรองเฉพาะวัน (จากตารางสรุปรายวัน)
@@ -195,11 +195,13 @@ function render(txns){
   var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0 };
   var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[] };
   // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT)
-  var cExp = 0, cPay = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
+  var cExp = 0, cPay = 0, cSale = 0, cOther = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
   txns.forEach(function(t){
     var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount;
     if (t.cat==='EXPENSE') { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
     else if (t.cat==='PAYMENT') cPay += t.amount;
+    else if (t.cat==='SALE' || t.cat==='AR') cSale += t.amount;
+    else if (t.cat==='OTHER') cOther += t.amount;
   });
   var bn = { KTB:'กรุงไทย', BAY:'ออมฯ', BAYC:'กระแสฯ' };
   var expBreak = ['KTB','BAY','BAYC'].filter(function(b){ return expBank[b]>0; })
@@ -208,7 +210,8 @@ function render(txns){
     '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">กรุงไทย เข้า (ขาย)</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">กรุงศรี PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน กรุงไทย→กรุงศรี</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(sums.k_in+sums.b_pp)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(cSale)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม<br><span style="font-size:10px">(ไม่รวมรายได้อื่น/โยกเงิน)</span></div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#00897B">฿'+nf(cOther)+'</div><div class="kk">รายได้อื่น/เงินคืน<br><span style="font-size:10px">เช่น ADJ FEE คืน</span></div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(cPay)+'</div><div class="kk">ชำระเจ้าหนี้การค้า</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp)+'</div><div class="kk">ค่าใช้จ่าย<br><span style="font-size:10.5px">'+expBreak+'</span></div></div>';
 
