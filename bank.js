@@ -449,6 +449,9 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
 
   var prev = null, count = 0, now = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm');
   function num(v){ var n = parseFloat(String(v).replace(/[, ]/g, '')); return isNaN(n) ? null : n; }
+
+  // ── pass 1: รวบรวมรายการใหม่ + หาช่วงวันที่ของ statement ──
+  var rows = [], minD = null, maxD = null;
   for (var r = hRow + 1; r < grid.length; r++) {
     var dtRaw = String(grid[r][cDate] || '').trim();
     var bal = num(grid[r][cBal]);
@@ -464,12 +467,28 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
     var cat = '';
     if (dir === 'IN') cat = /MORPSD|NMPSDP|IORSDT|promptpay|orft/i.test(detail) ? 'SALE' : 'OTHER';
     var key = 'STMT-KTB-' + d + '-' + dir + '-' + amt + '-' + bal;   // ยอดคงเหลือ = unique ต่อรายการ
-    if (!seen[key]) {
-      s.appendRow([d, 'KTB', dir, amt, cat, detail, now, key, '', '']);
-      seen[key] = 1; count++;
-    }
+    rows.push([d, 'KTB', dir, amt, cat, detail, now, key, '', '']);
+    if (!minD || d < minD) minD = d;
+    if (!maxD || d > maxD) maxD = d;
     prev = bal;
   }
+  if (!rows.length || !minD) return 0;
+
+  // ── authoritative replace: ลบแถว KTB เดิมในช่วงวันที่นี้ (กันซ้ำกับที่มาจากอีเมล) ──
+  if (s.getLastRow() > 1) {
+    var all = s.getRange(2, 1, s.getLastRow() - 1, 2).getValues();   // col1 DATE, col2 BANK
+    for (var i = all.length - 1; i >= 0; i--) {
+      var rd = all[i][0] instanceof Date
+        ? Utilities.formatDate(all[i][0], 'Asia/Bangkok', 'yyyy-MM-dd')
+        : String(all[i][0]).slice(0, 10);
+      if (String(all[i][1]) === 'KTB' && rd >= minD && rd <= maxD) s.deleteRow(i + 2);
+    }
+  }
+
+  // ── pass 2: ใส่รายการใหม่ (dedup ภายในไฟล์) ──
+  rows.forEach(function(row) {
+    if (!seen[row[7]]) { s.appendRow(row); seen[row[7]] = 1; count++; }
+  });
   return count;
 }
 
