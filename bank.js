@@ -110,8 +110,11 @@ function isIncoming_(text) {
 }
 
 // อ่านอีเมลธนาคารย้อนหลัง N วัน → เขียน BANK_TRANSACTIONS (กันซ้ำด้วย MSG_ID)
-function fetchBankEmails(daysBack) {
+// opts (ไม่บังคับ): { since:'yyyy/MM/dd', before:'yyyy/MM/dd', ktbOnly:true }
+// ใช้ดึงย้อนหลังเป็นช่วงเวลา เช่น ดึง KTB เดือน พ.ค. โดยไม่แตะกรุงศรี
+function fetchBankEmails(daysBack, opts) {
   try {
+    opts = opts || {};
     daysBack = Number(daysBack) || 3;
     var cfg = getConfig();
     var ktbFrom = String(cfg.BANK_EMAIL_KTB || 'krungthai.com').trim();
@@ -124,12 +127,13 @@ function fetchBankEmails(daysBack) {
       s.getRange(2, 8, s.getLastRow()-1, 1).getValues().forEach(function(r){ if (r[0]) seen[String(r[0])] = 1; });
     }
 
-    var since = Utilities.formatDate(new Date(Date.now() - daysBack*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+    var since = opts.since || Utilities.formatDate(new Date(Date.now() - daysBack*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+    var range = ' after:' + since + (opts.before ? ' before:' + opts.before : '');
     var added = 0, skipped = 0;
 
     // ── กรุงไทย: ใช้ "ไฟล์ statement แนบ (MT940 ใน ZIP)" เป็นแหล่งหลัก ──
     // อีเมลข้อความใช้เฉพาะ "โอนไปกรุงศรี" → บันทึกฝั่ง BAY IN (TRANSFER)
-    GmailApp.search('from:' + ktbFrom + ' after:' + since, 0, 50).forEach(function(th) {
+    GmailApp.search('from:' + ktbFrom + range, 0, 50).forEach(function(th) {
       th.getMessages().forEach(function(msg) {
         var id = msg.getId();
         if (seen[id]) { skipped++; return; }
@@ -172,7 +176,7 @@ function fetchBankEmails(daysBack) {
     });
 
     // ── กรุงศรี: อีเมล = PromptPay ลูกค้าเข้า (ยอดขาย + เตือน 0.5%) ──
-    GmailApp.search('from:' + bayFrom + ' after:' + since, 0, 50).forEach(function(th) {
+    if (!opts.ktbOnly) GmailApp.search('from:' + bayFrom + range, 0, 50).forEach(function(th) {
       th.getMessages().forEach(function(msg) {
         var id = msg.getId();
         if (seen[id]) { skipped++; return; }
@@ -197,6 +201,22 @@ function fetchBankEmails(daysBack) {
     }
     return { ok: true, added: added, skipped: skipped, msg: 'บันทึกใหม่ ' + added + ' รายการ (ซ้ำ ' + skipped + ')' };
   } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// ── ดึง KTB จากอีเมลแบบกำหนดเดือน (long-term fix แทนการ decrypt .xls เอง) ──
+// yyyymm เช่น '2026-05' → ค้นอีเมล KTB ตั้งแต่ต้นเดือน ถึงต้นเดือนถัดไป (เผื่อ statement ส่งต้นเดือนถัดไป)
+// ktbOnly = true → ไม่แตะกรุงศรี (กันยอดที่ import จาก CSV แล้วซ้ำ)
+function importKtbMonthFromEmail(yyyymm) {
+  yyyymm = String(yyyymm || '').trim();
+  var m = yyyymm.match(/^(\d{4})-(\d{1,2})$/);
+  if (!m) return { ok: false, msg: 'รูปแบบเดือนไม่ถูก ต้องเป็น YYYY-MM เช่น 2026-05' };
+  var y = Number(m[1]), mo = Number(m[2]);
+  var since = m[1] + '/' + ('0' + mo).slice(-2) + '/01';
+  var ny = mo === 12 ? y + 1 : y, nmo = mo === 12 ? 1 : mo + 1;
+  var before = ny + '/' + ('0' + nmo).slice(-2) + '/08';   // ครอบอีเมล statement ที่ส่งต้นเดือนถัดไป (เผื่อถึงวันที่ 7)
+  var r = fetchBankEmails(0, { since: since, before: before, ktbOnly: true });
+  if (r && r.ok) r.msg = 'KTB เดือน ' + yyyymm + ': ' + r.msg + ' (ค้นเมล ' + since + ' ถึง ' + before + ')';
+  return r;
 }
 
 // ── จัดประเภทตามผังเงิน 5 ข้อ + คืนรายการที่ต้องเตือน ──────────────
@@ -830,12 +850,13 @@ function testLine() {
 
 // ── DEBUG: สแกนหาอีเมลธนาคารจริง 14 วัน — รันใน GAS Editor แล้วดู Log ──
 // ใช้ปรับ BANK_EMAIL_KTB / BANK_EMAIL_BAY และ regex ให้ตรงรูปแบบจริง
-function debugBankEmails() {
+function debugBankEmails(daysBack) {
+  daysBack = Number(daysBack) || 14;
   var queries = [
     'from:krungthai.com', 'from:ktb.co.th', 'from:krungsri.com', 'from:bay.co.th',
     'กรุงไทย', 'กรุงศรี', 'Krungthai', 'Krungsri', 'เงินเข้า', 'รับโอนเงิน'
   ];
-  var since = Utilities.formatDate(new Date(Date.now() - 14*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+  var since = Utilities.formatDate(new Date(Date.now() - daysBack*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
   var out = [];
   queries.forEach(function(q) {
     try {
@@ -843,10 +864,11 @@ function debugBankEmails() {
       threads.forEach(function(th) {
         var m = th.getMessages()[0];
         var body = ''; try { body = m.getPlainBody().slice(0, 200).replace(/\s+/g, ' '); } catch(e) {}
-        var att = 0; try { att = m.getAttachments().length; } catch(e) {}
+        var att = 0, attNames = ''; try { var atts = m.getAttachments(); att = atts.length; attNames = atts.map(function(a){ return a.getName(); }).join(', '); } catch(e) {}
         out.push('Q[' + q + '] FROM: ' + m.getFrom()
+          + '\n  DATE: ' + Utilities.formatDate(m.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd')
           + '\n  SUBJ: ' + m.getSubject()
-          + '\n  ATT: ' + att + ' | AMT-PARSE: ' + extractAmount_(m.getSubject() + ' ' + body)
+          + '\n  ATT: ' + att + (attNames ? ' [' + attNames + ']' : '') + ' | AMT-PARSE: ' + extractAmount_(m.getSubject() + ' ' + body)
           + '\n  BODY: ' + body.slice(0, 150));
       });
     } catch(e) { out.push('Q[' + q + '] ERROR: ' + e); }
