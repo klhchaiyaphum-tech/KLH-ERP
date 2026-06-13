@@ -453,16 +453,18 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
   // ── pass 1: รวบรวมรายการใหม่ + หาช่วงวันที่ของ statement ──
   var rows = [], minD = null, maxD = null;
   for (var r = hRow + 1; r < grid.length; r++) {
-    var dtRaw = String(grid[r][cDate] || '').trim();
+    var cell = grid[r][cDate];
+    var isDate = (cell instanceof Date) && !isNaN(cell);   // กรณี CSV ถูกแปลงเป็น Google Sheets แล้ววันที่กลายเป็น Date
+    var dtRaw = String(cell || '').trim();
     var bal = num(grid[r][cBal]);
-    if (!/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dtRaw)) { if (bal !== null) prev = bal; continue; }  // B/F
+    if (!isDate && !/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dtRaw)) { if (bal !== null) prev = bal; continue; }  // B/F
     if (bal === null) continue;
     var amt = Math.abs(num(grid[r][cAmt]) || 0);
     var delta = (prev !== null) ? (bal - prev) : 0;
     var dir = delta > 0 ? 'IN' : (delta < 0 ? 'OUT' : (amt > 0 ? 'IN' : ''));
     if (!dir) { prev = bal; continue; }
     if (amt <= 0) amt = Math.abs(delta);
-    var d = parseThaiDate_(dtRaw);
+    var d = parseThaiDate_(cell);
     var detail = (String(grid[r][cCode] || '') + ' ' + String(grid[r][cDetail] || '')).replace(/\s+/g, ' ').trim().slice(0, 120);
     var cat = '';
     if (dir === 'IN') cat = /MORPSD|NMPSDP|IORSDT|promptpay|orft/i.test(detail) ? 'SALE' : 'OTHER';
@@ -616,6 +618,52 @@ function parseThaiDate_(v) {
   var y = Number(m[3]); if (y < 100) y += 2500;
   if (y > 2400) y -= 543;
   return y + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+}
+
+// ── debug: ดูว่าในโฟลเดอร์ statement มีไฟล์อะไร, mime, จำนวนแถว, ตรวจ KTB/หัวตารางเจอไหม ──
+// รันใน GAS Editor แล้วดูผลใน Execution log (และส่งเข้า LINE ให้ด้วย)
+function debugStmtImport() {
+  var folder = stmtFolder_();
+  var report = ['📁 โฟลเดอร์: ' + folder.getName()];
+  var files = folder.getFiles(), any = false;
+  while (files.hasNext()) {
+    any = true;
+    var f = files.next(), name = f.getName(), mime = f.getMimeType();
+    var line = '• ' + name + '\n   mime=' + mime;
+    var tempId = null;
+    try {
+      var grid = null;
+      if (mime === MimeType.CSV || /\.csv$/i.test(name)) {
+        grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8').replace(/^﻿/, ''));
+      } else if (mime === MimeType.GOOGLE_SHEETS) {
+        grid = SpreadsheetApp.openById(f.getId()).getSheets()[0].getDataRange().getValues();
+      } else if (/\.xlsx?$/i.test(name) || mime === MimeType.MICROSOFT_EXCEL) {
+        var conv = Drive.Files.create({ name: 'tmp_dbg', mimeType: 'application/vnd.google-apps.spreadsheet' }, f.getBlob());
+        tempId = conv.id;
+        grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
+      } else { line += '\n   (ชนิดไฟล์ไม่รองรับ → ข้าม)'; report.push(line); continue; }
+
+      var isKtb = /Historical_SSKB|กรุงไทย/i.test(name);
+      var headerRow = -1;
+      for (var i = 0; i < Math.min(grid.length, 20); i++) {
+        var rk = (grid[i] || []).join('|');
+        if (/ถอนเงิน\/ฝากเงิน|ยอดคงเหลือยกมา/.test(rk)) isKtb = true;
+        if (/ยอดคงเหลือ/.test(rk) && /วันที่/.test(rk)) headerRow = i;
+      }
+      line += '\n   rows=' + grid.length + ' · isKtb=' + isKtb + ' · headerRow=' + headerRow;
+      if (isKtb && headerRow >= 0) {
+        var firstData = (grid[headerRow + 2] || []).slice(0, 7).join(' | ');
+        line += '\n   ตัวอย่างแถวข้อมูล: ' + firstData;
+      }
+    } catch (e) { line += '\n   ERROR: ' + e.message; }
+    finally { if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch (e2) {} } }
+    report.push(line);
+  }
+  if (!any) report.push('(ไม่มีไฟล์ในโฟลเดอร์ — ยังไม่ได้อัปโหลด หรืออัปโหลดผิดโฟลเดอร์)');
+  var msg = report.join('\n');
+  Logger.log(msg);
+  try { sendWmsLine_('🔍 ' + msg); } catch (e3) {}
+  return msg;
 }
 
 // ตั้ง trigger สแกนโฟลเดอร์ทุกคืน 23:00 (รันครั้งเดียวใน Editor)
