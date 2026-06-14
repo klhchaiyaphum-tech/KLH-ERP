@@ -840,8 +840,46 @@ function getBankSummary(yyyymm) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// รายวัน: สรุปยอดสะสมจาก BANK_TRANSACTIONS ส่ง LINE (ไม่ดึงอีเมลแล้ว — ข้อมูลมาจากนำเข้า statement)
+// ── ดึง KTB รายวันจากอีเมล: แกะ ZIP → parse MT940 (.txt ไม่เข้ารหัส) เท่านั้น ──
+// ข้ามไฟล์เข้ารหัส (statement รายเดือน) · ไม่สร้างแถวฝั่ง BAY (กันซ้ำกับ statement กรุงศรี)
+// ยอดรายเดือน (CSV เข้ารหัส) ค่อยถอดเป็น CSV มา import ทับทีหลัง (authoritative replace เคลียร์ให้ตรง)
+function fetchKtbDaily(daysBack) {
+  try {
+    daysBack = Number(daysBack) || 2;
+    var cfg = getConfig();
+    var ktbFrom = String(cfg.BANK_EMAIL_KTB || 'krungthai.com').trim();
+    var s = bankSheet_();
+    var seen = {};
+    if (s.getLastRow() > 1) s.getRange(2, 8, s.getLastRow() - 1, 1).getValues().forEach(function(r){ if (r[0]) seen[String(r[0])] = 1; });
+    var since = Utilities.formatDate(new Date(Date.now() - daysBack * 86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+    var added = 0, files = 0;
+    GmailApp.search('from:' + ktbFrom + ' after:' + since, 0, 50).forEach(function(th) {
+      th.getMessages().forEach(function(m) {
+        m.getAttachments().forEach(function(att) {
+          var nm = att.getName();
+          try {
+            if (/\.zip$/i.test(nm)) {
+              Utilities.unzip(att.copyBlob().setContentType('application/zip')).forEach(function(b) {
+                var t = '';
+                try { t = b.getDataAsString('UTF-8'); } catch(e) { return; }   // เข้ารหัส/ไบนารี → ข้าม
+                if (t.indexOf(':61:') >= 0) { added += parseMt940_(t, s, seen); files++; }
+              });
+            } else if (/\.txt$/i.test(nm)) {
+              var t2 = att.getDataAsString('UTF-8');
+              if (t2.indexOf(':61:') >= 0) { added += parseMt940_(t2, s, seen); files++; }
+            }
+          } catch(e) {}
+        });
+      });
+    });
+    if (added > 0) categorizeBankTxns_();
+    return { ok: true, added: added, files: files, msg: 'KTB รายวัน: เพิ่ม ' + added + ' รายการ (จาก ' + files + ' ไฟล์ MT940 ใน ' + daysBack + ' วัน)' };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE
 function dailyBankJob() {
+  var ktb = fetchKtbDaily(2);
   var ym = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
   var sum = getBankSummary(ym);
   if (sum.ok) {
@@ -849,9 +887,10 @@ function dailyBankJob() {
       + '🟦 KTB เข้า: ฿' + Math.round(sum.ktbIn).toLocaleString() + '\n'
       + '🟧 กรุงศรี เข้า: ฿' + Math.round(sum.bayIn).toLocaleString() + '\n'
       + '🔁 โยกเงิน (ไม่นับขาย): ฿' + Math.round(sum.transfer).toLocaleString() + '\n'
-      + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString());
+      + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString()
+      + (ktb && ktb.added ? '\n(KTB อีเมลใหม่ ' + ktb.added + ' รายการ)' : ''));
   }
-  return sum;
+  return { ok: true, ktb: ktb, sum: sum };
 }
 
 // ════════════════════════════════════════════════════════════

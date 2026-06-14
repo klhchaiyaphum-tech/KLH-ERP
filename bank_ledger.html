@@ -92,6 +92,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <button class="btn" onclick="goBack()">← หน้าหลัก</button>
       <input type="month" id="month">
       <button class="btn primary" onclick="load()">โหลด</button>
+      <button class="btn" onclick="fetchKtb()" id="ktbBtn" title="ดึงอีเมล KTB รายวัน (MT940) เข้าระบบ — ยอดขายรายวัน">📥 ดึง KTB วันนี้</button>
       <button class="btn" onclick="importStmt()" id="stmtBtn">📂 นำเข้า statement</button>
       <button class="btn" onclick="recat()" title="จับคู่โยกเงินใหม่ทั้ง 3 บัญชี">🔁 จับคู่โยกเงิน</button>
       <button class="btn" onclick="adjSso()" id="ssoBtn" title="แยกเงินจ่ายประกันสังคม: ครึ่งเป็นค่าใช้จ่าย(นายจ้าง) ครึ่งเป็นหนี้สิน(หักพนักงานนำส่ง)">⚖️ ปรับปรุงประกันสังคม</button>
@@ -110,7 +111,8 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <div class="sec-b" style="padding:14px 16px">
         <div style="font-weight:700;margin-bottom:6px">ขั้นตอนดึงข้อมูล (เลือกเดือน → กดตามลำดับ)</div>
         <ol style="margin:0 0 12px 18px;font-size:13px;line-height:1.9;color:var(--ink-2)">
-          <li><b>📂 นำเข้า statement</b> — แหล่งข้อมูลหลัก: อ่านไฟล์ statement (CSV) ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> · KTB เป็น authoritative replace (รันซ้ำไม่ซ้ำ)</li>
+          <li><b>📥 ดึง KTB วันนี้</b> — อ่านอีเมล KTB รายวัน (ไฟล์ .txt MT940 ใน ZIP ไม่เข้ารหัส) = ยอดขาย KTB รายวัน · กดได้เรื่อยๆ กันซ้ำให้</li>
+          <li><b>📂 นำเข้า statement</b> — statement รายเดือน: ถอดรหัส .xls KTB → CSV วางในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> · authoritative replace (ทับยอดรายวันให้ตรงเป๊ะ)</li>
           <li><b>📂 นำเข้า statement</b> — อ่านไฟล์ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> (กรุงศรี ออมทรัพย์/กระแสรายวัน ที่ดาวน์โหลดมาวาง) แล้วย้ายไฟล์ไป "นำเข้าแล้ว"</li>
           <li><b>🔁 จับคู่โยกเงิน</b> — จับคู่เงินโยกข้ามบัญชี (กรุงไทยออก↔กรุงศรีเข้า, ออมฯออก↔กระแสฯเข้า) ยอด+วันตรงกัน = "โยกเงิน" ไม่นับเป็นขาย</li>
         </ol>
@@ -120,7 +122,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
           <li><b>➕ เพิ่มรายการมือ</b> — คีย์เองจากกระดาษ statement กรณีไฟล์อ่านไม่ได้</li>
           <li>ในแต่ละแถว: เลือก <b>หมวด</b> (ขาย/ตัดลูกหนี้/โยกเงิน/ชำระหนี้/ค่าใช้จ่าย) + <b>ผังบัญชี</b> + พิมพ์หมายเหตุ → กดบันทึก → ไหลเข้างบกำไรขาดทุน</li>
         </ul>
-        <div class="hint" style="margin:0">🤖 อัตโนมัติ: ตั้ง <b>setupDailyStatementTrigger()</b> (สแกนโฟลเดอร์ทุก 23:00) + <b>setupDailySalesTrigger()</b> (รายงานยอด LINE ทุก 08:00) ใน GAS Editor ครั้งเดียว · KTB เป็น .xls เข้ารหัส ต้องถอดรหัสเป็น CSV ก่อนวางในโฟลเดอร์</div>
+        <div class="hint" style="margin:0">🤖 อัตโนมัติ (รันครั้งเดียวใน GAS Editor): <b>setupDailyBankTrigger()</b> ดึง KTB รายวัน 06:00 · <b>setupDailySalesTrigger()</b> รายงาน LINE 08:00 · <b>setupDailyStatementTrigger()</b> สแกนโฟลเดอร์ 23:00 — เช็คด้วย <b>listTriggers()</b></div>
       </div>
     </div>
 
@@ -330,14 +332,14 @@ function addTxn(){
   .addBankTxn(d);
 }
 
-function fetchEmails(){
-  var b=document.getElementById('fetchBtn'); b.disabled=true; b.textContent='กำลังอ่านอีเมล...';
+function fetchKtb(){
+  var b=document.getElementById('ktbBtn'); b.disabled=true; b.textContent='กำลังดึง KTB...';
   google.script.run.withSuccessHandler(function(r){
-    b.disabled=false; b.textContent='📥 ดึงอีเมล';
-    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">'+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
+    b.disabled=false; b.textContent='📥 ดึง KTB วันนี้';
+    document.getElementById('msg').innerHTML = (r&&r.ok) ? '<div class="okmsg">✅ '+r.msg+'</div>' : '<div class="err">'+((r&&r.msg)||'ดึงไม่ได้')+'</div>';
     load();
-  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📥 ดึงอีเมล'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
-  .fetchBankEmails(15);
+  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📥 ดึง KTB วันนี้'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .fetchKtbDaily(3);
 }
 
 function recat(){
