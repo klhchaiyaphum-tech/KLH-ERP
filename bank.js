@@ -219,6 +219,27 @@ function importKtbMonthFromEmail(yyyymm) {
   return r;
 }
 
+// ── ดู trigger ที่ติดตั้งแล้ว (เช็คว่ารายงาน 08:00 / สแกนโฟลเดอร์ 23:00 ตั้งไว้หรือยัง) ──
+// รันใน GAS Editor: listTriggers()
+function listTriggers() {
+  var ts = ScriptApp.getProjectTriggers();
+  if (!ts.length) return '⚠️ ยังไม่มี trigger เลย — ต้องรัน setupDailyStatementTrigger() + setupDailySalesTrigger() + setupWeeklyTaxTrigger() ครั้งเดียว';
+  var cnt = {};
+  ts.forEach(function(t){ var h = t.getHandlerFunction(); cnt[h] = (cnt[h]||0) + 1; });
+  var want = {
+    dailySalesReport: 'รายงานยอดขาย LINE 08:00',
+    importBayStatements: 'สแกนโฟลเดอร์ statement 23:00',
+    checkWeeklySalesTarget: 'เช็คเป้ายอดขาย อาทิตย์ 19:00',
+    dailyBankJob: 'สรุปยอดธนาคาร LINE 06:00'
+  };
+  var out = ['📋 Trigger ที่ติดตั้ง (' + ts.length + '):'];
+  Object.keys(cnt).forEach(function(h){ out.push('  ✅ ' + h + (want[h]?' — '+want[h]:'') + (cnt[h]>1?' ('+cnt[h]+' ตัว!)':'')); });
+  Object.keys(want).forEach(function(h){ if (!cnt[h]) out.push('  ❌ ขาด: ' + h + ' — ' + want[h]); });
+  var msg = out.join('\n');
+  Logger.log(msg);
+  return msg;
+}
+
 // ── เช็คแถวซ้ำในสมุดธนาคาร (ดู KTB เดือนหนึ่งๆ ว่ามีคีย์ซ้ำไหม) ──
 // รันใน Editor: checkBankDup('2026-05')
 function checkBankDup(yyyymm) {
@@ -790,9 +811,8 @@ function getBankSummary(yyyymm) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// รายวัน 06:00: ดึงอีเมล + สรุปส่ง LINE (ตาม blueprint ในชีต)
+// รายวัน: สรุปยอดสะสมจาก BANK_TRANSACTIONS ส่ง LINE (ไม่ดึงอีเมลแล้ว — ข้อมูลมาจากนำเข้า statement)
 function dailyBankJob() {
-  var res = fetchBankEmails(2);
   var ym = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
   var sum = getBankSummary(ym);
   if (sum.ok) {
@@ -800,10 +820,9 @@ function dailyBankJob() {
       + '🟦 KTB เข้า: ฿' + Math.round(sum.ktbIn).toLocaleString() + '\n'
       + '🟧 กรุงศรี เข้า: ฿' + Math.round(sum.bayIn).toLocaleString() + '\n'
       + '🔁 โยกเงิน (ไม่นับขาย): ฿' + Math.round(sum.transfer).toLocaleString() + '\n'
-      + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString()
-      + (res.added ? '\n(อีเมลใหม่ ' + res.added + ' ฉบับ)' : ''));
+      + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString());
   }
-  return res;
+  return sum;
 }
 
 // ════════════════════════════════════════════════════════════

@@ -92,7 +92,6 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <button class="btn" onclick="goBack()">← หน้าหลัก</button>
       <input type="month" id="month">
       <button class="btn primary" onclick="load()">โหลด</button>
-      <button class="btn" onclick="fetchEmails()" id="fetchBtn">📥 ดึงอีเมล</button>
       <button class="btn" onclick="importStmt()" id="stmtBtn">📂 นำเข้า statement</button>
       <button class="btn" onclick="recat()" title="จับคู่โยกเงินใหม่ทั้ง 3 บัญชี">🔁 จับคู่โยกเงิน</button>
       <button class="btn" onclick="adjSso()" id="ssoBtn" title="แยกเงินจ่ายประกันสังคม: ครึ่งเป็นค่าใช้จ่าย(นายจ้าง) ครึ่งเป็นหนี้สิน(หักพนักงานนำส่ง)">⚖️ ปรับปรุงประกันสังคม</button>
@@ -111,7 +110,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <div class="sec-b" style="padding:14px 16px">
         <div style="font-weight:700;margin-bottom:6px">ขั้นตอนดึงข้อมูล (เลือกเดือน → กดตามลำดับ)</div>
         <ol style="margin:0 0 12px 18px;font-size:13px;line-height:1.9;color:var(--ink-2)">
-          <li><b>📥 ดึงอีเมล</b> — อ่านอีเมลธนาคารย้อนหลัง 15 วัน <b>กดครั้งเดียวพอ</b> (ดึงทุกฉบับที่ยังไม่เคยอ่าน กันซ้ำให้) · กรุงไทยจะแกะไฟล์ ZIP statement เอง · กรุงศรีจะได้ยอด PromptPay ลูกค้า</li>
+          <li><b>📂 นำเข้า statement</b> — แหล่งข้อมูลหลัก: อ่านไฟล์ statement (CSV) ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> · KTB เป็น authoritative replace (รันซ้ำไม่ซ้ำ)</li>
           <li><b>📂 นำเข้า statement</b> — อ่านไฟล์ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> (กรุงศรี ออมทรัพย์/กระแสรายวัน ที่ดาวน์โหลดมาวาง) แล้วย้ายไฟล์ไป "นำเข้าแล้ว"</li>
           <li><b>🔁 จับคู่โยกเงิน</b> — จับคู่เงินโยกข้ามบัญชี (กรุงไทยออก↔กรุงศรีเข้า, ออมฯออก↔กระแสฯเข้า) ยอด+วันตรงกัน = "โยกเงิน" ไม่นับเป็นขาย</li>
         </ol>
@@ -121,7 +120,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
           <li><b>➕ เพิ่มรายการมือ</b> — คีย์เองจากกระดาษ statement กรณีไฟล์อ่านไม่ได้</li>
           <li>ในแต่ละแถว: เลือก <b>หมวด</b> (ขาย/ตัดลูกหนี้/โยกเงิน/ชำระหนี้/ค่าใช้จ่าย) + <b>ผังบัญชี</b> + พิมพ์หมายเหตุ → กดบันทึก → ไหลเข้างบกำไรขาดทุน</li>
         </ul>
-        <div class="hint" style="margin:0">🤖 อัตโนมัติ: ตั้ง <b>setupDailyBankTrigger()</b> (อีเมลทุก 06:00) + <b>setupDailyStatementTrigger()</b> (โฟลเดอร์ทุก 23:00) ใน GAS Editor ครั้งเดียว — หลังจากนั้น<b>ไม่ต้องกดเลย</b> ระบบดึง+เตือน LINE ให้เอง</div>
+        <div class="hint" style="margin:0">🤖 อัตโนมัติ: ตั้ง <b>setupDailyStatementTrigger()</b> (สแกนโฟลเดอร์ทุก 23:00) + <b>setupDailySalesTrigger()</b> (รายงานยอด LINE ทุก 08:00) ใน GAS Editor ครั้งเดียว · KTB เป็น .xls เข้ารหัส ต้องถอดรหัสเป็น CSV ก่อนวางในโฟลเดอร์</div>
       </div>
     </div>
 
