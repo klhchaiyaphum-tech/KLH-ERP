@@ -37,7 +37,10 @@ input:focus,select:focus{ border-color:var(--coral); box-shadow:0 0 0 3px var(--
 .btn.green{ background:var(--green); border-color:var(--green); color:#fff; }
 .btn.sm{ padding:5px 10px; font-size:12px; border-radius:8px; }
 .body{ padding:16px 20px 22px; }
-.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px; margin-bottom:15px; }
+#kpis{ display:flex; flex-direction:column; gap:13px; margin-bottom:15px; }
+.kgrp{ background:var(--cream,#fdf7f1); border:1px solid var(--line); border-radius:16px; padding:10px 12px 12px; }
+.kglbl{ font-size:12px; font-weight:800; color:var(--ink-2); margin:1px 2px 9px; letter-spacing:.2px; }
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px; }
 .kpi{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:13px 15px; }
 .kpi .kv{ font-family:var(--ffn); font-size:19px; font-weight:800; line-height:1; }
 .kpi .kk{ font-size:11.5px; color:var(--ink-2); margin-top:6px; }
@@ -92,6 +95,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <button class="btn" onclick="fetchEmails()" id="fetchBtn">📥 ดึงอีเมล</button>
       <button class="btn" onclick="importStmt()" id="stmtBtn">📂 นำเข้า statement</button>
       <button class="btn" onclick="recat()" title="จับคู่โยกเงินใหม่ทั้ง 3 บัญชี">🔁 จับคู่โยกเงิน</button>
+      <button class="btn" onclick="adjSso()" id="ssoBtn" title="แยกเงินจ่ายประกันสังคม: ครึ่งเป็นค่าใช้จ่าย(นายจ้าง) ครึ่งเป็นหนี้สิน(หักพนักงานนำส่ง)">⚖️ ปรับปรุงประกันสังคม</button>
     </div>
   </div>
   <div class="body">
@@ -121,7 +125,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       </div>
     </div>
 
-    <div class="kpis" id="kpis"></div>
+    <div id="kpis"></div>
 
     <!-- เพิ่มรายการมือ (คีย์จาก statement) -->
     <div class="addbox">
@@ -146,7 +150,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 </div>
 
 <script>
-var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/เงินคืน', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', UNKNOWN:'รอระบุ' };
+var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/เงินคืน', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', LIABILITY:'นำส่งหนี้สิน(เช่น ปกส.พนักงาน)', UNKNOWN:'รอระบุ' };
 // ผังบัญชีโหลดจาก Sheet CHART_OF_ACCOUNTS — [{code,name,type}] · value=name (เก็บใน ACCOUNT)
 var ACCTS = [{code:'',name:'',type:''}];
 function loadChart(){
@@ -201,26 +205,35 @@ function render(txns){
   // KPI
   var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0 };
   var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[] };
-  // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT)
-  var cExp = 0, cPay = 0, cSale = 0, cOther = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
+  // หมวดบัญชีที่เป็น "หนี้สิน" (จากผังบัญชี) — ไม่นับเป็นค่าใช้จ่ายในงบ
+  var liab = {}; ACCTS.forEach(function(a){ if(a && a.type==='หนี้สิน' && a.name) liab[a.name]=1; });
+  // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT) · โยก ออม→กระแส (b2c)
+  var cExp = 0, cPay = 0, cSale = 0, cOther = 0, b2c = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
   txns.forEach(function(t){
     var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount;
-    if (t.cat==='EXPENSE') { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
+    if (t.cat==='EXPENSE' && !liab[t.account]) { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
     else if (t.cat==='PAYMENT') cPay += t.amount;
     else if (t.cat==='SALE' || t.cat==='AR') cSale += t.amount;
     else if (t.cat==='OTHER') cOther += t.amount;
+    if (t.bank==='BAYC' && t.dir==='IN' && t.cat==='TRANSFER') b2c += t.amount;  // โยก ออม→กระแส
   });
   var bn = { KTB:'กรุงไทย', BAY:'ออมฯ', BAYC:'กระแสฯ' };
   var expBreak = ['KTB','BAY','BAYC'].filter(function(b){ return expBank[b]>0; })
     .map(function(b){ return bn[b]+' ฿'+nf(expBank[b]); }).join(' · ') || 'ยังไม่มี';
+  // กลุ่มที่ 1 = รายรับ · กลุ่มที่ 2 = เงินออก/โยกเงิน
   document.getElementById('kpis').innerHTML =
-    '<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">กรุงไทย เข้า (ขาย)</div></div>'
+    '<div class="kgrp"><div class="kglbl">💰 รายรับ</div><div class="kpis">'
+    +'<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">กรุงไทย เข้า (ขาย)</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">กรุงศรี PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน กรุงไทย→กรุงศรี</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(cSale)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม<br><span style="font-size:10px">(ไม่รวมรายได้อื่น/โยกเงิน)</span></div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#00897B">฿'+nf(cOther)+'</div><div class="kk">รายได้อื่น/เงินคืน<br><span style="font-size:10px">เช่น ADJ FEE คืน</span></div></div>'
+    +'</div></div>'
+    +'<div class="kgrp"><div class="kglbl">💸 เงินออก / โยกเงิน</div><div class="kpis">'
+    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(sums.b_tf)+'</div><div class="kk">โยกเงิน กรุงไทย→กรุงศรี</div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#1565C0">฿'+nf(b2c)+'</div><div class="kk">โยกเงิน กรุงศรีออม→กระแส</div></div>'
     +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(cPay)+'</div><div class="kk">ชำระเจ้าหนี้การค้า</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp)+'</div><div class="kk">ค่าใช้จ่าย<br><span style="font-size:10.5px">'+expBreak+'</span></div></div>';
+    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp)+'</div><div class="kk">ค่าใช้จ่าย<br><span style="font-size:10.5px">'+expBreak+'</span></div></div>'
+    +'</div></div>';
 
   // ── สรุปรายวัน (overview) — คลิกวันเพื่อกรองดูเฉพาะวันนั้น ──
   var days = {};
@@ -330,6 +343,18 @@ function fetchEmails(){
 
 function recat(){
   google.script.run.withSuccessHandler(function(){ load(); }).recategorizeBank();
+}
+
+function adjSso(){
+  var ym=document.getElementById('month').value;
+  if(!confirm('แยกเงินจ่ายประกันสังคมเดือน '+ym+'\n\nครึ่งหนึ่ง → ค่าใช้จ่าย ประกันสังคม(นายจ้าง)\nอีกครึ่ง → หนี้สิน เงินหักประกันสังคมพนักงาน (ไม่เข้างบกำไรขาดทุน)\n\nทำซ้ำได้ ไม่ซ้ำรายการที่แยกแล้ว — ดำเนินการ?')) return;
+  var b=document.getElementById('ssoBtn'); b.disabled=true; b.textContent='กำลังแยก...';
+  google.script.run.withSuccessHandler(function(r){
+    b.disabled=false; b.textContent='⚖️ ปรับปรุงประกันสังคม';
+    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">✅ '+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
+    load();
+  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='⚖️ ปรับปรุงประกันสังคม'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .adjustSocialSecurity(ym);
 }
 
 function importStmt(){

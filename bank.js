@@ -245,6 +245,43 @@ function checkBankDup(yyyymm) {
   return msg;
 }
 
+// ── ปรับปรุงประกันสังคม: แยกครึ่งเป็นค่าใช้จ่าย(นายจ้าง) + ครึ่งเป็นหนี้สิน(หักพนักงานนำส่ง) ──
+// เงินที่จ่าย สนง.ประกันสังคม = ส่วนนายจ้าง 50% (ค่าใช้จ่าย 5311) + ส่วนพนักงานที่หักไว้ 50% (หนี้สิน 2210)
+// เรียกจากปุ่มในหน้า bank · ทำซ้ำได้ (ข้ามรายการที่แยกแล้ว)
+function adjustSocialSecurity(yyyymm) {
+  var s = bankSheet_();
+  if (s.getLastRow() <= 1) return { ok: false, msg: 'ไม่มีข้อมูล' };
+  var W = H_BANK.length;
+  var rng = s.getRange(2, 1, s.getLastRow() - 1, W);
+  var rows = rng.getValues();
+  var add = [], n = 0, total = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var date = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+    if (yyyymm && date.slice(0, 7) !== yyyymm) continue;
+    if (String(r[2]) !== 'OUT') continue;                         // เฉพาะเงินจ่ายออก
+    var subj = String(r[5] || ''), note = String(r[8] || '');
+    if (!/SOCIAL SECURITY|ประกันสังคม|SSO/i.test(subj)) continue;  // เฉพาะรายการประกันสังคม
+    if (/แยกประกันสังคม/.test(note)) continue;                     // แยกไปแล้ว — ข้าม
+    var amt = Number(r[3]) || 0;
+    if (amt <= 0) continue;
+    var emp = Math.round(amt / 2 * 100) / 100;                     // ครึ่งพนักงาน (หนี้สิน)
+    var owner = Math.round((amt - emp) * 100) / 100;               // ครึ่งนายจ้าง (ค่าใช้จ่าย) — กันเศษ
+    // แก้แถวเดิม → ครึ่งนายจ้าง เป็นค่าใช้จ่าย
+    r[3] = owner; r[4] = 'EXPENSE';
+    r[8] = (note ? note + ' · ' : '') + 'แยกประกันสังคม(นายจ้าง)';
+    r[9] = 'ประกันสังคม (นายจ้าง)';
+    // แถวใหม่ → ครึ่งพนักงาน เป็นหนี้สินนำส่ง (ไม่เข้างบกำไรขาดทุน)
+    add.push([r[0], r[1], 'OUT', emp, 'LIABILITY', subj, r[6], String(r[7]) + '-SS2',
+              'แยกประกันสังคม(พนักงาน) นำส่งหนี้สิน', 'เงินหักประกันสังคมพนักงาน']);
+    n++; total += amt;
+  }
+  if (!n) return { ok: true, n: 0, msg: 'ไม่พบรายการประกันสังคมที่ยังไม่ได้แยก (หรือแยกครบแล้ว)' };
+  rng.setValues(rows);
+  s.getRange(s.getLastRow() + 1, 1, add.length, W).setValues(add);
+  return { ok: true, n: n, msg: 'แยกประกันสังคม ' + n + ' รายการ (รวม ฿' + total.toLocaleString() + ') → ครึ่งค่าใช้จ่าย + ครึ่งหนี้สิน' };
+}
+
 // ── จัดประเภทตามผังเงิน 5 ข้อ + คืนรายการที่ต้องเตือน ──────────────
 // 1) KTB IN = ยอดขาย KLH ทั้งหมด
 // 2) KTB OUT จับคู่ BAY IN (statement) = โยกเงิน · ไม่ตรง = ค่าใช้จ่ายธนาคาร (เตือน)
