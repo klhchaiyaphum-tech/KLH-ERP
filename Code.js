@@ -46,8 +46,6 @@ function doGet(e) {
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
   tmpl.fromPage = (e && e.parameter && e.parameter.from) || '';
-  tmpl.logoUrl = '';
-  try { tmpl.logoUrl = getConfig().LOGO_URL || ''; } catch(e2) {}
   return tmpl.evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
