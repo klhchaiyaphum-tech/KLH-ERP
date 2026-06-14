@@ -102,7 +102,13 @@ function load(){
 
 function render(r){
   var est = r.estimate;
-  var h = '<div class="cards">'
+  var h = '';
+  if (r.taxId || r.companyName) {
+    var tid = r.taxId ? r.taxId.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : '—';
+    h += '<div class="sec" style="padding:10px 14px;margin-bottom:12px"><b>'+(r.companyName||'')+'</b>'
+       + '<span style="margin-left:10px;color:var(--ink-2)">เลขประจำตัวผู้เสียภาษี: <b class="num">'+tid+'</b></span></div>';
+  }
+  h += '<div class="cards">'
     + '<div class="card buy"><div class="k">ภาษีซื้อ (บิลชื่อ KLH)</div><div class="v num" style="color:var(--blue)">฿'+nf(r.input.vat)+'</div><div class="s">'+r.input.count+' ใบกำกับ · ฐาน ฿'+nf(r.input.base)+'</div></div>'
     + '<div class="card sell"><div class="k">ภาษีขาย (จากยอดรับจริง)</div><div class="v num" style="color:var(--coral-2)">฿'+nf(r.outputVatActual)+'</div><div class="s">ยอดรับจริงธนาคาร ฿'+nf(r.actualSales)+(r.posSales?' · POS ฿'+nf(r.posSales):'')+'</div></div>'
     + '<div class="card '+(r.netVat>=0?'net':'warn')+'"><div class="k">VAT สุทธิ (ต้องนำส่ง)</div><div class="v num" style="color:'+(r.netVat>=0?'var(--green)':'var(--miss)')+'">฿'+nf(r.netVat)+'</div><div class="s">'+(r.netVat>=0?'ขาย > ซื้อ ✓':'⚠️ ขาย < ซื้อ — ต้องเพิ่มยอดขาย')+'</div></div>'

@@ -309,6 +309,14 @@ function getPP30(yyyymm) {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var ym = yyyymm || Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM');
 
+    // เลขประจำตัวผู้เสียภาษี + ชื่อบริษัท จาก CONFIG (รองรับหลายชื่อ key)
+    var cfg = getConfig();
+    var taxId = '', coName = '';
+    ['COMPANY_TAX_ID','TAX_ID','TAXID','TAXPAYER_ID','เลขผู้เสียภาษี','เลขประจำตัวผู้เสียภาษี','เลขประจำตัวผู้เสียภาษีอากร'].forEach(function(k){
+      if (!taxId && cfg[k]) taxId = String(cfg[k]).replace(/[^0-9]/g, '');
+    });
+    coName = String(cfg.COMPANY_NAME || '');
+
     // 1) ภาษีซื้อ: INVOICE_HEADER (4 TAX_ENTITY, 2 INVOICE_DATE, 5 SUBTOTAL, 6 VAT_AMT, 7 TOTAL)
     var inputVat = 0, inputBase = 0, inputCount = 0, purchaseAll = 0;
     var inv = ss.getSheetByName('INVOICE_HEADER');
@@ -356,6 +364,7 @@ function getPP30(yyyymm) {
 
     return {
       ok: true, month: ym,
+      taxId: taxId, companyName: coName,
       input:  { vat: inputVat, base: inputBase, count: inputCount },
       purchaseAllEntities: purchaseAll,
       actualSales: salesForVat,                       // ยอดขายที่ใช้คำนวณ (ธนาคารเป็นหลัก)
