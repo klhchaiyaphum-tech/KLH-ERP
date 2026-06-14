@@ -118,9 +118,11 @@ function render(r){
     + '<div class="row"><span>ยอดขายขั้นต่ำที่ต้องมี (ให้ VAT ขาย > ซื้อ)</span><b class="num">฿'+nf(r.minSalesRequired)+'</b></div>'
     + '<div class="row"><span>ยอดรับจริงจากธนาคารเดือนนี้</span><b class="num" style="color:'+(r.actualSales>=r.minSalesRequired?'var(--green)':'var(--miss)')+'">฿'+nf(r.actualSales)+'</b></div>';
   if (est) {
-    h += '<div class="row"><span>เป้าผู้บริหาร (+'+est.execPercent+'% เหนือภาษีซื้อ)</span><b class="num">฿'+nf(est.targetSales)+'</b></div>'
+    h += '<div class="row"><span>🎯 เป้าผู้บริหาร — ยอดขายที่ต้องได้ (+'+est.execPercent+'% เหนือต้นทุน OCR)</span><b class="num" style="color:var(--coral-2)">฿'+nf(est.targetSales)+'</b></div>'
       + '<div class="row"><span>VAT ขายตามเป้า</span><b class="num">฿'+nf(est.targetVat)+'</b></div>'
-      + '<div class="row"><span>ส่วนต่างจากเป้า</span><b class="num" style="color:'+(r.actualSales>=est.targetSales?'var(--green)':'var(--miss)')+'">'+(r.actualSales>=est.targetSales?'+':'')+nf(r.actualSales-est.targetSales)+'</b></div>';
+      + '<div class="row"><span>ส่วนต่างจากเป้า (ยอดรับจริง − เป้า)</span><b class="num" style="color:'+(r.actualSales>=est.targetSales?'var(--green)':'var(--miss)')+'">'+(r.actualSales>=est.targetSales?'+':'')+nf(r.actualSales-est.targetSales)+'</b></div>';
+    if (est.lastYearAvg) h += '<div class="row" style="border-top:1px dashed var(--line);margin-top:4px;padding-top:8px"><span>📅 ยอดขายปีที่แล้ว (เฉลี่ย/เดือน)</span><b class="num">฿'+nf(est.lastYearAvg)+'</b></div>'
+      + '<div class="row"><span>ยอดรับจริง เทียบปีที่แล้ว</span><b class="num" style="color:'+(r.actualSales>=est.lastYearAvg?'var(--green)':'var(--miss)')+'">'+(r.actualSales>=est.lastYearAvg?'+':'')+nf(r.actualSales-est.lastYearAvg)+'</b></div>';
   } else {
     h += '<div class="row"><span style="color:var(--ink-3)">ยังไม่ได้ตั้งเป้าเดือนนี้ — กรอก % ด้านล่าง</span><b></b></div>';
   }

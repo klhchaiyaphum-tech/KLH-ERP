@@ -253,17 +253,22 @@ function getProfitLoss(yyyymm) {
       if (be && be.ok) opex = { total: be.total, rows: be.rows, unspecified: be.unspecified };
     } catch(e2) {}
 
-    // รายได้อื่น (OTHER จากสมุดเงินธนาคาร เช่น ADJ FEE เงินคืน)
-    var otherIncome = 0;
+    // รายได้อื่น (OTHER) + ชำระเจ้าหนี้การค้า (PAYMENT) จากสมุดเงินธนาคาร
+    var otherIncome = 0, bankPayment = 0;
     try {
       var bkt = ss.getSheetByName('BANK_TRANSACTIONS');
       if (bkt && bkt.getLastRow() > 1) {
         bkt.getDataRange().getValues().slice(1).forEach(function(r){
           var d = r[0] instanceof Date ? Utilities.formatDate(r[0],'Asia/Bangkok','yyyy-MM-dd') : String(r[0]);
-          if (d.slice(0,7) === ym && String(r[4]) === 'OTHER') otherIncome += Number(r[3]) || 0;
+          if (d.slice(0,7) !== ym) return;
+          var c4 = String(r[4]), amt = Number(r[3]) || 0;
+          if (c4 === 'OTHER') otherIncome += amt;
+          else if (c4 === 'PAYMENT') bankPayment += amt;
         });
       }
     } catch(e3) {}
+    // ยอดซื้อเข้า KLH = อ้างอิงกระแสเงิน (ชำระเจ้าหนี้การค้าจากธนาคาร) — ถ้ายังไม่มี OCR
+    if (bankPayment > 0) purchases.klh = bankPayment;
 
     var gross = totalRev - totalCogs;
     return {

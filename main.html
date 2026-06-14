@@ -232,12 +232,11 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 function goTo(p) {
   google.script.run
     .withSuccessHandler(function(url) {
-      // url = exec URL เต็ม e.g. https://script.google.com/macros/s/xxx/exec
-      window.top.location.href = url + '?page=' + p;
+      // window.open(_top) = วิธีมาตรฐาน GAS ทะลุ iframe (เลี่ยง cross-origin block ของ window.top.location)
+      window.open(url + '?page=' + p, '_top');
     })
     .withFailureHandler(function() {
-      // fallback: navigate iframe directly
-      window.location.href = '?page=' + p;
+      window.open('?page=' + p, '_top');
     })
     .getExecUrl();
 }
