@@ -340,6 +340,58 @@ function getInvoiceFolder_(cfg, entity, date) {
   return getOrCreate(yearF, mm);
 }
 
+// ── สร้างสินค้าใหม่เข้า KLH DATA จากหน้า OCR (กรณี match ไม่เจอ) ──
+// ปลดล็อกปลายน้ำ: พอมีบาร์โค้ดใน KLH DATA แล้ว รับเข้าคลัง+FIFO+ต้นทุน+ภาษี ทำงานต่อได้
+function createProductFromOcr(p) {
+  try {
+    p = p || {};
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var kd = ss.getSheetByName('KLH DATA');
+    if (!kd) return { ok: false, msg: 'ไม่พบชีต KLH DATA' };
+    var barcode = String(p.barcode || '').trim();
+    if (!barcode) return { ok: false, msg: 'ต้องใส่บาร์โค้ดสินค้า' };
+    var lastRow = kd.getLastRow();
+    if (lastRow > 1) {
+      var ex = kd.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ex.length; i++)
+        if (String(ex[i][0]).trim() === barcode)
+          return { ok: false, msg: 'บาร์โค้ด ' + barcode + ' มีอยู่แล้วใน KLH DATA' };
+    }
+    var width = Math.max(kd.getLastColumn(), 35);
+    var row = [];
+    for (var c = 0; c < width; c++) row.push('');
+    var buy  = Number(p.buyPrice) || 0;
+    var cost = Number(p.cost) || buy;
+    row[0]  = barcode;                      // A BARCODE_SMALL
+    row[1]  = String(p.name || '');         // B PRODUCT_NAME
+    row[4]  = Number(p.conv) || 1;          // E MULTIPLIER (ชิ้น/หน่วยใหญ่)
+    row[5]  = String(p.unitBig || '');      // F UNIT_BIG
+    row[6]  = String(p.supplierCode || ''); // G SUPPLIER_CODE
+    row[8]  = buy;                          // I BUY_PRICE
+    row[15] = cost;                         // P CALC_COST
+    row[16] = String(p.tax || '7%');        // Q TAX
+    row[17] = cost;                         // R COST_FINAL
+    row[24] = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd'); // Y UPDATE_DATE
+    row[29] = String(p.entity || '');       // AD TAX_ENTITY
+    kd.getRange(lastRow + 1, 1, 1, width).setValues([row]);
+    return { ok: true, barcode: barcode, name: String(p.name || ''),
+             conv: Number(p.conv) || 1, unit: String(p.unitBig || ''),
+             buyPrice: buy, cost: cost };
+  } catch(e) { return { ok: false, msg: e.message || String(e) }; }
+}
+
+// ── ลบชีต INVENTORY_LOG (ไม่ได้ใช้ในโค้ด) — ปลอดภัย: ลบเฉพาะถ้าว่าง (≤1 แถว) ──
+function deleteInventoryLogIfEmpty() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var s = ss.getSheetByName('INVENTORY_LOG');
+    if (!s) return { ok: true, msg: 'ไม่มีชีต INVENTORY_LOG อยู่แล้ว' };
+    if (s.getLastRow() > 1) return { ok: false, msg: 'INVENTORY_LOG มีข้อมูล ' + (s.getLastRow() - 1) + ' แถว — ไม่ลบ (เปิดดูก่อน)' };
+    ss.deleteSheet(s);
+    return { ok: true, msg: 'ลบชีต INVENTORY_LOG (ว่าง) เรียบร้อย' };
+  } catch(e) { return { ok: false, msg: e.message || String(e) }; }
+}
+
 // ── ย้ายไฟล์บิลเก่าเข้าโฟลเดอร์ใหม่ (INVOICE_FOLDER_ID) ตามกิจการ/ปี/เดือน ──
 // รันครั้งเดียวใน GAS Editor: migrateInvoiceFiles()  · อ้างไฟล์จาก PDF_URL ในแต่ละแถว
 function migrateInvoiceFiles() {

@@ -980,7 +980,8 @@ function showProductPicker(n, results, ocrCode, ocrName) {
   var box = document.getElementById('pmatch-' + n);
   if (!results || !results.length) {
     box.innerHTML = '<span style="color:#c62828;font-size:.78rem">ไม่พบใน KLH DATA — </span>'
-      + '<button type="button" class="btn-find-prod" onclick="findProduct(' + n + ')"><i class="bi bi-arrow-clockwise"></i> ลองใหม่</button>';
+      + '<button type="button" class="btn-find-prod" onclick="findProduct(' + n + ')"><i class="bi bi-arrow-clockwise"></i> ลองใหม่</button> '
+      + '<button type="button" class="btn-find-prod" style="background:#2E7D32;color:#fff" onclick="createProd(' + n + ')"><i class="bi bi-plus-circle"></i> สร้างสินค้าใหม่</button>';
     return;
   }
   var html = '<div style="border:1px solid #ddd;border-radius:6px;margin-top:4px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;position:relative">';
@@ -1012,6 +1013,62 @@ function selectProduct(n, barcode, name, mult, unit, buyPrice, costFinal) {
     + ' <button type="button" class="btn-find-prod" style="font-size:.72rem" onclick="findProduct(' + n + ')">เปลี่ยน</button>'
     + ' <button type="button" class="btn" style="font-size:.72rem;padding:3px 10px;background:#6A1B9A;color:#fff;border-radius:4px" onclick="openPriceCompare(' + n + ')"><i class="bi bi-calculator"></i> เปรียบเทียบต้นทุน</button>';
   calcFocRow(n);
+}
+
+// ── สร้างสินค้าใหม่ → KLH DATA (เมื่อ match ไม่เจอ) ──
+function createProd(n) {
+  function ea(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var nameEl = document.querySelector('#row-' + n + ' .item-input');
+  var name   = nameEl ? nameEl.value.trim() : '';
+  var code   = document.getElementById('pcode-' + n).value.trim();
+  var unit   = document.getElementById('punit-' + n).value.trim();
+  var price  = parseFloat(document.getElementById('pprice-' + n).value) || 0;
+  if (!_entity) { alert('กรุณาเลือกกิจการก่อน'); return; }
+  Swal.fire({
+    title: 'สร้างสินค้าใหม่ → KLH DATA',
+    width: 420,
+    html:
+      '<div style="text-align:left;font-size:.82rem;line-height:1.2">'
+      + '<label>บาร์โค้ด (จำเป็น)</label>'
+      + '<input id="cp-bc" class="swal2-input" style="margin:3px 0;width:90%" value="' + ea(code) + '" placeholder="สแกน/พิมพ์บาร์โค้ด">'
+      + '<label>ชื่อสินค้า</label>'
+      + '<input id="cp-nm" class="swal2-input" style="margin:3px 0;width:90%" value="' + ea(name) + '">'
+      + '<label>หน่วยใหญ่ (ลัง/โหล/แพ็ค)</label>'
+      + '<input id="cp-unit" class="swal2-input" style="margin:3px 0;width:90%" value="' + ea(unit) + '">'
+      + '<label>กี่ชิ้น/หน่วยใหญ่ (conv)</label>'
+      + '<input id="cp-conv" type="number" min="1" step="1" class="swal2-input" style="margin:3px 0;width:90%" value="1">'
+      + '<label>ทุนซื้อ/หน่วย (บาท)</label>'
+      + '<input id="cp-buy" type="number" min="0" step="0.01" class="swal2-input" style="margin:3px 0;width:90%" value="' + price + '">'
+      + '<div style="color:#888;font-size:.72rem;margin-top:6px">กิจการ: ' + ea(_entity) + ' · ปรับต้นทุน/ราคาขายละเอียดได้ที่หน้า Survey ภายหลัง</div>'
+      + '</div>',
+    showCancelButton: true, confirmButtonText: 'สร้าง', cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#2E7D32',
+    preConfirm: function() {
+      var bc = document.getElementById('cp-bc').value.trim();
+      if (!bc) { Swal.showValidationMessage('ต้องใส่บาร์โค้ด'); return false; }
+      return {
+        barcode: bc,
+        name:    document.getElementById('cp-nm').value.trim(),
+        unitBig: document.getElementById('cp-unit').value.trim(),
+        conv:    Number(document.getElementById('cp-conv').value) || 1,
+        buyPrice:Number(document.getElementById('cp-buy').value) || 0,
+        entity:  _entity || ''
+      };
+    }
+  }).then(function(res) {
+    if (!res.isConfirmed) return;
+    var p = res.value; p.cost = p.buyPrice;
+    showLoading('กำลังสร้างสินค้า...');
+    google.script.run
+      .withSuccessHandler(function(r) {
+        hideLoading();
+        if (!r || !r.ok) { Swal.fire('ผิดพลาด', (r && r.msg) || 'สร้างไม่สำเร็จ', 'error'); return; }
+        selectProduct(n, r.barcode, r.name, r.conv, r.unit, r.buyPrice, r.cost);
+        Swal.fire({ icon: 'success', title: 'สร้างสินค้าแล้ว', text: r.barcode + ' ' + r.name, timer: 1400, showConfirmButton: false });
+      })
+      .withFailureHandler(function(e) { hideLoading(); Swal.fire('Error', e.message, 'error'); })
+      .createProductFromOcr(p);
+  });
 }
 
 // ── Save ──────────────────────────────────────────────────────
