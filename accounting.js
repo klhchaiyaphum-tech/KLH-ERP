@@ -351,7 +351,8 @@ function getPP30(yyyymm) {
     var es = taxEstSheet_();
     if (es.getLastRow() > 1) {
       es.getDataRange().getValues().slice(1).forEach(function(r) {
-        if (String(r[0]) === ym) est = {
+        var k = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM') : String(r[0]).slice(0, 7);
+        if (k === ym) est = {
           execPercent: Number(r[2])||0, targetSales: Number(r[3])||0,
           targetVat: Number(r[4])||0, lastYearAvg: Number(r[5])||0
         };
@@ -398,7 +399,10 @@ function saveTaxEstimate(yyyymm, execPercent, lastYearAvg) {
     var s = taxEstSheet_();
     var rows = s.getDataRange().getValues();
     var rowIdx = -1;
-    for (var i = 1; i < rows.length; i++) if (String(rows[i][0]) === ym) { rowIdx = i+1; break; }
+    for (var i = 1; i < rows.length; i++) {
+      var k = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Bangkok', 'yyyy-MM') : String(rows[i][0]).slice(0, 7);
+      if (k === ym) { rowIdx = i+1; break; }
+    }
     var rec = [ym, pp.input.vat, pct, targetSales, targetVat, Number(lastYearAvg)||0,
                Session.getActiveUser().getEmail(),
                Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm')];

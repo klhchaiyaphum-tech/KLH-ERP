@@ -252,6 +252,23 @@ function tick() {
 tick();
 setInterval(tick, 30000);
 
+// ตั้งการ์ดเมนูเป็นลิงก์จริง <a href target=_top> — กดได้บน iPad/iPhone (โหมด standalone หน้าจอโฮม)
+// บน iOS standalone, onclick+window.open ใช้ไม่ได้ ต้องเป็น anchor จริงที่ชี้ exec URL
+google.script.run
+  .withSuccessHandler(function(url){
+    var cards = document.querySelectorAll('a.card');
+    for (var i=0;i<cards.length;i++){
+      var oc = cards[i].getAttribute('onclick') || '';
+      var m = oc.match(/goTo\('([^']+)'\)/);
+      if (!m) continue;
+      cards[i].href = url + '?page=' + m[1];
+      cards[i].setAttribute('target','_top');
+      cards[i].removeAttribute('onclick');
+    }
+  })
+  .withFailureHandler(function(){})
+  .getExecUrl();
+
 // โหลดโลโก้จาก CONFIG (LOGO_URL)
 google.script.run
   .withSuccessHandler(function(res){
