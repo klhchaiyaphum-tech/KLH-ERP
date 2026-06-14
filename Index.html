@@ -182,7 +182,7 @@
           <label>ผู้จำหน่าย <span class="col">(G)</span></label>
           <input class="inp" id="supSearch" placeholder="🔍 พิมพ์ค้นหาผู้จำหน่าย..." oninput="filterSup(this.value)" style="margin-bottom:6px;font-size:13px;">
           <div class="sel-row">
-            <select id="eSupCode" size="1"><option value="">-- เลือก --</option></select>
+            <select id="eSupCode" size="1" onchange="onSupPicked()"><option value="">-- เลือก --</option></select>
             <button class="round-btn" onclick="openSupModal()" title="เพิ่มผู้จัดจำหน่ายใหม่">🏢</button>
             <button class="round-btn" onclick="goToSupplierMaster()" title="จัดการ/แก้ไขทั้งหมด">✏️</button>
           </div>
@@ -487,7 +487,18 @@
     const sel = document.getElementById('eSupCode');
     // ถ้าเหลือตัวเดียว → เลือกให้เลย / ถ้าหลายตัว → เปิด list ให้เห็น
     sel.size = (q && n > 1) ? Math.min(n + 1, 8) : 1;
-    if (q && n === 1) { sel.selectedIndex = 1; sel.size = 1; }
+    if (q && n === 1) { sel.selectedIndex = 1; sel.size = 1; onSupPicked(); }
+  }
+
+  // เลือกผู้จำหน่ายจาก list → ยุบ list + โชว์ชื่อที่เลือกในช่องค้นหา (ยืนยันว่าเลือกแล้ว)
+  function onSupPicked() {
+    const sel = document.getElementById('eSupCode');
+    sel.size = 1;
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.value) {
+      const box = document.getElementById('supSearch');
+      if (box) box.value = opt.text;
+    }
   }
 
   function refreshDropdowns(callback) {

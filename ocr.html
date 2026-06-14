@@ -1148,8 +1148,12 @@ function showHistory() {
     .withSuccessHandler(function(res) {
       hideLoading();
       var tbody = document.getElementById('histTbody');
-      if (!res || !res.ok || !res.items.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">ไม่มีประวัติ</td></tr>';
+      if (!res || !res.ok) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#c62828;padding:24px">โหลดประวัติไม่ได้: ' + ((res && res.msg) || 'ไม่ทราบสาเหตุ') + '</td></tr>';
+        return;
+      }
+      if (!res.items || !res.items.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีประวัติใบกำกับ</td></tr>';
         return;
       }
       tbody.innerHTML = res.items.map(function(r) {
