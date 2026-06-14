@@ -877,6 +877,37 @@ function fetchKtbDaily(daysBack) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
+// ── กระทบยอด KTB: เช็คว่าเดือนนี้มีข้อมูลครบทุกวันไหม (วันขาด = อาจดึงไม่ครบ) ──
+// เทียบความครบถ้วน — ถ้ามีวันขาด ให้ import statement รายเดือนมาเติม (authoritative replace)
+function reconcileKtb(yyyymm) {
+  try {
+    var s = bankSheet_();
+    var ym = yyyymm || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
+    if (s.getLastRow() <= 1) return { ok: true, msg: 'ยังไม่มีข้อมูลในสมุดธนาคาร' };
+    var rows = s.getRange(2, 1, s.getLastRow() - 1, H_BANK.length).getValues();
+    var dayIn = {}, totalIn = 0, totalOut = 0, cnt = 0;
+    rows.forEach(function(r) {
+      if (String(r[1]) !== 'KTB') return;
+      var d = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+      if (d.slice(0, 7) !== ym) return;
+      cnt++;
+      var amt = Number(r[3]) || 0;
+      if (r[2] === 'IN') { var day = Number(d.slice(8, 10)); dayIn[day] = (dayIn[day] || 0) + amt; totalIn += amt; }
+      else totalOut += amt;
+    });
+    if (!cnt) return { ok: true, msg: '🔍 KTB เดือน ' + ym + ': ยังไม่มีข้อมูลเลย — กดดึง KTB หรือ import statement' };
+    var days = Object.keys(dayIn).map(Number).sort(function(a, b){ return a - b; });
+    var first = days[0], last = days[days.length - 1], missing = [];
+    for (var d = first; d <= last; d++) if (!dayIn[d]) missing.push(d);
+    var msg = '🔍 กระทบยอด KTB ' + ym
+      + '\nรายการ ' + cnt + ' · เงินเข้ารวม ฿' + Math.round(totalIn).toLocaleString()
+      + '\nมีข้อมูลวันที่ ' + first + '–' + last + ' (' + days.length + ' วัน)';
+    if (missing.length) msg += '\n⚠️ วันไม่มีเงินเข้า: ' + missing.join(', ') + '\n→ เช็คว่าปิดร้าน หรือข้อมูลขาด (import statement รายเดือนมาเติมครบ)';
+    else msg += '\n✅ ครบทุกวันในช่วง ไม่มีวันขาด';
+    return { ok: true, msg: msg, totalIn: totalIn, missing: missing };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
 // รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE
 function dailyBankJob() {
   var ktb = fetchKtbDaily(2);

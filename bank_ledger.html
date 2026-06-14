@@ -92,7 +92,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <button class="btn" onclick="goBack()">← หน้าหลัก</button>
       <input type="month" id="month">
       <button class="btn primary" onclick="load()">โหลด</button>
-      <button class="btn" onclick="fetchKtb()" id="ktbBtn" title="ดึงอีเมล KTB รายวัน (MT940) เข้าระบบ — ยอดขายรายวัน">📥 ดึง KTB วันนี้</button>
+      <button class="btn" onclick="reconKtb()" id="reconBtn" title="เช็คว่ายอด KTB เดือนนี้ครบทุกวันไหม (มีวันขาดไหม)">🔍 กระทบยอด KTB</button>
       <button class="btn" onclick="importStmt()" id="stmtBtn">📂 นำเข้า statement</button>
       <button class="btn" onclick="recat()" title="จับคู่โยกเงินใหม่ทั้ง 3 บัญชี">🔁 จับคู่โยกเงิน</button>
       <button class="btn" onclick="adjSso()" id="ssoBtn" title="แยกเงินจ่ายประกันสังคม: ครึ่งเป็นค่าใช้จ่าย(นายจ้าง) ครึ่งเป็นหนี้สิน(หักพนักงานนำส่ง)">⚖️ ปรับปรุงประกันสังคม</button>
@@ -111,7 +111,8 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <div class="sec-b" style="padding:14px 16px">
         <div style="font-weight:700;margin-bottom:6px">ขั้นตอนดึงข้อมูล (เลือกเดือน → กดตามลำดับ)</div>
         <ol style="margin:0 0 12px 18px;font-size:13px;line-height:1.9;color:var(--ink-2)">
-          <li><b>📥 ดึง KTB วันนี้</b> — อ่านอีเมล KTB รายวัน (ไฟล์ .txt MT940 ใน ZIP ไม่เข้ารหัส) = ยอดขาย KTB รายวัน · กดได้เรื่อยๆ กันซ้ำให้</li>
+          <li>🤖 <b>KTB รายวันมาเอง</b> — ระบบดึงอีเมล KTB (MT940) ทุกเช้า 06:00 อัตโนมัติ (ตั้ง setupDailyBankTrigger ครั้งเดียว) ไม่ต้องกดเอง</li>
+          <li><b>🔍 กระทบยอด KTB</b> — เช็คว่าเดือนที่เลือกมียอด KTB ครบทุกวันไหม ถ้ามีวันขาดจะเตือน → import statement รายเดือนมาเติม</li>
           <li><b>📂 นำเข้า statement</b> — statement รายเดือน: ถอดรหัส .xls KTB → CSV วางในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> · authoritative replace (ทับยอดรายวันให้ตรงเป๊ะ)</li>
           <li><b>📂 นำเข้า statement</b> — อ่านไฟล์ในโฟลเดอร์ Drive <b>BANK_STATEMENTS</b> (กรุงศรี ออมทรัพย์/กระแสรายวัน ที่ดาวน์โหลดมาวาง) แล้วย้ายไฟล์ไป "นำเข้าแล้ว"</li>
           <li><b>🔁 จับคู่โยกเงิน</b> — จับคู่เงินโยกข้ามบัญชี (กรุงไทยออก↔กรุงศรีเข้า, ออมฯออก↔กระแสฯเข้า) ยอด+วันตรงกัน = "โยกเงิน" ไม่นับเป็นขาย</li>
@@ -332,14 +333,15 @@ function addTxn(){
   .addBankTxn(d);
 }
 
-function fetchKtb(){
-  var b=document.getElementById('ktbBtn'); b.disabled=true; b.textContent='กำลังดึง KTB...';
+function reconKtb(){
+  var ym=document.getElementById('month').value;
+  var b=document.getElementById('reconBtn'); b.disabled=true; b.textContent='กำลังเช็ค...';
   google.script.run.withSuccessHandler(function(r){
-    b.disabled=false; b.textContent='📥 ดึง KTB วันนี้';
-    document.getElementById('msg').innerHTML = (r&&r.ok) ? '<div class="okmsg">✅ '+r.msg+'</div>' : '<div class="err">'+((r&&r.msg)||'ดึงไม่ได้')+'</div>';
-    load();
-  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='📥 ดึง KTB วันนี้'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
-  .fetchKtbDaily(3);
+    b.disabled=false; b.textContent='🔍 กระทบยอด KTB';
+    var cls=(r&&r.ok&&(!r.missing||!r.missing.length))?'okmsg':'err';
+    document.getElementById('msg').innerHTML='<div class="'+cls+'" style="white-space:pre-line">'+((r&&r.msg)||'เช็คไม่ได้')+'</div>';
+  }).withFailureHandler(function(e){ b.disabled=false; b.textContent='🔍 กระทบยอด KTB'; document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .reconcileKtb(ym);
 }
 
 function recat(){
