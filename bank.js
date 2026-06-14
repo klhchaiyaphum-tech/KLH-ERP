@@ -219,6 +219,35 @@ function importKtbMonthFromEmail(yyyymm) {
   return r;
 }
 
+// ── ดูเนื้อไฟล์ .txt ใน ZIP อีเมล KTB รายวัน (ยืนยันรูปแบบเพื่อ parse ให้ถูก) ──
+// รันใน GAS Editor: debugKtbZip()  → ดู Logger หรือค่า return
+function debugKtbZip() {
+  var cfg = getConfig();
+  var ktbFrom = String(cfg.BANK_EMAIL_KTB || 'krungthai.com').trim();
+  var since = Utilities.formatDate(new Date(Date.now() - 7 * 86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+  var out = [];
+  GmailApp.search('from:' + ktbFrom + ' after:' + since, 0, 8).forEach(function(th) {
+    th.getMessages().forEach(function(m) {
+      var subj = m.getSubject() || '';
+      var dt = Utilities.formatDate(m.getDate(), 'Asia/Bangkok', 'yyyy-MM-dd');
+      m.getAttachments().forEach(function(att) {
+        var nm = att.getName();
+        if (!/\.zip$/i.test(nm)) { out.push('• ' + dt + ' [' + subj.slice(0, 40) + '] ATT(ไม่ใช่ zip): ' + nm); return; }
+        try {
+          Utilities.unzip(att.copyBlob().setContentType('application/zip')).forEach(function(b) {
+            var fn = b.getName(), bytes = b.getBytes().length, head = '';
+            try { head = b.getDataAsString('UTF-8').slice(0, 1200); } catch(e) { head = '[อ่านเป็นข้อความไม่ได้ = อาจเข้ารหัส] ' + e; }
+            out.push('• ' + dt + ' ZIP=' + nm + '\n   ไฟล์ใน: ' + fn + ' (' + bytes + ' bytes)\n   ── เนื้อหา 1200 ตัวแรก ──\n' + head + '\n════════');
+          });
+        } catch(e) { out.push('• ' + dt + ' unzip ' + nm + ' พัง: ' + e); }
+      });
+    });
+  });
+  var msg = out.length ? out.join('\n\n') : 'ไม่พบอีเมล KTB ใน 7 วัน';
+  Logger.log(msg);
+  return msg;
+}
+
 // ── ดู trigger ที่ติดตั้งแล้ว (เช็คว่ารายงาน 08:00 / สแกนโฟลเดอร์ 23:00 ตั้งไว้หรือยัง) ──
 // รันใน GAS Editor: listTriggers()
 function listTriggers() {
