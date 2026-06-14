@@ -59,14 +59,11 @@ input:focus{ border-color:var(--coral); }
   <div id="msg"></div>
   <div id="content"><div class="loading">เลือกเดือนแล้วกด "โหลดข้อมูล"</div></div>
 
-  <!-- ยอดเงินเข้าธนาคาร (จากอีเมล KTB/กรุงศรี) -->
+  <!-- ยอดเงินเข้าธนาคาร (จาก BANK_TRANSACTIONS) -->
   <div class="sec" id="bankSec" style="display:none">
-    <h2>🏦 ยอดเงินเข้าธนาคาร (จากอีเมลแจ้งเตือน)</h2>
+    <h2>🏦 ยอดเงินเข้าธนาคาร (จากสมุดเงินธนาคาร)</h2>
     <div id="bankBody"><div class="loading">—</div></div>
-    <div class="bar" style="margin:10px 0 0;border:none;padding:0;background:none">
-      <button class="btn" onclick="fetchBank()" id="fetchBtn">📥 ดึงอีเมลธนาคารตอนนี้ (ย้อนหลัง 15 วัน)</button>
-    </div>
-    <div class="hint">ระบบอ่านอีเมลจาก krungthai.com / krungsri.com อัตโนมัติทุกวัน 06:00 (รัน setupDailyBankTrigger ใน GAS Editor ครั้งเดียว) · ยอด KTB↔กรุงศรี ที่เท่ากันวันเดียวกัน = โยกเงิน ไม่นับขาย · เปลี่ยนผู้ส่งได้ใน CONFIG: BANK_EMAIL_KTB / BANK_EMAIL_BAY</div>
+    <div class="hint">ตัวเลขดึงจาก BANK_TRANSACTIONS โดยตรง (statement ที่นำเข้าหน้า "สมุดเงินธนาคาร" ?page=bank) — <b>ไม่ต้องดึงอีเมลที่นี่อีก</b> · ยอด KTB↔กรุงศรี วันเดียวกัน = โยกเงิน ไม่นับขาย</div>
   </div>
 
   <!-- ผู้บริหารกรอกประมาณการ -->
@@ -107,13 +104,13 @@ function render(r){
   var est = r.estimate;
   var h = '<div class="cards">'
     + '<div class="card buy"><div class="k">ภาษีซื้อ (บิลชื่อ KLH)</div><div class="v num" style="color:var(--blue)">฿'+nf(r.input.vat)+'</div><div class="s">'+r.input.count+' ใบกำกับ · ฐาน ฿'+nf(r.input.base)+'</div></div>'
-    + '<div class="card sell"><div class="k">ภาษีขาย (จากยอดจริง)</div><div class="v num" style="color:var(--coral-2)">฿'+nf(r.outputVatActual)+'</div><div class="s">ยอดขาย KLH ฿'+nf(r.actualSales)+'</div></div>'
+    + '<div class="card sell"><div class="k">ภาษีขาย (จากยอดรับจริง)</div><div class="v num" style="color:var(--coral-2)">฿'+nf(r.outputVatActual)+'</div><div class="s">ยอดรับจริงธนาคาร ฿'+nf(r.actualSales)+(r.posSales?' · POS ฿'+nf(r.posSales):'')+'</div></div>'
     + '<div class="card '+(r.netVat>=0?'net':'warn')+'"><div class="k">VAT สุทธิ (ต้องนำส่ง)</div><div class="v num" style="color:'+(r.netVat>=0?'var(--green)':'var(--miss)')+'">฿'+nf(r.netVat)+'</div><div class="s">'+(r.netVat>=0?'ขาย > ซื้อ ✓':'⚠️ ขาย < ซื้อ — ต้องเพิ่มยอดขาย')+'</div></div>'
     + '<div class="card"><div class="k">ยอดซื้อรวมทุกนิติ (เจ้าหนี้)</div><div class="v num">฿'+nf(r.purchaseAllEntities)+'</div><div class="s">เก็บทุกชื่อใน SHOPS</div></div>'
     + '</div>';
   h += '<div class="sec"><h2>📋 สรุป ภพ.30 — '+r.month+'</h2>'
     + '<div class="row"><span>ยอดขายขั้นต่ำที่ต้องมี (ให้ VAT ขาย > ซื้อ)</span><b class="num">฿'+nf(r.minSalesRequired)+'</b></div>'
-    + '<div class="row"><span>ยอดขายจริงเดือนนี้ (KLH)</span><b class="num" style="color:'+(r.actualSales>=r.minSalesRequired?'var(--green)':'var(--miss)')+'">฿'+nf(r.actualSales)+'</b></div>';
+    + '<div class="row"><span>ยอดรับจริงจากธนาคารเดือนนี้</span><b class="num" style="color:'+(r.actualSales>=r.minSalesRequired?'var(--green)':'var(--miss)')+'">฿'+nf(r.actualSales)+'</b></div>';
   if (est) {
     h += '<div class="row"><span>เป้าผู้บริหาร (+'+est.execPercent+'% เหนือภาษีซื้อ)</span><b class="num">฿'+nf(est.targetSales)+'</b></div>'
       + '<div class="row"><span>VAT ขายตามเป้า</span><b class="num">฿'+nf(est.targetVat)+'</b></div>'
@@ -134,8 +131,8 @@ function loadBank(ym){
       +'<div class="row"><span>🟧 กรุงศรี (BAY) เงินเข้า</span><b class="num">฿'+nf(b.bayIn)+'</b></div>'
       +'<div class="row"><span>🔁 โยกเงินระหว่างบัญชี (ไม่นับขาย)</span><b class="num" style="color:var(--ink-3)">฿'+nf(b.transfer)+'</b></div>'
       +'<div class="row"><span><b>💰 ฐานยอดขายภาษีจากธนาคาร</b></span><b class="num" style="color:var(--coral-2)">฿'+nf(b.salesBase)+'</b></div>'
-      +(b.count===0?'<div class="hint">ยังไม่มีข้อมูล — กดปุ่ม "ดึงอีเมลธนาคาร" ด้านล่าง</div>':'')
-      +(_pp&&_pp.actualSales?'<div class="row"><span>เทียบยอดขาย POS</span><b class="num">฿'+nf(_pp.actualSales)+' (ต่าง ฿'+nf(b.salesBase-_pp.actualSales)+')</b></div>':'');
+      +(b.count===0?'<div class="hint">ยังไม่มีข้อมูลเดือนนี้ — นำเข้า statement ที่หน้า "สมุดเงินธนาคาร" (?page=bank)</div>':'')
+      +(_pp&&_pp.posSales?'<div class="row"><span>เทียบยอดขาย POS</span><b class="num">฿'+nf(_pp.posSales)+' (ต่าง ฿'+nf(b.salesBase-_pp.posSales)+')</b></div>':'');
   }).withFailureHandler(function(){ document.getElementById('bankBody').innerHTML='<div class="hint">โหลดไม่ได้</div>'; }).getBankSummary(ym);
 }
 function fetchBank(){

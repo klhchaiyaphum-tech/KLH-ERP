@@ -776,7 +776,8 @@ function getBankSummary(yyyymm) {
     var out = { ok: true, month: ym, ktbIn: 0, bayIn: 0, transfer: 0, payment: 0, salesBase: 0, count: 0 };
     if (s.getLastRow() <= 1) return out;
     s.getDataRange().getValues().slice(1).forEach(function(r) {
-      if (String(r[0]).slice(0, 7) !== ym) return;
+      var rd = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM') : String(r[0]).slice(0, 7);
+      if (rd !== ym) return;
       var bank = r[1], dir = r[2], amt = Number(r[3]) || 0, cat = r[4];
       out.count++;
       if (cat === 'TRANSFER') { out.transfer += amt; return; }

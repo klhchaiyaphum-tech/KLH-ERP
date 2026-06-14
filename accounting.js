@@ -345,15 +345,23 @@ function getPP30(yyyymm) {
       });
     }
 
-    // ภาษีขายจากยอดจริง = ยอดขาย × 7/107 (ราคารวม VAT)
-    var outputVatActual = actualSales * 7 / 107;
+    // 4) ยอดขายรับจริงจากธนาคาร (BANK_TRANSACTIONS: SALE+AR) — แหล่งหลักของฐานภาษีขาย
+    var bs = getBankSummary(ym);
+    var bankSales = (bs && bs.ok) ? bs.salesBase : 0;
+
+    // ฐานยอดขายเพื่อคำนวณภาษีขาย: ใช้ยอดรับจริงจากธนาคารเป็นหลัก (POS อาจยังไม่ครบ) ไม่มีค่อย fallback POS
+    var salesForVat = bankSales > 0 ? bankSales : actualSales;
+    var outputVatActual = salesForVat * 7 / 107;     // ราคารวม VAT
     var netVat = outputVatActual - inputVat;
 
     return {
       ok: true, month: ym,
       input:  { vat: inputVat, base: inputBase, count: inputCount },
       purchaseAllEntities: purchaseAll,
-      actualSales: actualSales,
+      actualSales: salesForVat,                       // ยอดขายที่ใช้คำนวณ (ธนาคารเป็นหลัก)
+      posSales: actualSales,                          // ยอดขาย POS (อ้างอิง)
+      bankSales: bankSales,
+      bank: (bs && bs.ok) ? bs : null,
       outputVatActual: outputVatActual,
       netVat: netVat,
       estimate: est,
