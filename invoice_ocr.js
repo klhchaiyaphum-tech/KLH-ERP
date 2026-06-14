@@ -340,6 +340,44 @@ function getInvoiceFolder_(cfg, entity, date) {
   return getOrCreate(yearF, mm);
 }
 
+// ── ย้ายไฟล์บิลเก่าเข้าโฟลเดอร์ใหม่ (INVOICE_FOLDER_ID) ตามกิจการ/ปี/เดือน ──
+// รันครั้งเดียวใน GAS Editor: migrateInvoiceFiles()  · อ้างไฟล์จาก PDF_URL ในแต่ละแถว
+function migrateInvoiceFiles() {
+  try {
+    var ss  = SpreadsheetApp.openById(SHEET_ID);
+    var cfg = getConfig();
+    if (!cfg.INVOICE_FOLDER_ID) return { ok: false, msg: 'CONFIG ยังไม่มี INVOICE_FOLDER_ID' };
+    var dest = DriveApp.getFolderById(cfg.INVOICE_FOLDER_ID);   // เช็คว่าเข้าถึงได้
+    var h = ss.getSheetByName(SH_INV_H);
+    if (!h || h.getLastRow() <= 1) return { ok: true, moved: 0, msg: 'ยังไม่มีใบกำกับ' };
+
+    var rows = h.getRange(2, 1, h.getLastRow() - 1, H_INV_H.length).getValues();
+    var moved = 0, already = 0, skipped = 0, errs = [];
+    rows.forEach(function(r) {
+      var url = String(r[9] || '');
+      var m = url.match(/[-\w]{25,}/);                 // file id ใน URL
+      if (!m) { skipped++; return; }
+      try {
+        var file   = DriveApp.getFileById(m[0]);
+        var entity = String(r[4] || 'KLH').trim() || 'KLH';
+        var dt     = r[2] instanceof Date ? r[2] : new Date(String(r[2]));
+        if (isNaN(dt)) dt = r[12] instanceof Date ? r[12] : new Date();   // fallback วันที่สร้าง
+        var target = getInvoiceFolder_(cfg, entity, dt);  // ใช้ INVOICE_FOLDER_ID ใหม่
+        // ข้ามถ้าอยู่ในโฟลเดอร์เป้าหมายแล้ว
+        var inTarget = false, ps = file.getParents();
+        while (ps.hasNext()) { if (ps.next().getId() === target.getId()) { inTarget = true; break; } }
+        if (inTarget) { already++; return; }
+        file.moveTo(target);
+        moved++;
+      } catch(e) { errs.push((m[0]||'?') + ': ' + e.message); }
+    });
+    var msg = 'ย้ายบิล ' + moved + ' ไฟล์ · อยู่ที่เดิมแล้ว ' + already + ' · ข้าม(ไม่มีลิงก์) ' + skipped
+            + (errs.length ? ' · พลาด ' + errs.length : '');
+    Logger.log(msg + (errs.length ? '\n' + errs.join('\n') : ''));
+    return { ok: true, moved: moved, already: already, skipped: skipped, errors: errs, msg: msg };
+  } catch(e) { return { ok: false, msg: e.message || String(e) }; }
+}
+
 // ── Save Invoice (Header + Detail) ───────────────────────────
 function saveInvoice(d) {
   try {
