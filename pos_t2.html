@@ -118,7 +118,7 @@ input{font-family:inherit;}
 
 <!-- Topbar -->
 <div class="topbar">
-  <div class="brandmark">K</div>
+  <div class="brandmark" id="brandLetter">K</div>
   <div style="flex-shrink:0">
     <div style="font-size:14px;font-weight:700;line-height:1.1" id="storeName">KLH POS</div>
     <div style="font-size:11px;color:var(--ink-3)">Sunmi T2 Lite</div>
@@ -299,6 +299,7 @@ window.onload=function(){
     .withSuccessHandler(function(res){
       hideLoad2();
       if(res&&res.ok){
+        if(res.logoUrl){ var bl=document.getElementById('brandLetter'); if(bl){ bl.innerHTML='<img src="'+res.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:10px">'; bl.style.background='transparent'; } }
         if(res.entities&&res.entities.length){ _s.entity=res.entities[0]; document.getElementById('storeName').textContent=_s.entity; }
         if(res.warehouses&&res.warehouses.length) _s.whId=res.warehouses[0].id;
       }

@@ -471,6 +471,10 @@ window.onload = function() {
     .withSuccessHandler(function(res) {
       hideLoad();
       if (res && res.ok) {
+        if (res.logoUrl) {
+          var bl = document.getElementById('brandLetter');
+          if (bl) { bl.innerHTML = '<img src="'+res.logoUrl+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:11px">'; bl.style.background = 'transparent'; }
+        }
         if (res.entities && res.entities.length) {
           _s.entity = res.entities[0];
           document.getElementById('storeName').textContent = _s.entity;

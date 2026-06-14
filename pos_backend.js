@@ -211,11 +211,15 @@ function getPosPageData() {
     pendingOrders = getPendingOrders();
   } catch(e) { Logger.log('pendingOrders err: ' + e); }
 
+  var logoUrl = '';
+  try { logoUrl = getConfig().LOGO_URL || ''; } catch(e) {}
+
   return {
     ok:         true,
     warehouses: warehouses,
     entities:   entities,
-    pending:    pendingOrders
+    pending:    pendingOrders,
+    logoUrl:    logoUrl
   };
 }
 
