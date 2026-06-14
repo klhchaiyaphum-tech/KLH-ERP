@@ -338,6 +338,11 @@ function adjustSocialSecurity(yyyymm) {
 // 3) BAY IN จากอีเมล = PromptPay ลูกค้า = SALE (โดนค่าธรรมเนียม 0.5% → เตือนตามตัวลูกค้า)
 //    BAY OUT จับคู่ BAYC IN = โยกเงินภายใน · ไม่ตรง = ค่าใช้จ่าย เช่น ค่าน้ำ (เตือน)
 // 4) BAYC IN จับคู่ BAY OUT = โยกเงิน · BAYC OUT ที่เหลือ = ชำระหนี้/ค่าใช้จ่าย (ต้องระบุ)
+// KTB เงินเข้า: ลูกค้าโอน/PromptPay/เงินโอนเข้า = ขาย · ค่าธรรมเนียมคืน/ปรับปรุง(ADJ)/ดอกเบี้ย = รายได้อื่น
+function ktbInCat_(desc) {
+  return /\bADJ\b|BPGS|\bBSD\d|ดอกเบี้ย|interest|คืนค่าธรรมเนียม|fee\s*refund/i.test(String(desc || '')) ? 'OTHER' : 'SALE';
+}
+
 function categorizeBankTxns_() {
   var s = bankSheet_();
   if (s.getLastRow() <= 1) return [];
@@ -352,14 +357,16 @@ function categorizeBankTxns_() {
     return false;
   }
 
-  // แก้รายการเก่า: KTB เงินเข้าที่ติดเป็น "ขาย" แต่ไม่ใช่ PromptPay (เช่น ADJ FEE/เงินคืน) → รายได้อื่น
+  // จัดหมวด KTB เงินเข้าใหม่ตามรหัสธุรกรรม: ลูกค้าโอน/PromptPay = ขาย · ค่าธรรมเนียมคืน/ปรับปรุง/ดอกเบี้ย = รายได้อื่น
   for (var z = 1; z < rows.length; z++) {
-    if (rows[z][1] === 'KTB' && rows[z][2] === 'IN'
-        && (rows[z][4] === 'SALE' || !rows[z][4])
-        && !/promptpay|orft|MORPSD|NMPSDP|IORSDT/i.test(String(rows[z][5]||''))) {
-      rows[z][4] = 'OTHER';
-      s.getRange(z+1, 5).setValue('OTHER');
-      if (!rows[z][8]) alerts.push('💡 กรุงไทยเงินเข้า ฿' + Number(rows[z][3]).toLocaleString() + ' (' + String(rows[z][0]).slice(0,10) + ') ไม่ใช่ PromptPay → ตั้งเป็น "รายได้อื่น/เงินคืน" (เช่น ADJ FEE) ตรวจ/ระบุในสมุดเงินธนาคาร');
+    if (rows[z][1] === 'KTB' && rows[z][2] === 'IN' && rows[z][4] !== 'TRANSFER'
+        && (rows[z][4] === 'SALE' || rows[z][4] === 'OTHER' || !rows[z][4])) {
+      var want = ktbInCat_(rows[z][5]);
+      if (rows[z][4] !== want) {
+        rows[z][4] = want;
+        s.getRange(z+1, 5).setValue(want);
+        if (want === 'OTHER' && !rows[z][8]) alerts.push('💡 กรุงไทยเงินเข้า ฿' + Number(rows[z][3]).toLocaleString() + ' (' + String(rows[z][0]).slice(0,10) + ') = ค่าธรรมเนียม/ปรับปรุง → ตั้งเป็น "รายได้อื่น/เงินคืน" (ไม่ใช่ยอดขาย)');
+      }
     }
   }
 
@@ -522,10 +529,7 @@ function parseMt940_(text, s, seen) {
       var desc = cur.desc.join(' ').replace(/\s+/g, ' ').trim().slice(0, 120);
       // จัดหมวด: เงินเข้าที่เป็น PromptPay/ORFT = ยอดขายลูกค้า · นอกนั้น (ADJ FEE/ดอกเบี้ย/เงินคืน) = รายได้อื่น
       var cat = '';
-      if (cur.dir === 'IN') {
-        var isPP = /promptpay|orft|MORPSD|NMPSDP|IORSDT/i.test(desc);
-        cat = isPP ? 'SALE' : 'OTHER';
-      }
+      if (cur.dir === 'IN') cat = ktbInCat_(desc);
       s.appendRow([cur.date, bank, cur.dir, cur.amt, cat, desc || ('MT940 ' + cur.ref),
                    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', '']);
       seen[key] = 1; count++;
@@ -600,7 +604,7 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
     var d = parseThaiDate_(cell);
     var detail = (String(grid[r][cCode] || '') + ' ' + String(grid[r][cDetail] || '')).replace(/\s+/g, ' ').trim().slice(0, 120);
     var cat = '';
-    if (dir === 'IN') cat = /MORPSD|NMPSDP|IORSDT|promptpay|orft/i.test(detail) ? 'SALE' : 'OTHER';
+    if (dir === 'IN') cat = ktbInCat_(detail);
     var key = 'STMT-KTB-' + d + '-' + dir + '-' + amt + '-' + bal;   // ยอดคงเหลือ = unique ต่อรายการ
     rows.push([d, 'KTB', dir, amt, cat, detail, now, key, '', '']);
     if (!minD || d < minD) minD = d;
@@ -908,20 +912,40 @@ function reconcileKtb(yyyymm) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE
+// เช็คว่าวันที่ ymd มีรายการของแต่ละธนาคารไหม (ไว้เตือนถ้าลืมเรียก statement)
+function bankDayPresence_(ymd) {
+  var s = bankSheet_();
+  var has = { KTB: false, BAY: false, BAYC: false };
+  if (s.getLastRow() <= 1) return has;
+  s.getRange(2, 1, s.getLastRow() - 1, 2).getValues().forEach(function(r) {
+    var d = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+    if (d === ymd && has.hasOwnProperty(r[1])) has[r[1]] = true;
+  });
+  return has;
+}
+
+// รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE + เตือนถ้าเมื่อวานไม่มียอด
 function dailyBankJob() {
   var ktb = fetchKtbDaily(2);
   var ym = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
+  var yest = Utilities.formatDate(new Date(Date.now() - 86400000), 'Asia/Bangkok', 'yyyy-MM-dd');
   var sum = getBankSummary(ym);
+  // เตือนถ้าเมื่อวานยังไม่มียอด (ลืมเรียก/ดึง statement)
+  var has = bankDayPresence_(yest);
+  var miss = [];
+  if (!has.KTB) miss.push('กรุงไทย (KTB)');
+  if (!has.BAY && !has.BAYC) miss.push('กรุงศรี (BAY) — เรียก statement เองทุกคืน');
   if (sum.ok) {
-    sendWmsLine_('🏦 รายงานยอดเงินธนาคาร (' + ym + ' สะสม)\n'
+    var msg = '🏦 รายงานยอดเงินธนาคาร (' + ym + ' สะสม)\n'
       + '🟦 KTB เข้า: ฿' + Math.round(sum.ktbIn).toLocaleString() + '\n'
       + '🟧 กรุงศรี เข้า: ฿' + Math.round(sum.bayIn).toLocaleString() + '\n'
       + '🔁 โยกเงิน (ไม่นับขาย): ฿' + Math.round(sum.transfer).toLocaleString() + '\n'
       + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString()
-      + (ktb && ktb.added ? '\n(KTB อีเมลใหม่ ' + ktb.added + ' รายการ)' : ''));
+      + (ktb && ktb.added ? '\n(KTB อีเมลใหม่ ' + ktb.added + ' รายการ)' : '');
+    if (miss.length) msg += '\n\n⚠️ เมื่อวาน (' + yest + ') ยังไม่มียอด:\n   • ' + miss.join('\n   • ') + '\n→ เรียก/นำเข้า statement ให้ครบ';
+    sendWmsLine_(msg);
   }
-  return { ok: true, ktb: ktb, sum: sum };
+  return { ok: true, ktb: ktb, sum: sum, missingYesterday: miss };
 }
 
 // ════════════════════════════════════════════════════════════
