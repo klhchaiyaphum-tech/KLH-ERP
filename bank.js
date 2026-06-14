@@ -219,6 +219,32 @@ function importKtbMonthFromEmail(yyyymm) {
   return r;
 }
 
+// ── เช็คแถวซ้ำในสมุดธนาคาร (ดู KTB เดือนหนึ่งๆ ว่ามีคีย์ซ้ำไหม) ──
+// รันใน Editor: checkBankDup('2026-05')
+function checkBankDup(yyyymm) {
+  var s = bankSheet_();
+  if (s.getLastRow() <= 1) return 'ไม่มีข้อมูล';
+  var rows = s.getRange(2, 1, s.getLastRow() - 1, H_BANK.length).getValues();
+  var byKey = {}, total = 0, dups = [];
+  var sumByBank = {};
+  rows.forEach(function(r) {
+    var rd = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+    if (yyyymm && rd.slice(0, 7) !== yyyymm) return;
+    total++;
+    var bk = String(r[1]) + ' ' + String(r[2]);
+    sumByBank[bk] = (sumByBank[bk] || 0) + Number(r[3] || 0);
+    var k = String(r[7] || (rd + r[1] + r[2] + r[3]));
+    byKey[k] = (byKey[k] || 0) + 1;
+    if (byKey[k] === 2) dups.push(k);
+  });
+  var msg = '📊 เดือน ' + (yyyymm || 'ทั้งหมด') + ': ' + total + ' แถว · คีย์ซ้ำ ' + dups.length + ' รายการ';
+  Object.keys(sumByBank).sort().forEach(function(b){ msg += '\n  ' + b + ' = ' + sumByBank[b].toLocaleString(); });
+  if (dups.length) msg += '\n⚠️ คีย์ซ้ำ: ' + dups.slice(0, 8).join(', ');
+  else msg += '\n✅ ไม่มีซ้ำ';
+  Logger.log(msg);
+  return msg;
+}
+
 // ── จัดประเภทตามผังเงิน 5 ข้อ + คืนรายการที่ต้องเตือน ──────────────
 // 1) KTB IN = ยอดขาย KLH ทั้งหมด
 // 2) KTB OUT จับคู่ BAY IN (statement) = โยกเงิน · ไม่ตรง = ค่าใช้จ่ายธนาคาร (เตือน)
@@ -496,21 +522,30 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
   }
   if (!rows.length || !minD) return 0;
 
-  // ── authoritative replace: ลบแถว KTB เดิมในช่วงวันที่นี้ (กันซ้ำกับที่มาจากอีเมล) ──
-  if (s.getLastRow() > 1) {
-    var all = s.getRange(2, 1, s.getLastRow() - 1, 2).getValues();   // col1 DATE, col2 BANK
-    for (var i = all.length - 1; i >= 0; i--) {
-      var rd = all[i][0] instanceof Date
-        ? Utilities.formatDate(all[i][0], 'Asia/Bangkok', 'yyyy-MM-dd')
-        : String(all[i][0]).slice(0, 10);
-      if (String(all[i][1]) === 'KTB' && rd >= minD && rd <= maxD) s.deleteRow(i + 2);
-    }
-  }
+  // ── authoritative replace แบบ batch (อ่าน-กรอง-เขียนครั้งเดียว: เร็ว + ไม่ row-range error + กันซ้ำ) ──
+  var W = H_BANK.length;                                  // 10 คอลัมน์
+  var lastRow = s.getLastRow();
+  var existing = lastRow > 1 ? s.getRange(2, 1, lastRow - 1, W).getValues() : [];
 
-  // ── pass 2: ใส่รายการใหม่ (dedup ภายในไฟล์) ──
-  rows.forEach(function(row) {
-    if (!seen[row[7]]) { s.appendRow(row); seen[row[7]] = 1; count++; }
+  // เก็บทุกแถวที่ "ไม่ใช่ KTB ในช่วงวันที่นี้" (ลบ KTB ช่วงนี้ทิ้งทั้งหมด → กันซ้ำกับ email/รันซ้ำ)
+  var kept = [], keptKeys = {};
+  existing.forEach(function(r) {
+    var rd = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+    if (String(r[1]) === 'KTB' && rd >= minD && rd <= maxD) return;   // ตัดทิ้ง จะใส่ใหม่จากไฟล์
+    kept.push(r);
+    if (r[7]) keptKeys[String(r[7])] = 1;
   });
+
+  // dedup รายการใหม่ (กันคีย์ซ้ำในไฟล์เอง + ซ้ำกับแถวที่เก็บไว้)
+  var fresh = [];
+  rows.forEach(function(row) {
+    if (keptKeys[row[7]]) return;
+    keptKeys[row[7]] = 1; fresh.push(row); count++;
+  });
+
+  var out = kept.concat(fresh);
+  if (lastRow > 1) s.getRange(2, 1, lastRow - 1, W).clearContent();
+  if (out.length) s.getRange(2, 1, out.length, W).setValues(out);
   return count;
 }
 
