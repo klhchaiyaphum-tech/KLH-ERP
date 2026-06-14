@@ -32,10 +32,7 @@ input{font-family:inherit;}
 .screen.hidden{display:none;}
 
 /* ── Status bar (mock Android) ── */
-.statusbar{
-  height:30px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
-  padding:0 16px;font-size:12px;font-weight:600;color:var(--ink);background:var(--surface);
-}
+.statusbar{ display:none; }
 .sb-icons{display:flex;align-items:center;gap:5px;opacity:.85;}
 
 /* ── App header ── */
@@ -288,10 +285,11 @@ svg{display:block;}
         placeholder="ค้นหาสินค้า / บาร์โค้ด"
         style="border:none;outline:none;background:transparent;font-family:var(--ff);font-size:14.5px;width:100%;color:var(--ink);"
         autocomplete="off" autocorrect="off">
-      <!-- Scan hint for Sunmi physical scanner -->
-      <button onclick="showScanHint()" style="width:30px;height:30px;color:var(--brand-2);flex-shrink:0;" title="กดปุ่มด้านข้างเครื่อง Sunmi เพื่อสแกน">
+      <!-- กล้องสแกน (แยกจากช่องพิมพ์ค้นหา) · เครื่อง Sunmi กดปุ่มข้างเครื่องยิงเข้าช่องพิมพ์ได้ -->
+      <button onclick="startScan()" style="width:30px;height:30px;color:var(--brand-2);flex-shrink:0;" title="แตะเพื่อเปิดกล้องสแกน (หรือกดปุ่มยิงข้างเครื่อง Sunmi)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
       </button>
+      <button id="btnRecallBills" onclick="recallBills()" style="display:none;flex-shrink:0;padding:5px 9px;border-radius:8px;background:var(--brand-soft);color:var(--brand-2);font-weight:700;font-size:12.5px;border:1px solid var(--brand-tint);white-space:nowrap;">⏸️ <span id="heldCount">0</span></button>
     </div>
   </div>
 
@@ -362,10 +360,15 @@ svg{display:block;}
       <span style="font-weight:600;">ยอดสุทธิ</span>
       <span class="num tot-net-val" id="sumTotal">฿0</span>
     </div>
-    <button class="btn-primary" id="btnCreateOrder" onclick="doCreateOrder()" disabled>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19.5 6.5"/></svg>
-      สร้างออเดอร์ + พิมพ์ใบ
-    </button>
+    <div style="display:flex;gap:8px;">
+      <button id="btnHoldBill" onclick="holdBill()" style="flex:0 0 38%;padding:13px;border-radius:12px;background:var(--surface-3);color:var(--ink);font-weight:600;font-size:15px;border:1px solid var(--line);">
+        ⏸️ พักบิล
+      </button>
+      <button class="btn-primary" id="btnCreateOrder" onclick="doCreateOrder()" disabled style="flex:1;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19.5 6.5"/></svg>
+        สร้างออเดอร์ + พิมพ์ใบ
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1096,6 +1099,46 @@ function newOrder() {
   // Re-render product list to clear stepper states
   filterCat(_state.activeCat, null);
 }
+
+// ── พักบิล / เรียกบิลพัก (เก็บใน localStorage เครื่องนี้) ──────────
+function _getHeld(){ try { return JSON.parse(localStorage.getItem('klh_pos_held')||'[]'); } catch(e){ return []; } }
+function _setHeld(a){ try { localStorage.setItem('klh_pos_held', JSON.stringify(a)); } catch(e){} updateHeldCount(); }
+function updateHeldCount(){
+  var h=_getHeld(), btn=document.getElementById('btnRecallBills');
+  if(!btn) return;
+  document.getElementById('heldCount').textContent=h.length;
+  btn.style.display = h.length ? '' : 'none';
+}
+function holdBill(){
+  var n=Object.keys(_state.cart||{}).length;
+  if(!n){ Swal.fire({icon:'info',title:'ตะกร้าว่าง — ไม่มีอะไรให้พัก',timer:1300,showConfirmButton:false}); return; }
+  var h=_getHeld();
+  h.push({ ts:Date.now(), cart:_state.cart, custCode:_state.custCode||'', custName:_state.custName||'',
+           count:n, label:(_state.custName||'ลูกค้าทั่วไป') });
+  _setHeld(h);
+  newOrder();
+  Swal.fire({icon:'success',title:'พักบิลแล้ว',text:'กดปุ่ม ⏸️ มุมขวาบนเพื่อเรียกกลับ',timer:1500,showConfirmButton:false});
+}
+function recallBills(){
+  var h=_getHeld();
+  if(!h.length){ updateHeldCount(); return; }
+  var html=h.map(function(b,i){
+    var t=new Date(b.ts), tm=('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
+    return '<button onclick="recallOne('+i+')" style="display:block;width:100%;text-align:left;margin:5px 0;padding:11px 13px;border:1px solid #eee;border-radius:10px;background:#fff;font-size:14px">'
+      +'<b>'+b.label+'</b> · '+b.count+' ชิ้น<span style="color:#999;float:right">'+tm+'</span></button>';
+  }).join('');
+  Swal.fire({ title:'บิลที่พักไว้ ('+h.length+')', html:html, showConfirmButton:false, showCloseButton:true, width:360 });
+}
+function recallOne(i){
+  var h=_getHeld(), b=h[i]; if(!b) return;
+  _state.cart=b.cart||{}; _state.custCode=b.custCode||''; _state.custName=b.custName||'';
+  h.splice(i,1); _setHeld(h);
+  if(typeof Swal!=='undefined') Swal.close();
+  updateCartBar();
+  if(typeof filterCat==='function') filterCat(_state.activeCat, null);
+  showSummary();
+}
+updateHeldCount();
 
 // ── Customer search ────────────────────────────────────
 var _custTimer = null;
