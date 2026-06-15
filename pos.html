@@ -450,22 +450,25 @@ svg{display:block;}
 (function(){
   if (typeof google !== 'undefined' && google.script && google.script.run) return;
   var GAS_API = 'https://script.google.com/macros/s/AKfycbzNrUw3x0WgzHuf2gc3Rnst84uh7WHNEMLJVeR0EKQnRjIOc4b1_dUfe0zUfPqGh11A/exec';
-  var FNS = ['getPosPageData','getPosCategories','posSearchProducts','getAllCustomers',
-             'searchCustomers','addCustomer','createOrder','closeSale','getPendingOrders'];
-  function Runner(){ this._ok=null; this._fail=null; }
-  Runner.prototype.withSuccessHandler=function(cb){ this._ok=cb; return this; };
-  Runner.prototype.withFailureHandler=function(cb){ this._fail=cb; return this; };
-  FNS.forEach(function(fn){
-    Runner.prototype[fn]=function(){
-      var args=Array.prototype.slice.call(arguments), self=this;
-      fetch(GAS_API,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-                      body:JSON.stringify({ fn:fn, args:args }) })
-        .then(function(r){ return r.json(); })
-        .then(function(res){ if(self._ok) self._ok(res); })
-        .catch(function(e){ if(self._fail) self._fail(e); else console.error('API '+fn, e); });
-    };
-  });
-  window.google = { script:{ get run(){ return new Runner(); },
+  // Proxy: รองรับชื่อฟังก์ชันใดๆ (whitelist จริงอยู่ฝั่ง doPost) → ไม่ throw ถ้าเรียกฟังก์ชันที่ไม่ได้ list
+  function newRunner(){
+    var s = { _ok:null, _fail:null };
+    var proxy = new Proxy(s, { get:function(t, prop){
+      if (prop === 'withSuccessHandler') return function(cb){ s._ok = cb; return proxy; };
+      if (prop === 'withFailureHandler') return function(cb){ s._fail = cb; return proxy; };
+      if (typeof prop !== 'string') return undefined;
+      return function(){                                    // prop = ชื่อฟังก์ชันหลังบ้าน
+        var args = Array.prototype.slice.call(arguments);
+        fetch(GAS_API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+                         body:JSON.stringify({ fn:prop, args:args }) })
+          .then(function(r){ return r.json(); })
+          .then(function(res){ if (s._ok) s._ok(res); })
+          .catch(function(e){ if (s._fail) s._fail(e); else console.error('API '+prop, e); });
+      };
+    }});
+    return proxy;
+  }
+  window.google = { script:{ get run(){ return newRunner(); },
                              host:{ close:function(){}, setHeight:function(){}, editor:{} } } };
 })();
 
