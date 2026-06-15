@@ -867,7 +867,10 @@ function loadProducts(q, catFilter) {
       }
       renderProductList(rows, q);
     })
-    .withFailureHandler(function(){})
+    .withFailureHandler(function(err){
+      var pl = document.getElementById('prodList');
+      if (pl) pl.innerHTML = '<div class="empty-state" style="color:#c62828">โหลดสินค้าไม่ได้<br><small>'+((err&&err.message)||err||'')+'</small><br><button class="btn-find-prod" onclick="loadProducts(\'\',\'all\')">ลองใหม่</button></div>';
+    })
     .posSearchProducts(q || '', whId, catArg);
 }
 
