@@ -444,6 +444,31 @@ svg{display:block;}
 //  Connects to pos_backend.js + Code.js via google.script.run
 // ════════════════════════════════════════════════════
 
+// ── Fetch shim: ทำให้ google.script.run ทำงานผ่าน fetch เมื่อรัน "นอก GAS" ──
+// (เปิดในแอป Android wrapper หรือ GitHub Pages — หนีจาก iframe Google → กล้อง+พิมพ์ทำงาน)
+// ถ้ารันใน GAS ปกติ shim นี้จะไม่ทำงาน (มี google.script.run จริงอยู่แล้ว)
+(function(){
+  if (typeof google !== 'undefined' && google.script && google.script.run) return;
+  var GAS_API = 'https://script.google.com/macros/s/AKfycbzNrUw3x0WgzHuf2gc3Rnst84uh7WHNEMLJVeR0EKQnRjIOc4b1_dUfe0zUfPqGh11A/exec';
+  var FNS = ['getPosPageData','getPosCategories','posSearchProducts','getAllCustomers',
+             'searchCustomers','addCustomer','createOrder','closeSale','getPendingOrders'];
+  function Runner(){ this._ok=null; this._fail=null; }
+  Runner.prototype.withSuccessHandler=function(cb){ this._ok=cb; return this; };
+  Runner.prototype.withFailureHandler=function(cb){ this._fail=cb; return this; };
+  FNS.forEach(function(fn){
+    Runner.prototype[fn]=function(){
+      var args=Array.prototype.slice.call(arguments), self=this;
+      fetch(GAS_API,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+                      body:JSON.stringify({ fn:fn, args:args }) })
+        .then(function(r){ return r.json(); })
+        .then(function(res){ if(self._ok) self._ok(res); })
+        .catch(function(e){ if(self._fail) self._fail(e); else console.error('API '+fn, e); });
+    };
+  });
+  window.google = { script:{ get run(){ return new Runner(); },
+                             host:{ close:function(){}, setHeight:function(){}, editor:{} } } };
+})();
+
 // ── App state ────────────────────────────────────────
 var _state = {
   execUrl:    '',
@@ -1120,6 +1145,14 @@ function doCreateOrder() {
 var _lastSlipData = null;
 function printSlip(orderId, entity, items, total) {
   _lastSlipData = {orderId:orderId, entity:entity, items:items, total:total};
+  // ── แอป Android (มี bridge เครื่องพิมพ์ Sunmi) → สั่งพิมพ์ตรง ──
+  if (window.AndroidPrint && typeof window.AndroidPrint.printReceipt === 'function') {
+    var lns = items.map(function(it){ return it.name + '  x' + it.qty + '  ' + Number(it.lineTotal).toLocaleString('th-TH'); }).join('\n');
+    var txt = entity + '\nใบรายการขาย — ชำระที่แคชเชียร์\n--------------------------------\n'
+            + lns + '\n--------------------------------\nรวม ฿' + Number(total).toLocaleString('th-TH',{minimumFractionDigits:2})
+            + '\nเลขที่: ' + orderId + '\n(สแกน QR ที่แคชเชียร์)';
+    try { window.AndroidPrint.printReceipt(txt, orderId); return; } catch(e){}
+  }
   var now = new Date();
   var ts  = now.getDate()+'/'+(now.getMonth()+1)+'/'+(now.getFullYear()+543)+' '+now.toTimeString().slice(0,5);
   var rows = items.map(function(it){
