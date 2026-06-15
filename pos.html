@@ -1190,16 +1190,14 @@ function reprintSlip() {
 }
 
 function newOrder() {
+  showBrowse();                      // สลับกลับหน้าขายก่อน (กันบรรทัดล่าง error แล้วไม่ย้อนกลับ)
   _state.cart = {};
   _state.custCode = '';
   _state.custName = '';
-  document.getElementById('custSearchInput').value = '';
-  document.getElementById('custChip').style.display = 'none';
-  document.getElementById('custSearchInput').style.display = '';
-  updateCartBar();
-  showBrowse();
-  // Re-render product list to clear stepper states
-  filterCat(_state.activeCat, null);
+  var cs = document.getElementById('custSearchInput'); if (cs) { cs.value = ''; cs.style.display = ''; }
+  var cc = document.getElementById('custChip');        if (cc) cc.style.display = 'none';
+  try { updateCartBar(); } catch(e) {}
+  try { filterCat(_state.activeCat, null); } catch(e) {}   // re-render product list
 }
 
 // ── พักบิล / เรียกบิลพัก (เก็บใน localStorage เครื่องนี้) ──────────
