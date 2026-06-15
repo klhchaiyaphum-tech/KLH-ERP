@@ -162,6 +162,9 @@ input{font-family:inherit;}
 #overlay{display:none;position:fixed;inset:0;background:rgba(243,241,236,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
 .spin{width:36px;height:36px;border:4px solid var(--line-2);border-top-color:var(--brand);border-radius:999px;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
+/* พิมพ์ในหน้า (fallback เบราว์เซอร์) */
+#printArea{display:none;}
+@media print{ body>*{display:none!important;} #printArea{display:block!important;width:72mm;margin:0;padding:6px;color:#000;} @page{margin:0;} }
 </style>
 </head>
 <body>
@@ -174,7 +177,7 @@ input{font-family:inherit;}
     <div style="font-size:11.5px;color:var(--ink-3)" id="clockLabel">รับชำระเงิน</div>
   </div>
   <div style="width:1px;height:30px;background:var(--line);margin:0 4px;flex-shrink:0"></div>
-  <div class="devchip"><span class="ld"></span>Tigercashbox พร้อม</div>
+  <div class="devchip" style="background:#F0EEEA;color:#9a8c7e;border-color:#ddd6cc" title="ลิ้นชักที่ 2 — เตรียมไว้ ค่อยเปิดใช้ภายหลัง"><span class="ld" style="background:#c9bcae"></span>Tigercashbox · ลิ้นชัก 2 (รอเปิดใช้)</div>
   <div style="flex:1"></div>
   <button class="btn-hdr" onclick="refreshPending()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -263,8 +266,8 @@ input{font-family:inherit;}
       </div>
       <div id="discAfter" style="display:none;text-align:center;font-size:13px;color:rgba(255,255,255,.6);">หลังส่วนลด: <b class="num" id="afterDisc" style="color:#7FE0A8">฿0.00</b></div>
       <div class="bill-info" id="payBillInfo">—</div>
-      <div class="devchip-dark">
-        <span style="width:7px;height:7px;border-radius:999px;background:#7FE0A8"></span>Tigercashbox · เชื่อมต่อแล้ว
+      <div class="devchip-dark" style="color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.12)">
+        <span style="width:7px;height:7px;border-radius:999px;background:rgba(255,255,255,.3)"></span>Tigercashbox · ลิ้นชัก 2 (รอเปิดใช้)
       </div>
       <div class="devrow">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l2-6h14l2 6M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7M3 11h18M9.5 15h5"/></svg>
@@ -363,7 +366,7 @@ input{font-family:inherit;}
       <div style="text-align:center">
         <div style="font-size:21px;font-weight:700;">ปิดบิลสำเร็จ!</div>
         <div style="color:var(--ink-2);margin-top:4px;font-size:14px" id="successDetail">—</div>
-        <div class="devchip" id="drawerOpenedChip" style="display:none;margin:8px auto 0"><span class="ld"></span>ลิ้นชักเปิดแล้วผ่าน Tigercashbox</div>
+        <div class="devchip" id="drawerOpenedChip" style="display:none;margin:8px auto 0"><span class="ld"></span>ลิ้นชัก 1 เปิดแล้ว</div>
       </div>
       <div class="success-btns">
         <button class="btn-ghost" onclick="printReceipt()">
@@ -387,6 +390,31 @@ input{font-family:inherit;}
 //  KLH Cashier — redesigned to match PC POS style
 //  Deferred settlement: scan QR → merge orders → pay → deduct stock
 // ════════════════════════════════════════════════════
+
+// ── Fetch shim: รัน "นอก GAS" ได้ (แอป Android / GitHub Pages) → กล้อง+พิมพ์ทำงาน ──
+(function(){
+  if (typeof google !== 'undefined' && google.script && google.script.run) return;
+  var GAS_API = 'https://script.google.com/macros/s/AKfycbzNrUw3x0WgzHuf2gc3Rnst84uh7WHNEMLJVeR0EKQnRjIOc4b1_dUfe0zUfPqGh11A/exec';
+  function newRunner(){
+    var s = { _ok:null, _fail:null };
+    var proxy = new Proxy(s, { get:function(t, prop){
+      if (prop === 'withSuccessHandler') return function(cb){ s._ok = cb; return proxy; };
+      if (prop === 'withFailureHandler') return function(cb){ s._fail = cb; return proxy; };
+      if (typeof prop !== 'string') return undefined;
+      return function(){
+        var args = Array.prototype.slice.call(arguments);
+        fetch(GAS_API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+                         body:JSON.stringify({ fn:prop, args:args }) })
+          .then(function(r){ return r.json(); })
+          .then(function(res){ if (s._ok) s._ok(res); })
+          .catch(function(e){ if (s._fail) s._fail(e); else console.error('API '+prop, e); });
+      };
+    }});
+    return proxy;
+  }
+  window.google = { script:{ get run(){ return newRunner(); },
+                             host:{ close:function(){}, setHeight:function(){}, editor:{} } } };
+})();
 
 var _execUrl = '';
 // KTB ถุงเงิน static QR (เค แอล เอช - รหัส 2AO36354TB2000326PG)
@@ -709,6 +737,10 @@ function openDrawer() {
   _drawerOpen = true;
   document.getElementById('drawerState').textContent = '● เปิดอยู่';
   document.getElementById('drawerState').style.color = '#7FE0A8';
+  // ลิ้นชัก 1: สั่งเปิดผ่าน Sunmi SDK (เมื่อรันในแอป) · Tigercashbox = ลิ้นชัก 2 (อนาคต)
+  if (window.AndroidPrint && typeof window.AndroidPrint.openDrawer === 'function') {
+    try { window.AndroidPrint.openDrawer(); } catch(e) {}
+  }
 }
 
 // ── Close sale ─────────────────────────────────────────
@@ -770,7 +802,28 @@ function showSuccess(saleId, total, method, change) {
 }
 
 function printReceipt() {
-  Swal.fire({icon:'info',title:'พิมพ์ใบเสร็จ',text:'ส่งงานพิมพ์ '+_lastSaleId+' ไปยัง Tigercashbox',timer:2000,showConfirmButton:false});
+  var lns = '';
+  (_loadedOrders||[]).forEach(function(o){ (o.items||[]).forEach(function(it){
+    var q = it.qty || it.pieces || 1;
+    lns += it.name + '  x' + q + '  ' + Number(it.lineTotal||0).toLocaleString('th-TH') + '\n';
+  }); });
+  var chg = _payMethod==='CASH' ? Math.max(0, _cashRecv - _grandTotal) : 0;
+  var pay = _payMethod==='CASH' ? ('เงินสด ฿'+Number(_cashRecv).toLocaleString('th-TH')+'  ทอน ฿'+Number(chg).toLocaleString('th-TH'))
+          : (_payMethod==='QR' ? 'พร้อมเพย์ QR' : 'เครดิต/เชื่อ');
+  var ent = (_loadedOrders[0] && _loadedOrders[0].entity) || 'KLH';
+  var txt = ent + '\nใบเสร็จรับเงิน\n--------------------------------\n'
+          + lns + '--------------------------------\n'
+          + 'รวม ฿' + Number(_grandTotal).toLocaleString('th-TH',{minimumFractionDigits:2}) + '\n'
+          + 'ชำระ: ' + pay + '\nเลขที่: ' + _lastSaleId;
+  // แอป Android → สั่งเครื่องพิมพ์ Sunmi ตรง
+  if (window.AndroidPrint && typeof window.AndroidPrint.printReceipt === 'function') {
+    try { window.AndroidPrint.printReceipt(txt, _lastSaleId); return; } catch(e) {}
+  }
+  // fallback (เบราว์เซอร์): พิมพ์ในหน้า
+  var area = document.getElementById('printArea');
+  if (!area) { area = document.createElement('div'); area.id='printArea'; document.body.appendChild(area); }
+  area.innerHTML = '<pre style="font-family:\'IBM Plex Sans Thai\',monospace;font-size:12px;white-space:pre-wrap;margin:0">'+txt.replace(/</g,'&lt;')+'</pre>';
+  setTimeout(function(){ try { window.print(); } catch(e){} }, 200);
 }
 
 function resetCashier() {

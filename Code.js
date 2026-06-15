@@ -567,7 +567,7 @@ function doPost(e) {
   if (body.fn) {
     var allowed = ['getPosPageData','getPosCategories','posSearchProducts',
                    'getAllCustomers','searchCustomers','addCustomer',
-                   'createOrder','closeSale','getPendingOrders',
+                   'createOrder','closeSale','getPendingOrders','loadOrderById',
                    'getExecUrl','getDropdownData'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
