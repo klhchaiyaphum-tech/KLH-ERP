@@ -556,10 +556,34 @@ function processAndSaveAll(imgBase64, barcodeSmall, info) {
   return { status: "success" };
 }
 
+// doPost รับทั้ง 2 แบบ:
+//  1) POS API จากแอป Android / GitHub Pages ผ่าน fetch  → body = { fn:'ชื่อฟังก์ชัน', args:[...] }
+//  2) LINE webhook (เดิม)                                → body = { events:[...] }
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const event = body.events[0];
-  Logger.log(JSON.stringify(event.source));
+  var body = {};
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch(err) {}
+
+  // ── (1) POS API ──
+  if (body.fn) {
+    var allowed = ['getPosPageData','getPosCategories','posSearchProducts',
+                   'getAllCustomers','searchCustomers','addCustomer',
+                   'createOrder','closeSale','getPendingOrders'];
+    var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
+    try {
+      if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {
+        out = globalThis[body.fn].apply(null, body.args || []);
+      }
+    } catch(err2) { out = { ok:false, msg:String(err2) }; }
+    return ContentService.createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ── (2) LINE webhook (เดิม) ──
+  try {
+    var event = body.events[0];
+    Logger.log(JSON.stringify(event.source));
+  } catch(err3) {}
+  return ContentService.createTextOutput('OK');
 }
 
 function getLineGroupId() {
