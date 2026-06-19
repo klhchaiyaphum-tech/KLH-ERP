@@ -422,11 +422,18 @@ function loadProducts(){
     S.products = rows || []; renderProducts();
   }).withFailureHandler(function(){ document.getElementById('prodList').innerHTML='<div class="empty">โหลดสินค้าไม่ได้</div>'; }).lineSearchProducts(S.searchQ, S.cat);
 }
-function priceOf(p){ return (S.priceLevel==='wholesale' && p.wholesalePrice>0) ? p.retailPrice||0 : (p.retailPrice||0); }
+// ราคา/ชิ้น ตามกลุ่มลูกค้า: ส่ง = ราคาส่ง÷ตัวคูณ · ปลีก/ทั่วไป = ราคาปลีก
+function priceOf(p){
+  if (S.priceLevel==='wholesale' && p.wholesalePrice>0 && (p.convRate||1)>0){
+    var per = p.wholesalePrice/(p.convRate||1);
+    if (per>0 && per < (p.retailPrice||per+1)) return Math.round(per*100)/100;
+  }
+  return p.retailPrice||0;
+}
 function unitInfo(p,unit){
   if (unit==='โหล') return { price:p.dozenPrice||0, ppu:12, label:'โหล', unitBig:'โหล' };
   if (unit==='ลัง') return { price:p.wholesalePrice||0, ppu:p.convRate||1, label:(p.unitBig||'ลัง'), unitBig:(p.unitBig||'ลัง') };
-  return { price:p.retailPrice||0, ppu:1, label:'ชิ้น', unitBig:'' };
+  return { price:priceOf(p), ppu:1, label:'ชิ้น', unitBig:'' };
 }
 function renderProducts(){
   var el = document.getElementById('prodList');
@@ -443,7 +450,9 @@ function renderProducts(){
     return '<div class="pcard">'
       + (q>0?'':'<button class="addb" onclick="addUnit(\''+bc+'\',\'ชิ้น\',1)">+</button>')
       + '<div class="pn">'+p.name+'</div>'
-      + '<div class="pp num">฿'+fmt(p.retailPrice||0)+'<small> /ชิ้น</small></div>'
+      + '<div class="pp num">฿'+fmt(priceOf(p))+'<small> /ชิ้น</small>'
+        + ((S.priceLevel==='wholesale' && priceOf(p) < (p.retailPrice||0)) ? ' <span style="font-size:10px;color:#06C755;font-weight:700">ราคาส่ง</span> <s style="font-size:11px;color:#aaa;font-weight:400">฿'+fmt(p.retailPrice)+'</s>' : '')
+        + '</div>'
       + (chips?'<div class="uchips">'+chips+'</div>':'')
       + (q>0?'<div class="qbar">'+right+'</div>':'')
       + '</div>';
