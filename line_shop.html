@@ -318,6 +318,7 @@ var S = {
 window.onload = function(){
   // จำสมาชิกเดิม (ไม่ต้อง login ใหม่ทุกครั้งที่เข้า Rich Menu)
   try { var sv=JSON.parse(localStorage.getItem('klh_line_member')||'null'); if(sv&&(sv.phone||sv.custId)){ S.member=sv; S.priceLevel=sv.priceLevel||'retail'; } } catch(e){}
+  routeByTo();          // นำทางทันที ไม่รอ config (กันค้างหน้า login)
   if (window.liff) {
     liff.init({ liffId: LIFF_ID }).then(function(){
       if (liff.isLoggedIn && liff.isLoggedIn()) {
@@ -325,12 +326,16 @@ window.onload = function(){
       }
     }).catch(function(e){ console.log('liff init', e); });
   }
-  loadConfig();
+  loadConfig();         // โหลด cats/logo เบื้องหลัง
 };
 function autoLoginByUid(){
   if (!S.profile || !S.profile.userId) return;
   google.script.run.withSuccessHandler(function(res){
-    if (res && res.ok && res.found){ S.member=res.member; S.priceLevel=res.member.priceLevel||'retail'; saveMember(); setMemberHeader(); }
+    if (res && res.ok && res.found){
+      S.member=res.member; S.priceLevel=res.member.priceLevel||'retail'; saveMember(); setMemberHeader();
+      // ถ้าเข้ามาที่เมนูสมาชิก/สถานะ แล้วเพิ่ง auto-login เสร็จ → เปิดจอนั้นเลย
+      if (LINE_TO==='member' || LINE_TO==='status') routeByTo();
+    }
   }).withFailureHandler(function(){}).lineFindMember('', S.profile.userId);
 }
 function saveMember(){ try { if (S.member) localStorage.setItem('klh_line_member', JSON.stringify(S.member)); } catch(e){} }
@@ -365,8 +370,7 @@ function loadConfig(){
     }
     if (res && res.company){ document.getElementById('shopName').textContent = res.company + ' สั่งสินค้า'; document.getElementById('hdName').textContent = res.company; }
     buildCats((res && res.categories) || []);
-    routeByTo();                              // เปิดตรงจอตาม Rich Menu
-  }).withFailureHandler(function(e){ toast('โหลดค่าไม่สำเร็จ'); routeByTo(); }).getLineShopConfig();
+  }).withFailureHandler(function(e){ toast('โหลดค่าไม่สำเร็จ'); }).getLineShopConfig();
 }
 
 // ---------- login ----------
