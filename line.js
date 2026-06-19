@@ -115,22 +115,80 @@ function createLineOrder(payload) {
   }
 }
 
-// โปรโมชั่น — staff แก้เองใน sheet PROMOTIONS (NAME · PRICE · IMAGE_URL · NOTE · ACTIVE)
+// โปรโมชั่น — sheet PROMOTIONS (NAME · PRICE · IMAGE_URL · NOTE · ACTIVE)
+// 6 ตัวอย่างเริ่มต้น (ใส่ครั้งแรกถ้า sheet ว่าง)
+var PROMO_SAMPLES_ = [
+  ['ข้าวหอมมะลิ 5 กก.', 165, '', 'ปกติ 195 — ลดเหลือ 165 บาท', 'TRUE'],
+  ['น้ำมันพืช 1 ลิตร ซื้อ 2 แถม 1', 0, '', 'ซื้อ 2 ขวด แถมฟรี 1 ขวด', 'TRUE'],
+  ['น้ำปลาทิพรส 700ml แพ็คคู่', 65, '', '2 ขวด เพียง 65 บาท', 'TRUE'],
+  ['ไข่ไก่เบอร์ 2 (แผง 30 ฟอง)', 99, '', 'สดใหม่ทุกวัน 99 บาท/แผง', 'TRUE'],
+  ['ผงซักฟอก 3 กก. ลด 20%', 0, '', 'ลดทันที 20% ทุกสูตร', 'TRUE'],
+  ['น้ำดื่ม แพ็ค 12 ขวด', 45, '', 'ยกแพ็ค 12 ขวด 45 บาท', 'TRUE']
+];
+function _promoSheet_(seedIfEmpty){
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('PROMOTIONS');
+  if (!s){
+    s = ss.insertSheet('PROMOTIONS');
+    s.getRange(1,1,1,5).setValues([['NAME','PRICE','IMAGE_URL','NOTE','ACTIVE']]);
+    s.getRange(1,1,1,5).setFontWeight('bold').setBackground('#F6704C').setFontColor('#fff');
+  }
+  if (seedIfEmpty && s.getLastRow() <= 1){
+    s.getRange(2,1,PROMO_SAMPLES_.length,5).setValues(PROMO_SAMPLES_);
+  }
+  return s;
+}
+
+// ฝั่งลูกค้า LINE — เฉพาะ ACTIVE
 function getPromotions(){
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
-    var s = ss.getSheetByName('PROMOTIONS');
-    if (!s){
-      s = ss.insertSheet('PROMOTIONS');
-      s.getRange(1,1,1,5).setValues([['NAME','PRICE','IMAGE_URL','NOTE','ACTIVE']]);
-      s.getRange(1,1,1,5).setFontWeight('bold').setBackground('#F6704C').setFontColor('#fff');
-      return { ok:true, items:[] };
-    }
+    var s = _promoSheet_(true);
     if (s.getLastRow() <= 1) return { ok:true, items:[] };
     var rows = s.getRange(2,1,s.getLastRow()-1,5).getValues();
     var items = rows.filter(function(r){ return r[0] && String(r[4]).toUpperCase() !== 'FALSE'; })
       .map(function(r){ return { name:String(r[0]), price:Number(r[1])||0, image:String(r[2]||''), note:String(r[3]||'') }; });
     return { ok:true, items:items };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ฝั่ง staff — ทั้งหมด (รวมที่ปิดอยู่) พร้อมเลขแถวสำหรับแก้ไข
+function getAllPromotions(){
+  try {
+    var s = _promoSheet_(true);
+    if (s.getLastRow() <= 1) return { ok:true, items:[] };
+    var rows = s.getRange(2,1,s.getLastRow()-1,5).getValues();
+    var items = rows.map(function(r,i){
+      return { row:i+2, name:String(r[0]||''), price:Number(r[1])||0, image:String(r[2]||''),
+               note:String(r[3]||''), active: String(r[4]).toUpperCase() !== 'FALSE' };
+    }).filter(function(it){ return it.name; });
+    return { ok:true, items:items };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// เพิ่ม/แก้ไขโปรโมชั่น — p.row>0 = แก้ไขแถวนั้น, ไม่งั้น = เพิ่มใหม่
+function savePromotion(p){
+  try {
+    if (!p || !String(p.name||'').trim()) return { ok:false, msg:'กรุณากรอกชื่อโปรโมชั่น' };
+    var s = _promoSheet_(false);
+    var vals = [ String(p.name).trim(), Number(p.price)||0, String(p.image||''),
+                 String(p.note||''), (p.active===false?'FALSE':'TRUE') ];
+    if (p.row && Number(p.row) >= 2){
+      s.getRange(Number(p.row),1,1,5).setValues([vals]);
+      return { ok:true, msg:'บันทึกแล้ว', row:Number(p.row) };
+    }
+    s.appendRow(vals);
+    return { ok:true, msg:'เพิ่มโปรโมชั่นแล้ว', row:s.getLastRow() };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ลบโปรโมชั่นตามเลขแถว
+function deletePromotion(row){
+  try {
+    var r = Number(row); if (!r || r < 2) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    var s = _promoSheet_(false);
+    if (r > s.getLastRow()) return { ok:false, msg:'ไม่พบแถว' };
+    s.deleteRow(r);
+    return { ok:true, msg:'ลบแล้ว' };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH จัดการโปรโมชั่น</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<style>
+:root{--coral:#F6704C;--coral2:#E2502B;--dark:#3A332C;--red:#D9512B;--green:#2E7D46;--line:#ECE6DA;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:linear-gradient(157deg,#F4EEE2 0%,#EFE6D7 100%);min-height:100vh;font-family:"IBM Plex Sans Thai","IBM Plex Sans",'Segoe UI',sans-serif;font-size:14px;color:var(--dark);}
+.hdr{background:linear-gradient(120deg,#FF7A2E,#F4701E 50%,#E2502B);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:200;}
+.hdr h1{font-size:1.05rem;font-weight:700;flex:1;}
+.btn-hdr{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:9px;padding:6px 13px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:5px;}
+.btn-hdr:hover{background:rgba(255,255,255,.35);}
+.wrap{padding:16px;max-width:1000px;margin:0 auto;}
+.toolbar{display:flex;gap:10px;margin-bottom:14px;align-items:center;}
+.toolbar .sub{flex:1;color:#8a7f70;font-size:.85rem;}
+.btn{border:none;border-radius:11px;padding:8px 16px;cursor:pointer;font-size:.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--coral);color:#fff;}.btn-primary:hover{background:var(--coral2);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(60,40,25,.06);display:flex;flex-direction:column;transition:.12s;}
+.pcard.off{opacity:.55;}
+.pcard:hover{box-shadow:0 4px 14px rgba(60,40,25,.12);}
+.pcard .thumb{height:120px;background:#FCE6DC;display:flex;align-items:center;justify-content:center;font-size:2.6rem;color:#E2502B;overflow:hidden;}
+.pcard .thumb img{width:100%;height:100%;object-fit:cover;}
+.pcard .pbody{padding:12px 14px;flex:1;display:flex;flex-direction:column;gap:5px;}
+.pcard .pname{font-weight:700;font-size:1rem;line-height:1.25;}
+.pcard .pprice{font-size:1.15rem;font-weight:800;color:var(--coral2);}
+.pcard .pprice small{font-size:.78rem;color:#aaa;font-weight:600;}
+.pcard .pnote{font-size:.82rem;color:#8a7f70;line-height:1.4;}
+.pcard .pfoot{display:flex;gap:7px;padding:10px 14px;border-top:1px solid var(--line);align-items:center;}
+.badge-on{background:#E8F5E9;color:var(--green);border-radius:999px;padding:2px 10px;font-size:.74rem;font-weight:700;}
+.badge-off{background:#FFEBEE;color:var(--red);border-radius:999px;padding:2px 10px;font-size:.74rem;font-weight:700;}
+.icon-btn{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;cursor:pointer;font-size:.85rem;color:#6B6258;}
+.icon-btn:hover{background:#F8F4EC;}
+.icon-btn.del:hover{background:#FFEBEE;color:var(--red);border-color:#F3C7C0;}
+.empty{text-align:center;color:#8a7f70;padding:60px 0;}
+#overlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:10px;}
+.spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--coral);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.swal2-input,.swal2-textarea{border-radius:10px!important;}
+input:focus,textarea:focus{border-color:var(--coral)!important;box-shadow:0 0 0 3px #FCE6DC!important;outline:none;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <i class="bi bi-megaphone-fill fs-5"></i>
+  <h1>จัดการโปรโมชั่น — LINE OA</h1>
+  <button class="btn-hdr" onclick="loadPromos()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+  <button class="btn-hdr" onclick="goHome()"><i class="bi bi-house-door-fill"></i> หลัก</button>
+</div>
+
+<div class="wrap">
+  <div class="toolbar">
+    <span class="sub">โปรโมชั่นที่ <b>เปิด</b> จะแสดงในหน้า LINE OA ของลูกค้าทันที</span>
+    <button class="btn btn-primary" onclick="openEdit(null)"><i class="bi bi-plus-lg"></i> เพิ่มโปรโมชั่น</button>
+  </div>
+  <div class="grid" id="grid"><div class="empty">กำลังโหลด...</div></div>
+</div>
+
+<div id="overlay"><div class="spinner"></div><div id="ovMsg" style="color:#8a7f70">...</div></div>
+
+<script>
+var _execUrl='';
+var _promos=[];
+
+window.onload = function(){
+  google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
+  loadPromos();
+};
+function goHome(){ if(_execUrl) window.top.location.href=_execUrl; else window.location.href='?page=index'; }
+function showLoad(m){ document.getElementById('ovMsg').textContent=m||'...'; document.getElementById('overlay').style.display='flex'; }
+function hideLoad(){ document.getElementById('overlay').style.display='none'; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmt(n){ return (Number(n)||0).toLocaleString('th-TH'); }
+
+function loadPromos(){
+  showLoad('โหลดโปรโมชั่น...');
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad(); _promos=(res&&res.items)||[]; render(); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getAllPromotions();
+}
+
+function render(){
+  var g=document.getElementById('grid');
+  if(!_promos.length){ g.innerHTML='<div class="empty"><div style="font-size:2.4rem">📣</div>ยังไม่มีโปรโมชั่น<br>กด "เพิ่มโปรโมชั่น"</div>'; return; }
+  g.innerHTML=_promos.map(function(p){
+    var thumb = p.image ? '<img src="'+esc(p.image)+'" onerror="this.parentNode.innerHTML=\'🏷️\'">' : '🏷️';
+    var price = p.price>0 ? '฿'+fmt(p.price) : '<small>ดูรายละเอียด</small>';
+    return '<div class="pcard'+(p.active?'':' off')+'">'
+      +'<div class="thumb">'+thumb+'</div>'
+      +'<div class="pbody">'
+      +  '<div class="pname">'+esc(p.name)+'</div>'
+      +  '<div class="pprice">'+price+'</div>'
+      +  (p.note?'<div class="pnote">'+esc(p.note)+'</div>':'')
+      +'</div>'
+      +'<div class="pfoot">'
+      +  '<span class="'+(p.active?'badge-on':'badge-off')+'" onclick="toggleActive('+p.row+','+(!p.active)+')" style="cursor:pointer" title="คลิกเพื่อสลับ">'+(p.active?'● เปิดอยู่':'○ ปิดอยู่')+'</span>'
+      +  '<button class="icon-btn" onclick="openEdit('+p.row+')" title="แก้ไข"><i class="bi bi-pencil"></i></button>'
+      +  '<button class="icon-btn del" onclick="del('+p.row+')" title="ลบ"><i class="bi bi-trash"></i></button>'
+      +'</div></div>';
+  }).join('');
+}
+
+function formHtml(p){
+  p=p||{};
+  return '<div style="text-align:left;display:flex;flex-direction:column;gap:8px">'
+    +'<div><label style="font-size:.8rem;font-weight:600">ชื่อโปรโมชั่น *</label>'
+    +'<input id="pf-name" class="swal2-input" style="margin:3px 0;width:100%" value="'+esc(p.name||'')+'" placeholder="เช่น ข้าวหอมมะลิ 5 กก."></div>'
+    +'<div><label style="font-size:.8rem;font-weight:600">ราคา (บาท) — ใส่ 0 ถ้าเป็นโปรแบบอื่น</label>'
+    +'<input id="pf-price" type="number" class="swal2-input" style="margin:3px 0;width:100%" value="'+(p.price||0)+'"></div>'
+    +'<div><label style="font-size:.8rem;font-weight:600">รายละเอียด</label>'
+    +'<textarea id="pf-note" class="swal2-textarea" style="margin:3px 0;width:100%" placeholder="เช่น ซื้อ 2 แถม 1 / ลด 20%">'+esc(p.note||'')+'</textarea></div>'
+    +'<div><label style="font-size:.8rem;font-weight:600">ลิงก์รูปภาพ (ไม่บังคับ)</label>'
+    +'<input id="pf-image" class="swal2-input" style="margin:3px 0;width:100%" value="'+esc(p.image||'')+'" placeholder="https://..."></div>'
+    +'<label style="font-size:.85rem;display:flex;align-items:center;gap:7px;margin-top:2px">'
+    +'<input id="pf-active" type="checkbox" '+(p.active===false?'':'checked')+' style="width:18px;height:18px"> เปิดแสดงในหน้า LINE</label>'
+    +'</div>';
+}
+function openEdit(row){
+  var p = row ? _promos.filter(function(x){return x.row===row;})[0] : null;
+  Swal.fire({
+    title: p?'แก้ไขโปรโมชั่น':'เพิ่มโปรโมชั่น', html:formHtml(p), width:520,
+    showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#F6704C',
+    focusConfirm:false
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    var data={
+      row: p?p.row:0,
+      name: document.getElementById('pf-name').value.trim(),
+      price: Number(document.getElementById('pf-price').value)||0,
+      note: document.getElementById('pf-note').value.trim(),
+      image: document.getElementById('pf-image').value.trim(),
+      active: document.getElementById('pf-active').checked
+    };
+    if(!data.name){ Swal.fire('แจ้งเตือน','กรุณากรอกชื่อโปรโมชั่น','warning'); return; }
+    showLoad('บันทึก...');
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res&&res.ok){ Swal.fire({icon:'success',title:res.msg,timer:1400,showConfirmButton:false}); loadPromos(); } else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .savePromotion(data);
+  });
+}
+function toggleActive(row,active){
+  var p=_promos.filter(function(x){return x.row===row;})[0]; if(!p) return;
+  showLoad('อัปเดต...');
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad(); if(res&&res.ok) loadPromos(); else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error'); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .savePromotion({ row:row, name:p.name, price:p.price, note:p.note, image:p.image, active:active });
+}
+function del(row){
+  var p=_promos.filter(function(x){return x.row===row;})[0]; if(!p) return;
+  Swal.fire({ title:'ลบโปรโมชั่น?', text:p.name, icon:'warning', showCancelButton:true, confirmButtonText:'ลบ', cancelButtonText:'ยกเลิก', confirmButtonColor:'#D9512B' })
+  .then(function(r){
+    if(!r.isConfirmed) return;
+    showLoad('ลบ...');
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad(); if(res&&res.ok){ Swal.fire({icon:'success',title:'ลบแล้ว',timer:1100,showConfirmButton:false}); loadPromos(); } else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .deletePromotion(row);
+  });
+}
+</script>
+</body>
+</html>

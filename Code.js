@@ -23,7 +23,8 @@ function doGet(e) {
     tax:         'tax_estimate',   // ประมาณการ สรรพากร (ภพ.30)
     wms_analytics: 'wms_analytics',// วิเคราะห์คลัง ABC/EOQ/ROP/Dead stock
     pl:          'pl',             // งบกำไรขาดทุน (Phase 6.3)
-    bank:        'bank_ledger'     // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
+    bank:        'bank_ledger',    // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
+    promo:       'promo'           // จัดการโปรโมชั่น LINE OA (staff)
   };
   const tpl = pageMap[page] || 'main';
   const titles = {
@@ -42,7 +43,8 @@ function doGet(e) {
     tax: 'KLH ประมาณการ สรรพากร',
     wms_analytics: 'KLH วิเคราะห์คลัง',
     pl: 'KLH งบกำไรขาดทุน',
-    bank: 'KLH สมุดเงินธนาคาร'
+    bank: 'KLH สมุดเงินธนาคาร',
+    promo: 'KLH จัดการโปรโมชั่น'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
   tmpl.fromPage = (e && e.parameter && e.parameter.from) || '';
@@ -574,7 +576,8 @@ function doPost(e) {
                    'createLineOrder','lineAttachSlip','lineRegisterMember','lineGetMyProfile',
                    'lineGetMyOrders','getPromotions',
                    // order lifecycle (POS-PC / Cashier board)
-                   'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary'];
+                   'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
+                   'getAllPromotions','savePromotion','deletePromotion'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {
