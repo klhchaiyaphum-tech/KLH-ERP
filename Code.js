@@ -568,7 +568,11 @@ function doPost(e) {
     var allowed = ['getPosPageData','getPosCategories','posSearchProducts',
                    'getAllCustomers','searchCustomers','addCustomer',
                    'createOrder','closeSale','getPendingOrders','loadOrderById',
-                   'getExecUrl','getDropdownData'];
+                   'getExecUrl','getDropdownData',
+                   // LINE OA shop
+                   'getLineShopConfig','lineFindMember','lineSearchProducts',
+                   'createLineOrder','lineAttachSlip','lineRegisterMember','lineGetMyProfile',
+                   'lineGetMyOrders','getPromotions'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {
