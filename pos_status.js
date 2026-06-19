@@ -35,6 +35,55 @@ function setOrderFulfill(orderId, fulfill) {
   } catch(e) { return { ok: false, msg: String(e) }; }
 }
 
+// ── สรุปยอดขายกะ (Cashier ปิดกะ) — SALES_HEADER: 2 date · 9 total · 10 payMethod · 13 user ──
+function getShiftSummary(dateStr) {
+  try {
+    var tz = 'Asia/Bangkok';
+    var day = dateStr || Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_SALH);
+    if (!s || s.getLastRow() <= 1) return { ok:true, date:day, count:0, total:0, cash:0, transfer:0, credit:0, bills:[] };
+    var rows = s.getRange(2, 1, s.getLastRow()-1, 15).getValues();
+    function sd(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var cash=0, transfer=0, credit=0, total=0, count=0, bills=[];
+    rows.forEach(function(r){
+      if (sd(r[2]) !== day) return;
+      var amt = Number(r[9])||0;
+      var m = String(r[10]||'').toUpperCase();
+      var bucket;
+      if (m.indexOf('CREDIT')>=0 || m.indexOf('เชื่อ')>=0) { credit += amt; bucket='เชื่อ'; }
+      else if (m.indexOf('CASH')>=0 || m.indexOf('เงินสด')>=0) { cash += amt; bucket='เงินสด'; }
+      else { transfer += amt; bucket='โอน/QR'; }   // QR/TRANSFER/PROMPTPAY
+      total += amt; count++;
+      bills.push({ saleId:String(r[0]||''), time:String(r[3]||''), customer:String(r[6]||''), total:amt, method:bucket });
+    });
+    return { ok:true, date:day, count:count, total:total, cash:cash, transfer:transfer, credit:credit, bills:bills };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ── ดึงรายการสินค้าของออเดอร์ (ทุกสถานะ) สำหรับพิมพ์ใบจัดสินค้า ──
+function getOrderForPick(orderId) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ordS = ss.getSheetByName(SH_ORD), dtlS = ss.getSheetByName(SH_ORDD);
+    if (!ordS || !dtlS) return { ok:false, msg:'ไม่พบ ORDERS' };
+    function sd(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||''); }
+    var hdr = ordS.getDataRange().getValues(), o = null;
+    for (var i=1;i<hdr.length;i++){
+      if (String(hdr[i][0])===String(orderId)){
+        o = { orderId:sd(hdr[i][0]), customerName:sd(hdr[i][8]), total:Number(hdr[i][11])||0,
+              status:sd(hdr[i][12]), note:sd(hdr[i][14]) };
+        break;
+      }
+    }
+    if (!o) return { ok:false, msg:'ไม่พบออเดอร์ '+orderId };
+    o.delivery = /จัดส่ง/.test(o.note) ? 'delivery' : 'pickup';
+    var dtl = dtlS.getDataRange().getValues().slice(1);
+    o.items = dtl.filter(function(r){ return String(r[0])===String(orderId); })
+      .map(function(r){ return { barcode:String(r[2]||''), name:String(r[3]||''), qty:Number(r[4])||0, unit:String(r[5]||'') }; });
+    return { ok:true, order:o };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // ── บอร์ดออเดอร์ (POS-PC จัดของ + Cashier รับเงิน) — ตัดที่ DONE ออก ──
 function getOrderBoard() {
   try {

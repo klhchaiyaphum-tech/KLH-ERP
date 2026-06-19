@@ -574,7 +574,7 @@ function doPost(e) {
                    'createLineOrder','lineAttachSlip','lineRegisterMember','lineGetMyProfile',
                    'lineGetMyOrders','getPromotions',
                    // order lifecycle (POS-PC / Cashier board)
-                   'getOrderBoard','setOrderFulfill'];
+                   'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {

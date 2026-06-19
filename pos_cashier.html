@@ -74,19 +74,34 @@ input{font-family:inherit;}
 .item-row .ir-total{font-weight:700;font-size:13.5px;min-width:70px;text-align:right;flex-shrink:0;}
 .empty-orders{text-align:center;color:var(--ink-3);padding:48px 0;font-size:14px;line-height:1.8;}
 
-/* Pending orders list */
-.pending-list{flex-shrink:0;border-top:1px solid var(--line);max-height:200px;overflow-y:auto;background:var(--surface-2);}
+/* Pending orders list (board) */
+.pending-list{flex-shrink:0;border-top:1px solid var(--line);max-height:56vh;overflow-y:auto;background:var(--surface-2);}
 .pending-list::-webkit-scrollbar{width:6px;}
 .pending-hdr{padding:8px 16px;font-size:12px;font-weight:700;color:var(--ink-3);background:var(--surface);border-bottom:1px solid var(--line);}
-.pending-item{
-  display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line);
-  cursor:pointer;transition:background .1s;
-}
-.pending-item:hover{background:var(--brand-soft);}
-.pi-id{font-family:var(--ff-num);font-size:11.5px;font-weight:700;color:var(--brand-2);}
-.pi-info{flex:1;font-size:12.5px;}
-.pi-total{font-weight:700;font-size:13px;color:var(--ink);}
-.pi-source{font-size:10px;color:var(--ink-3);background:var(--surface-3);padding:2px 6px;border-radius:999px;}
+
+/* ── 4-group bubble board ── */
+.board{padding:10px 12px;}
+.bgroup{margin-bottom:12px;}
+.bg-hd{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;padding:6px 11px;border-radius:9px;margin-bottom:7px;}
+.bg-hd .cnt{margin-left:auto;background:rgba(0,0,0,.14);color:#fff;border-radius:999px;padding:1px 9px;font-size:11px;}
+.bg-store-pay{background:#FFF1E6;color:#C2410C;}        .bg-store-pay .cnt{background:#C2410C;}
+.bg-line-pay{background:#E9FBF1;color:#0B7A43;}         .bg-line-pay .cnt{background:#06C755;}
+.bg-line-ready{background:#E6F7EE;color:#1E7A3A;}       .bg-line-ready .cnt{background:#1E7A3A;}
+.bg-line-deliver{background:#E8EFFF;color:#1D4ED8;}     .bg-line-deliver .cnt{background:#1D4ED8;}
+.bcard{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line-2);border-radius:11px;padding:9px 11px;margin-bottom:6px;box-shadow:var(--sh-1);}
+.bcard.line{border-left:4px solid #06C755;}
+.bcard .bc-main{flex:1;min-width:0;}
+.bcard .bc-name{font-size:13.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bcard .bc-sub{font-size:11px;color:var(--ink-3);margin-top:1px;font-family:var(--ff-num);}
+.bcard .bc-total{font-weight:800;font-size:15px;color:var(--ink);white-space:nowrap;}
+.bc-btns{display:flex;gap:6px;flex-shrink:0;}
+.bc-btn{padding:7px 12px;border-radius:9px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;color:#fff;white-space:nowrap;}
+.bc-btn:active{transform:scale(.96);}
+.bc-btn.pay{background:#C2410C;}
+.bc-btn.handover{background:#1E7A3A;}
+.bc-btn.deliver{background:#1D4ED8;}
+.bc-btn.slip{background:var(--surface);color:var(--ink-2);border:1px solid var(--line-2);}
+.board-empty{text-align:center;color:var(--ink-3);padding:30px 10px;font-size:13.5px;}
 
 /* ── RIGHT: Payment panel (same style as PC POS PaymentOverlay right-side) ── */
 .right-pane{width:420px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);}
@@ -178,16 +193,17 @@ input{font-family:inherit;}
     <div style="font-size:14.5px;font-weight:700;line-height:1.1">KLH Cashier</div>
     <div style="font-size:11.5px;color:var(--ink-3)" id="clockLabel">รับชำระเงิน</div>
   </div>
-  <div style="width:1px;height:30px;background:var(--line);margin:0 4px;flex-shrink:0"></div>
-  <div class="devchip" style="background:#F0EEEA;color:#9a8c7e;border-color:#ddd6cc" title="ลิ้นชักที่ 2 — เตรียมไว้ ค่อยเปิดใช้ภายหลัง"><span class="ld" style="background:#c9bcae"></span>Tigercashbox · ลิ้นชัก 2 (รอเปิดใช้)</div>
+  <div style="width:1px;height:30px;background:var(--line);margin:0 2px;flex-shrink:0"></div>
+  <div class="devchip" style="background:#F0EEEA;color:#9a8c7e;border-color:#ddd6cc;padding:6px 9px" title="Tigercashbox · ลิ้นชัก 2 — เตรียมไว้ ค่อยเปิดใช้ภายหลัง"><span class="ld" style="background:#c9bcae"></span>ลิ้นชัก 2</div>
+  <span id="shiftChip" style="font-size:11.5px;font-weight:700;color:var(--ink-3);white-space:nowrap"></span>
   <div style="flex:1"></div>
-  <button class="btn-hdr" onclick="refreshPending()">
+  <button class="btn-hdr" id="btnOpenShift" onclick="openShift()" style="background:#EAF7EE;border-color:#CBE6D1;color:#1E7A3A">🟢 เปิดกะ</button>
+  <button class="btn-hdr" onclick="showShiftSummary()" style="background:#FFF4E6;border-color:#F3D9A6;color:#B45309">📊 สรุป/ปิดกะ</button>
+  <button class="btn-hdr" onclick="refreshPending()" title="รีเฟรช">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-    รีเฟรช
   </button>
-  <button class="btn-hdr" onclick="goHome()">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    หลัก
+  <button class="btn-hdr" onclick="goHome()" title="กลับเมนูหลัก">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>
   </button>
 </div>
 
@@ -437,6 +453,7 @@ var _payDone     = false;
 // ── Boot ──────────────────────────────────────────────
 window.onload = function() {
   updateClock(); setInterval(updateClock, 30000);
+  updateShiftChip();
   buildKeypad();
   google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
   // render static QR ก่อน (ยอด 0 = ไม่ระบุยอด)
@@ -522,6 +539,102 @@ function goHome() {
   else window.location.href = '?page=index';
 }
 
+// ── เปิดกะ / สรุป / ปิดกะ ───────────────────────────────────
+function getShift(){ try { return JSON.parse(localStorage.getItem('klh_shift')||'null'); } catch(e){ return null; } }
+function fmtB(n){ return '฿'+(Number(n)||0).toLocaleString('th-TH',{minimumFractionDigits:0}); }
+function updateShiftChip(){
+  var sh = getShift(), el = document.getElementById('shiftChip'), btn = document.getElementById('btnOpenShift');
+  if (sh && sh.open){
+    el.textContent = '🟢 กะเปิด · เงินทอน '+fmtB(sh.opening)+' · '+(sh.openedAt||'').slice(11,16)+' น.';
+    el.style.color = '#1E7A3A';
+    if (btn){ btn.style.display='none'; }
+  } else {
+    el.textContent = '⚪ ยังไม่เปิดกะ';
+    el.style.color = 'var(--ink-3)';
+    if (btn){ btn.style.display=''; }
+  }
+}
+function openShift(){
+  Swal.fire({
+    title:'เปิดกะแคชเชียร์', input:'number',
+    inputLabel:'เงินทอนตั้งต้นในลิ้นชัก (บาท)', inputValue:'1000',
+    inputAttributes:{ min:'0', step:'1' },
+    showCancelButton:true, confirmButtonText:'เปิดกะ', cancelButtonText:'ยกเลิก'
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    var sh = { open:true, opening:Number(r.value)||0, openedAt:new Date().toISOString() };
+    localStorage.setItem('klh_shift', JSON.stringify(sh));
+    updateShiftChip();
+    Swal.fire({icon:'success',title:'เปิดกะแล้ว',text:'เงินทอนตั้งต้น '+fmtB(sh.opening),timer:1500,showConfirmButton:false});
+  });
+}
+function showShiftSummary(){
+  showLoad('สรุปยอดขาย...');
+  google.script.run.withSuccessHandler(function(res){
+    hideLoad();
+    if(!res || !res.ok){ Swal.fire('Error',(res&&res.msg)||'โหลดไม่สำเร็จ','error'); return; }
+    var sh = getShift(), opening = (sh&&sh.open)?Number(sh.opening)||0:0;
+    var drawer = opening + res.cash;   // เงินสดในลิ้นชักที่ควรมี
+    var html =
+      '<div style="text-align:left;font-size:14px;line-height:1.9">'
+      +'<div style="color:#888;font-size:12px">วันที่ '+res.date+' · '+res.count+' บิล</div>'
+      +'<hr style="margin:6px 0">'
+      +row('💵 เงินสด', res.cash)
+      +row('🏦 โอน/QR', res.transfer)
+      +row('📝 เงินเชื่อ', res.credit)
+      +'<hr style="margin:6px 0">'
+      +row('<b>ยอดขายรวม</b>', res.total, true)
+      +'<hr style="margin:6px 0">'
+      +row('เงินทอนตั้งต้น', opening)
+      +row('<b>เงินสดในลิ้นชัก (ควรมี)</b>', drawer, true)
+      +'</div>';
+    function row(l,v,big){ return '<div style="display:flex;justify-content:space-between"><span>'+l+'</span><span style="font-weight:'+(big?'800':'600')+';font-family:monospace'+(big?';font-size:16px':'')+'">'+fmtB(v)+'</span></div>'; }
+    Swal.fire({
+      title:'📊 สรุปยอดขายกะ', html:html, width:420,
+      showDenyButton:true, showCancelButton:true,
+      confirmButtonText:'🖨️ พิมพ์รายงาน', denyButtonText:'🔴 ปิดกะ', cancelButtonText:'ปิด',
+      confirmButtonColor:'#1E7A3A', denyButtonColor:'#C2410C'
+    }).then(function(a){
+      if(a.isConfirmed){ printShiftReport(res, opening, drawer); }
+      else if(a.isDenied){ closeShift(res, opening, drawer); }
+    });
+  }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).getShiftSummary();
+}
+function shiftReportText(res, opening, drawer){
+  return '***  สรุปยอดขายกะ  ***\n'+res.date+'\nจำนวน '+res.count+' บิล\n'
+    +'------------------------------\n'
+    +'เงินสด        '+fmtB(res.cash)+'\n'
+    +'โอน/QR        '+fmtB(res.transfer)+'\n'
+    +'เงินเชื่อ      '+fmtB(res.credit)+'\n'
+    +'------------------------------\n'
+    +'ยอดขายรวม     '+fmtB(res.total)+'\n'
+    +'------------------------------\n'
+    +'เงินทอนตั้งต้น  '+fmtB(opening)+'\n'
+    +'เงินสดในลิ้นชัก '+fmtB(drawer)+'\n'
+    +'(ควรมีเมื่อนับ)\n'
+    +'\nผู้ปิดกะ: ____________\n';
+}
+function printShiftReport(res, opening, drawer){
+  var txt = shiftReportText(res, opening, drawer);
+  if (window.AndroidPrint && window.AndroidPrint.printReceipt){
+    try { window.AndroidPrint.printReceipt(txt, 'SHIFT-'+res.date); } catch(e){}
+  } else {
+    var pa = document.getElementById('printArea');
+    if (pa){ pa.innerHTML = '<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); }
+  }
+}
+function closeShift(res, opening, drawer){
+  Swal.fire({ title:'ปิดกะ?', text:'พิมพ์รายงานและเริ่มกะใหม่', icon:'warning',
+    showCancelButton:true, confirmButtonText:'พิมพ์ + ปิดกะ', cancelButtonText:'ยกเลิก', confirmButtonColor:'#C2410C'
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    printShiftReport(res, opening, drawer);
+    localStorage.removeItem('klh_shift');
+    updateShiftChip();
+    Swal.fire({icon:'success',title:'ปิดกะแล้ว',timer:1500,showConfirmButton:false});
+  });
+}
+
 // ── บอร์ดออเดอร์ 3 ช่อง (getOrderBoard: รอชำระ / ชำระแล้วรอรับ LINE / ชำระแล้วหน้าร้าน) ──
 function refreshPending() {
   google.script.run
@@ -535,41 +648,81 @@ function refreshPending() {
     .getOrderBoard();
 }
 
-function _boardRow(o, action) {
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function _bcard(o, btnsHtml) {
   var isLine = /LINE/i.test(o.source || '');
-  return '<div class="pending-item'+(isLine?' line-order':'')+'"'+(action?(' onclick="'+action+'"'):'')+'>'
-    +'<span class="pi-id">'+o.orderId+'</span>'
-    +'<span class="pi-info"><b style="font-size:13px">'+(o.customerName||'ลูกค้าทั่วไป')+'</b> <span style="color:var(--ink-3);font-size:11px">'+o.date+' '+o.time+(o.delivery==='delivery'?' · จัดส่ง':'')+'</span></span>'
-    +'<span class="pi-source"'+(isLine?' style="background:#06C755;color:#fff;border:none"':'')+'>'+(isLine?'📱 LINE':o.source)+'</span>'
-    +'<span class="pi-total num">฿'+Number(o.total).toLocaleString('th-TH')+'</span>'
+  return '<div class="bcard'+(isLine?' line':'')+'">'
+    +'<div class="bc-main">'
+    +  '<div class="bc-name">'+esc(o.customerName||'ลูกค้าทั่วไป')+(isLine?' <span style="color:#06C755;font-size:11px">📱</span>':'')+'</div>'
+    +  '<div class="bc-sub">'+esc(o.orderId)+' · '+esc(o.time||o.date)+(o.delivery==='delivery'?' · 🚚 จัดส่ง':'')+'</div>'
+    +'</div>'
+    +'<div class="bc-total">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
+    +'<div class="bc-btns">'+btnsHtml+'</div>'
     +'</div>';
 }
 function renderBoard(orders) {
   var el = document.getElementById('pendingList');
-  var waitPay = [], lineReady = [], storePaid = [];
+  var storePay=[], linePay=[], lineReady=[], lineDeliver=[];
   (orders||[]).forEach(function(o){
-    if (o.payStatus !== 'PAID') waitPay.push(o);
-    else if (/LINE/i.test(o.source||'')) lineReady.push(o);
-    else storePaid.push(o);
+    var isLine = /LINE/i.test(o.source||'');
+    if (o.payStatus !== 'PAID') { (isLine?linePay:storePay).push(o); }
+    else if (isLine) { (o.delivery==='delivery'?lineDeliver:lineReady).push(o); }
+    // PAID หน้าร้าน = จบแล้ว ไม่ต้องแสดง
   });
-  function sec(title, arr, mkAction, color) {
+  function grp(cls, icon, title, arr, mk){
     if (!arr.length) return '';
-    return '<div style="margin:12px 0 5px;font-weight:800;font-size:13px;color:'+color+'">'+title+' ('+arr.length+')</div>'
-      + arr.map(function(o){ return _boardRow(o, mkAction ? mkAction(o.orderId) : ''); }).join('');
+    return '<div class="bgroup"><div class="bg-hd '+cls+'">'+icon+' '+title+'<span class="cnt">'+arr.length+'</span></div>'
+      + arr.map(function(o){ return _bcard(o, mk(o)); }).join('') + '</div>';
   }
-  var html = sec('🟠 รอชำระ', waitPay, function(id){ return "loadOrder('"+id+"')"; }, '#C2410C')
-           + sec('🟢 ชำระแล้ว · รอรับสินค้า (LINE)', lineReady, function(id){ return "handover('"+id+"')"; }, '#1E7A3A')
-           + sec('✅ ชำระแล้ว หน้าร้าน', storePaid, null, '#3A8C56');
-  el.innerHTML = html || '<div style="text-align:center;color:var(--ink-3);padding:14px;font-size:13px">ไม่มีออเดอร์</div>';
+  var slipBtn = function(o){ return '<button class="bc-btn slip" onclick="printPickSlip(\''+o.orderId+'\')">🖨️ ใบจัด</button>'; };
+  var html =
+      grp('bg-store-pay','🟠','รอชำระ · หน้าร้าน', storePay, function(o){
+        return '<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
+    + grp('bg-line-pay','📱','รอชำระ · ไลน์ (รับเงินตอนรับของ)', linePay, function(o){
+        return slipBtn(o)+'<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
+    + grp('bg-line-ready','🟢','ชำระแล้ว · ไลน์ รอรับสินค้า', lineReady, function(o){
+        return slipBtn(o)+'<button class="bc-btn handover" onclick="handover(\''+o.orderId+'\',\'pickup\')">ส่งมอบ</button>'; })
+    + grp('bg-line-deliver','🚚','รอจัดส่ง · ไลน์', lineDeliver, function(o){
+        return slipBtn(o)+'<button class="bc-btn deliver" onclick="handover(\''+o.orderId+'\',\'delivery\')">จัดส่งแล้ว</button>'; });
+  el.innerHTML = '<div class="board">'+(html || '<div class="board-empty">— ไม่มีออเดอร์ค้าง —</div>')+'</div>';
 }
 
-// ส่งมอบสินค้า LINE ที่ชำระแล้ว → จบออเดอร์ (DONE)
-function handover(orderId) {
-  Swal.fire({ title:'ส่งมอบสินค้า?', text:orderId+' — ลูกค้ารับสินค้าแล้ว', icon:'question',
-    showCancelButton:true, confirmButtonText:'ส่งมอบแล้ว', cancelButtonText:'ยกเลิก' })
+// พิมพ์ใบจัดสินค้า (picking slip) — โหลดรายการจากออเดอร์แล้วพิมพ์ + ตั้งสถานะกำลังจัด
+function printPickSlip(orderId) {
+  showLoad('โหลดรายการ '+orderId+'...');
+  google.script.run.withSuccessHandler(function(res){
+    hideLoad();
+    if (!res || !res.ok) { Swal.fire('Error',(res&&res.msg)||'โหลดไม่สำเร็จ','error'); return; }
+    var o = res.order || res;
+    var items = o.items || [];
+    var lines = items.map(function(it){
+      return (it.name||it.barcode)+'\n   x '+it.qty+' '+(it.unit||'')+'  ___';
+    }).join('\n');
+    var txt = '*** ใบจัดสินค้า ***\n'+orderId+'\n'
+      +(o.customerName||'ลูกค้า')+'\n'
+      +(/จัดส่ง/.test(o.note||'')?'[ จัดส่ง ] '+(o.note||''):'[ รับที่ร้าน ]')+'\n'
+      +'------------------------------\n'+lines+'\n------------------------------\nรวม '+items.length+' รายการ';
+    // พิมพ์ผ่าน Sunmi bridge ถ้ามี ไม่งั้นพิมพ์ในหน้า
+    if (window.AndroidPrint && window.AndroidPrint.printReceipt) {
+      try { window.AndroidPrint.printReceipt(txt, orderId); } catch(e){}
+    } else {
+      var pa = document.getElementById('printArea');
+      if (pa){ pa.innerHTML = '<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); }
+    }
+    // ตั้งสถานะ "กำลังจัด"
+    google.script.run.withSuccessHandler(function(){ refreshPending(); }).withFailureHandler(function(){}).setOrderFulfill(orderId,'PREPARING');
+    Swal.fire({icon:'success',title:'พิมพ์ใบจัด + กำลังจัด',timer:1100,showConfirmButton:false});
+  }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).getOrderForPick(orderId);
+}
+
+// ส่งมอบ/จัดส่งสินค้า LINE ที่ชำระแล้ว → จบออเดอร์ (DONE)
+function handover(orderId, mode) {
+  var deliver = mode === 'delivery';
+  Swal.fire({ title: deliver?'จัดส่งแล้ว?':'ส่งมอบสินค้า?', text:orderId+(deliver?' — ส่งของให้ลูกค้าแล้ว':' — ลูกค้ารับสินค้าแล้ว'), icon:'question',
+    showCancelButton:true, confirmButtonText: deliver?'จัดส่งแล้ว':'ส่งมอบแล้ว', cancelButtonText:'ยกเลิก' })
   .then(function(r){ if(!r.isConfirmed) return;
     google.script.run.withSuccessHandler(function(res){
-      if (res && res.ok){ Swal.fire({icon:'success',title:'ส่งมอบแล้ว',timer:1100,showConfirmButton:false}); refreshPending(); }
+      if (res && res.ok){ Swal.fire({icon:'success',title: deliver?'จัดส่งแล้ว':'ส่งมอบแล้ว',timer:1100,showConfirmButton:false}); refreshPending(); }
       else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
     }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).setOrderFulfill(orderId,'DONE');
   });

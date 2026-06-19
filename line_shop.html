@@ -215,6 +215,14 @@
       <input class="inp" id="nameInp" placeholder="ชื่อ-นามสกุล">
     </div>
     <div class="card">
+      <span class="label">วิธีชำระเงิน</span>
+      <div class="opt">
+        <div class="optb on" id="payNowBtn" onclick="setPay('now')">💳 โอน/QR ตอนนี้</div>
+        <div class="optb" id="payStoreBtn" onclick="setPay('store')">🏪 ชำระที่ร้านตอนรับของ</div>
+      </div>
+      <div id="payStoreHint" class="muted" style="display:none;font-size:12.5px;margin-top:6px">มารับสินค้าและชำระเงินที่ร้านได้เลย ไม่ต้องโอนล่วงหน้า</div>
+    </div>
+    <div class="card">
       <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span class="muted">จำนวนสินค้า</span><span class="num" id="sumCount">0</span></div>
       <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800"><span>รวมชำระ</span><span class="num" id="sumTotal" style="color:var(--coral2)">฿0</span></div>
     </div>
@@ -317,7 +325,7 @@ var S = {
   cfg:null, profile:null, member:null, priceLevel:'retail',
   products:[], cat:'', searchQ:'',
   cart:{},   // key barcode|unit -> line
-  delivery:'pickup', order:null, ktbQr:''
+  delivery:'pickup', payMethod:'now', order:null, ktbQr:''
 };
 
 // ---------- boot ----------
@@ -507,6 +515,15 @@ function setDelivery(t){
   document.getElementById('optPickup').classList.toggle('on', t==='pickup');
   document.getElementById('optDelivery').classList.toggle('on', t==='delivery');
   document.getElementById('addrWrap').style.display = t==='delivery'?'block':'none';
+  // ปรับป้ายปุ่ม "ชำระที่ร้าน" ตามวิธีรับสินค้า
+  document.getElementById('payStoreBtn').textContent = (t==='delivery') ? '🚚 เก็บเงินปลายทาง (COD)' : '🏪 ชำระที่ร้านตอนรับของ';
+}
+function setPay(m){
+  S.payMethod = m;   // 'now' = โอน/QR · 'store' = ชำระตอนรับ/ปลายทาง
+  document.getElementById('payNowBtn').classList.toggle('on', m==='now');
+  document.getElementById('payStoreBtn').classList.toggle('on', m==='store');
+  document.getElementById('payStoreHint').style.display = m==='store'?'block':'none';
+  document.getElementById('placeBtn').textContent = m==='store' ? 'ยืนยันสั่งซื้อ' : 'ยืนยันสั่งซื้อ → ชำระเงิน';
 }
 function syncFulfil(){
   document.getElementById('sumCount').textContent = cartCount()+' ชิ้น';
@@ -516,7 +533,8 @@ function syncFulfil(){
 // ---------- place order ----------
 function placeOrder(){
   if (S.delivery==='delivery' && !document.getElementById('addrInp').value.trim()){ toast('กรอกที่อยู่จัดส่ง'); return; }
-  var btn=document.getElementById('placeBtn'); btn.disabled=true; btn.textContent='กำลังสร้างออเดอร์...';
+  var payAtStore = S.payMethod === 'store';
+  var btn=document.getElementById('placeBtn'); var btnLabel=btn.textContent; btn.disabled=true; btn.textContent='กำลังสร้างออเดอร์...';
   var items = cartArr().map(function(it){ return { barcode:it.barcode, name:it.name, qty:it.qty, unit:it.unit, unitPrice:it.unitPrice, lineTotal:it.lineTotal, convRate:it.ppu, unitBig:it.unitBig }; });
   var payload = {
     customerCode: S.member&&S.member.custId?S.member.custId:'',
@@ -525,14 +543,16 @@ function placeOrder(){
     lineUid: S.profile?S.profile.userId:'',
     deliveryType: S.delivery,
     address: document.getElementById('addrInp').value.trim(),
+    note: payAtStore ? (S.delivery==='delivery' ? 'ชำระเงิน: เก็บปลายทาง (COD)' : 'ชำระเงิน: ที่ร้านตอนรับของ') : 'ชำระเงิน: โอน/QR',
     items: items, subtotal: cartTotal(), total: cartTotal()
   };
   google.script.run.withSuccessHandler(function(res){
-    btn.disabled=false; btn.textContent='ยืนยันสั่งซื้อ → ชำระเงิน';
+    btn.disabled=false; btn.textContent=btnLabel;
     if (!res || !res.ok){ toast('สร้างออเดอร์ไม่สำเร็จ: '+((res&&res.msg)||'')); return; }
     S.order = { orderId:res.orderId, total:cartTotal() };
-    openPay();
-  }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent='ยืนยันสั่งซื้อ → ชำระเงิน'; toast('ผิดพลาด: '+e.message); }).createLineOrder(payload);
+    if (payAtStore) finishOrder();   // ไม่ต้องโอน — แคชเชียร์รับเงินตอนรับของ/ปลายทาง
+    else openPay();
+  }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=btnLabel; toast('ผิดพลาด: '+e.message); }).createLineOrder(payload);
 }
 
 // ---------- payment ----------
@@ -563,8 +583,12 @@ function onSlip(input){
   r.readAsDataURL(f);
 }
 function finishOrder(){
-  document.getElementById('doneMsg').innerHTML = 'เลขออเดอร์ <b>#'+S.order.orderId+'</b><br>'
-    + (S.delivery==='delivery'?'เราจะจัดส่งให้เร็วที่สุด':'มารับสินค้าได้ที่ร้าน') + ' ขอบคุณค่ะ 🙏';
+  var payAtStore = S.payMethod === 'store';
+  var line2 = S.delivery==='delivery' ? 'เราจะจัดส่งให้เร็วที่สุด' : 'มารับสินค้าได้ที่ร้าน';
+  var pay = payAtStore
+    ? '<div style="margin-top:8px;color:#B45309;font-weight:700">💰 ชำระเงิน '+(S.delivery==='delivery'?'ปลายทางตอนรับของ':'ที่ร้านตอนรับของ')+'</div>'
+    : '';
+  document.getElementById('doneMsg').innerHTML = 'เลขออเดอร์ <b>#'+S.order.orderId+'</b><br>'+line2+' ขอบคุณค่ะ 🙏'+pay;
   show('scrDone');
 }
 function restart(){ S.cart={}; S.order=null; updateCartBar(); show('scrBrowse'); renderProducts(); }
