@@ -162,6 +162,8 @@ input{font-family:inherit;}
 #overlay{display:none;position:fixed;inset:0;background:rgba(243,241,236,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
 .spin{width:36px;height:36px;border:4px solid var(--line-2);border-top-color:var(--brand);border-radius:999px;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
+/* ออเดอร์จาก LINE — ไฮไลต์ให้แคชเชียร์เห็นชัด */
+.pending-item.line-order{border-left:4px solid #06C755;background:#F0FBF4;}
 /* พิมพ์ในหน้า (fallback เบราว์เซอร์) */
 #printArea{display:none;}
 @media print{ body>*{display:none!important;} #printArea{display:block!important;width:72mm;margin:0;padding:6px;color:#000;} @page{margin:0;} }
@@ -524,6 +526,7 @@ function goHome() {
 function refreshPending() {
   google.script.run
     .withSuccessHandler(function(orders) {
+      notifyNewLine(orders);
       renderPendingList(orders);
       updateRefreshLabel();
     })
@@ -538,13 +541,36 @@ function renderPendingList(orders) {
     return;
   }
   el.innerHTML = orders.map(function(o) {
-    return '<div class="pending-item" onclick="loadOrder(\''+o.orderId+'\''+')">'
+    var isLine = /LINE/i.test(o.source||'');
+    return '<div class="pending-item'+(isLine?' line-order':'')+'" onclick="loadOrder(\''+o.orderId+'\''+')">'
       +'<span class="pi-id">'+o.orderId+'</span>'
       +'<span class="pi-info"><b style="font-size:13px">'+(o.customerName||'ลูกค้าทั่วไป')+'</b> <span style="color:var(--ink-3);font-size:11px">'+o.date+' '+o.time+'</span></span>'
-      +'<span class="pi-source">'+o.source+'</span>'
+      +'<span class="pi-source"'+(isLine?' style="background:#06C755;color:#fff;border:none"':'')+'>'+(isLine?'📱 LINE':o.source)+'</span>'
       +'<span class="pi-total num">฿'+Number(o.total).toLocaleString('th-TH')+'</span>'
       +'</div>';
   }).join('');
+}
+
+// ── แจ้งเตือนออเดอร์ LINE ใหม่ (เสียง + toast) ──
+var _seenLineIds = null;
+function notifyNewLine(orders){
+  var ids = (orders||[]).filter(function(o){ return /LINE/i.test(o.source||''); }).map(function(o){ return o.orderId; });
+  if (_seenLineIds === null) { _seenLineIds = ids; return; }      // โหลดครั้งแรก ไม่เตือน
+  var fresh = ids.filter(function(id){ return _seenLineIds.indexOf(id) < 0; });
+  _seenLineIds = ids;
+  if (fresh.length) {
+    beep();
+    Swal.fire({ icon:'success', title:'📱 ออเดอร์ LINE ใหม่ '+fresh.length+' รายการ', text:'อยู่ในรายการรอชำระ', timer:3500, showConfirmButton:false, position:'top', toast:true });
+  }
+}
+function beep(){
+  try {
+    var a=new (window.AudioContext||window.webkitAudioContext)();
+    var o=a.createOscillator(), g=a.createGain();
+    o.connect(g); g.connect(a.destination); o.type='sine'; o.frequency.value=880;
+    g.gain.setValueAtTime(0.18,a.currentTime); g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.45);
+    o.start(); o.stop(a.currentTime+0.45);
+  } catch(e){}
 }
 
 // ── Load order ─────────────────────────────────────────
