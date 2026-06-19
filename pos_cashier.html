@@ -522,33 +522,57 @@ function goHome() {
   else window.location.href = '?page=index';
 }
 
-// ── Pending orders ─────────────────────────────────────
+// ── บอร์ดออเดอร์ 3 ช่อง (getOrderBoard: รอชำระ / ชำระแล้วรอรับ LINE / ชำระแล้วหน้าร้าน) ──
 function refreshPending() {
   google.script.run
-    .withSuccessHandler(function(orders) {
+    .withSuccessHandler(function(res) {
+      var orders = (res && res.orders) || [];
       notifyNewLine(orders);
-      renderPendingList(orders);
+      renderBoard(orders);
       updateRefreshLabel();
     })
     .withFailureHandler(function(){})
-    .getPendingOrders();
+    .getOrderBoard();
 }
 
-function renderPendingList(orders) {
+function _boardRow(o, action) {
+  var isLine = /LINE/i.test(o.source || '');
+  return '<div class="pending-item'+(isLine?' line-order':'')+'"'+(action?(' onclick="'+action+'"'):'')+'>'
+    +'<span class="pi-id">'+o.orderId+'</span>'
+    +'<span class="pi-info"><b style="font-size:13px">'+(o.customerName||'ลูกค้าทั่วไป')+'</b> <span style="color:var(--ink-3);font-size:11px">'+o.date+' '+o.time+(o.delivery==='delivery'?' · จัดส่ง':'')+'</span></span>'
+    +'<span class="pi-source"'+(isLine?' style="background:#06C755;color:#fff;border:none"':'')+'>'+(isLine?'📱 LINE':o.source)+'</span>'
+    +'<span class="pi-total num">฿'+Number(o.total).toLocaleString('th-TH')+'</span>'
+    +'</div>';
+}
+function renderBoard(orders) {
   var el = document.getElementById('pendingList');
-  if (!orders || !orders.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:14px;font-size:13px">ไม่มีออเดอร์รอชำระ</div>';
-    return;
+  var waitPay = [], lineReady = [], storePaid = [];
+  (orders||[]).forEach(function(o){
+    if (o.payStatus !== 'PAID') waitPay.push(o);
+    else if (/LINE/i.test(o.source||'')) lineReady.push(o);
+    else storePaid.push(o);
+  });
+  function sec(title, arr, mkAction, color) {
+    if (!arr.length) return '';
+    return '<div style="margin:12px 0 5px;font-weight:800;font-size:13px;color:'+color+'">'+title+' ('+arr.length+')</div>'
+      + arr.map(function(o){ return _boardRow(o, mkAction ? mkAction(o.orderId) : ''); }).join('');
   }
-  el.innerHTML = orders.map(function(o) {
-    var isLine = /LINE/i.test(o.source||'');
-    return '<div class="pending-item'+(isLine?' line-order':'')+'" onclick="loadOrder(\''+o.orderId+'\''+')">'
-      +'<span class="pi-id">'+o.orderId+'</span>'
-      +'<span class="pi-info"><b style="font-size:13px">'+(o.customerName||'ลูกค้าทั่วไป')+'</b> <span style="color:var(--ink-3);font-size:11px">'+o.date+' '+o.time+'</span></span>'
-      +'<span class="pi-source"'+(isLine?' style="background:#06C755;color:#fff;border:none"':'')+'>'+(isLine?'📱 LINE':o.source)+'</span>'
-      +'<span class="pi-total num">฿'+Number(o.total).toLocaleString('th-TH')+'</span>'
-      +'</div>';
-  }).join('');
+  var html = sec('🟠 รอชำระ', waitPay, function(id){ return "loadOrder('"+id+"')"; }, '#C2410C')
+           + sec('🟢 ชำระแล้ว · รอรับสินค้า (LINE)', lineReady, function(id){ return "handover('"+id+"')"; }, '#1E7A3A')
+           + sec('✅ ชำระแล้ว หน้าร้าน', storePaid, null, '#3A8C56');
+  el.innerHTML = html || '<div style="text-align:center;color:var(--ink-3);padding:14px;font-size:13px">ไม่มีออเดอร์</div>';
+}
+
+// ส่งมอบสินค้า LINE ที่ชำระแล้ว → จบออเดอร์ (DONE)
+function handover(orderId) {
+  Swal.fire({ title:'ส่งมอบสินค้า?', text:orderId+' — ลูกค้ารับสินค้าแล้ว', icon:'question',
+    showCancelButton:true, confirmButtonText:'ส่งมอบแล้ว', cancelButtonText:'ยกเลิก' })
+  .then(function(r){ if(!r.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(res){
+      if (res && res.ok){ Swal.fire({icon:'success',title:'ส่งมอบแล้ว',timer:1100,showConfirmButton:false}); refreshPending(); }
+      else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).setOrderFulfill(orderId,'DONE');
+  });
 }
 
 // ── แจ้งเตือนออเดอร์ LINE ใหม่ (เสียง + toast) ──

@@ -270,8 +270,14 @@
   <div class="body">
     <div class="card" style="text-align:center">
       <div style="font-size:18px;font-weight:800" id="ctName">KLH</div>
-      <div class="muted" style="margin:8px 0">โทร</div>
-      <div class="num" style="font-size:22px;font-weight:800;color:var(--coral2)" id="ctPhone">—</div>
+      <a id="ctPhoneLink" href="#" style="text-decoration:none">
+        <div class="muted" style="margin:10px 0 2px">📞 โทร</div>
+        <div class="num" style="font-size:22px;font-weight:800;color:var(--coral2)" id="ctPhone">—</div>
+      </a>
+      <div class="muted" style="margin:12px 0 2px">✉️ อีเมล</div>
+      <div id="ctEmail" style="font-size:14px">—</div>
+      <div class="muted" style="margin:12px 0 2px">📍 ที่อยู่</div>
+      <div id="ctAddr" style="font-size:13px;color:#555">—</div>
     </div>
   </div>
 </div>
@@ -653,8 +659,11 @@ function openPromo(){
 function openContact(){
   show('scrContact');
   var c=(S.cfg||{});
-  document.getElementById('ctName').textContent = c.company || 'KLH';
-  document.getElementById('ctPhone').textContent = c.phone || c.shopPhone || '—';
+  document.getElementById('ctName').textContent  = c.company || 'KLH';
+  document.getElementById('ctPhone').textContent = c.phone || '—';
+  document.getElementById('ctEmail').textContent = c.email || '—';
+  document.getElementById('ctAddr').textContent  = c.address || '—';
+  var pl=document.getElementById('ctPhoneLink'); if(pl) pl.href = c.phone?('tel:'+c.phone.replace(/[^0-9+]/g,'')):'#';
 }
 
 // ---------- KTB dynamic QR ----------

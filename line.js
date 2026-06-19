@@ -16,6 +16,9 @@ function getLineShopConfig() {
       ok: true,
       company:    cfg.COMPANY_NAME || 'KLH',
       logoUrl:    cfg.LOGO_URL || '',
+      phone:      cfg.SHOP_PHONE || cfg.PHONE || cfg.TEL || '',
+      email:      cfg.SHOP_EMAIL || cfg.EMAIL || '',
+      address:    cfg.SHOP_ADDRESS || cfg.ADDRESS || '',
       ktbQr:      KTB_QR_STATIC_LINE,
       categories: getPosCategories()
     };
