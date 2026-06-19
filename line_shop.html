@@ -252,6 +252,30 @@
   </div>
 </div>
 
+<!-- ===== SCREEN: ORDER STATUS ===== -->
+<div class="scr" id="scrStatus">
+  <div class="hd"><button class="back" onclick="show('scrBrowse')">←</button><div><b>สถานะออเดอร์</b><span>ติดตามพัสดุ</span></div></div>
+  <div class="body" id="statusList"><div class="spin"></div></div>
+</div>
+
+<!-- ===== SCREEN: PROMOTIONS ===== -->
+<div class="scr" id="scrPromo">
+  <div class="hd"><button class="back" onclick="show('scrBrowse')">←</button><div><b>โปรโมชั่น</b><span>ส่วนลด / แต้ม</span></div></div>
+  <div class="body" id="promoList"><div class="spin"></div></div>
+</div>
+
+<!-- ===== SCREEN: CONTACT ===== -->
+<div class="scr" id="scrContact">
+  <div class="hd"><button class="back" onclick="show('scrBrowse')">←</button><div><b>ติดต่อร้าน</b></div></div>
+  <div class="body">
+    <div class="card" style="text-align:center">
+      <div style="font-size:18px;font-weight:800" id="ctName">KLH</div>
+      <div class="muted" style="margin:8px 0">โทร</div>
+      <div class="num" style="font-size:22px;font-weight:800;color:var(--coral2)" id="ctPhone">—</div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -292,16 +316,45 @@ var S = {
 
 // ---------- boot ----------
 window.onload = function(){
-  // LIFF init (degrade gracefully ในเบราว์เซอร์)
+  // จำสมาชิกเดิม (ไม่ต้อง login ใหม่ทุกครั้งที่เข้า Rich Menu)
+  try { var sv=JSON.parse(localStorage.getItem('klh_line_member')||'null'); if(sv&&(sv.phone||sv.custId)){ S.member=sv; S.priceLevel=sv.priceLevel||'retail'; } } catch(e){}
   if (window.liff) {
     liff.init({ liffId: LIFF_ID }).then(function(){
       if (liff.isLoggedIn && liff.isLoggedIn()) {
-        liff.getProfile().then(function(p){ S.profile = p; }).catch(function(){});
+        liff.getProfile().then(function(p){ S.profile = p; if (!S.member) autoLoginByUid(); }).catch(function(){});
       }
     }).catch(function(e){ console.log('liff init', e); });
   }
   loadConfig();
 };
+function autoLoginByUid(){
+  if (!S.profile || !S.profile.userId) return;
+  google.script.run.withSuccessHandler(function(res){
+    if (res && res.ok && res.found){ S.member=res.member; S.priceLevel=res.member.priceLevel||'retail'; saveMember(); setMemberHeader(); }
+  }).withFailureHandler(function(){}).lineFindMember('', S.profile.userId);
+}
+function saveMember(){ try { if (S.member) localStorage.setItem('klh_line_member', JSON.stringify(S.member)); } catch(e){} }
+function setMemberHeader(){
+  var h=document.getElementById('hdMember'); if(!h) return;
+  if (!S.member){ h.textContent='ลูกค้าทั่วไป'; return; }
+  var nm=S.member.name||S.member.phone||'';
+  h.textContent=(S.member.custId?'สมาชิก: ':'')+nm+(S.member.custId?(' · '+S.priceLevel):'');
+  if (S.member.custId){ var mb=document.getElementById('memBtn'); if(mb) mb.style.display='grid'; }
+  var ni=document.getElementById('nameInp'); if(ni && S.member.name && !ni.value) ni.value=S.member.name;
+}
+// เปิดตรงจอตาม ?to= ของ Rich Menu
+function routeByTo(){
+  setMemberHeader();
+  var t = LINE_TO || 'order';
+  var isMember = !!(S.member && S.member.custId);
+  if (t==='member'){ isMember ? openMember() : show('scrLogin'); return; }
+  if (t==='status'){ openStatus(); return; }
+  if (t==='promo'){ openPromo(); return; }
+  if (t==='contact'){ openContact(); return; }
+  loadProducts();                          // order / cart (guest ได้)
+  if (t==='cart'){ cartArr().length ? goCart() : show('scrBrowse'); }
+  else show('scrBrowse');
+}
 
 function loadConfig(){
   google.script.run.withSuccessHandler(function(res){
@@ -312,7 +365,8 @@ function loadConfig(){
     }
     if (res && res.company){ document.getElementById('shopName').textContent = res.company + ' สั่งสินค้า'; document.getElementById('hdName').textContent = res.company; }
     buildCats((res && res.categories) || []);
-  }).withFailureHandler(function(e){ toast('โหลดค่าไม่สำเร็จ'); }).getLineShopConfig();
+    routeByTo();                              // เปิดตรงจอตาม Rich Menu
+  }).withFailureHandler(function(e){ toast('โหลดค่าไม่สำเร็จ'); routeByTo(); }).getLineShopConfig();
 }
 
 // ---------- login ----------
@@ -330,8 +384,9 @@ function doLogin(){
       S.member = { phone: ph, custId:'', name:'' };
       document.getElementById('hdMember').textContent = 'ลูกค้าใหม่ · ' + ph;
     }
+    saveMember();
     enterShop();
-  }).withFailureHandler(function(){ S.member={phone:ph}; enterShop(); }).lineFindMember(ph, uid);
+  }).withFailureHandler(function(){ S.member={phone:ph}; saveMember(); enterShop(); }).lineFindMember(ph, uid);
 }
 function guestEnter(){ S.member=null; document.getElementById('hdMember').textContent='ลูกค้าทั่วไป'; enterShop(); }
 function enterShop(){ show('scrBrowse'); loadProducts(); }
@@ -525,6 +580,7 @@ function doRegister(){
     if (!res || !res.ok){ toast('สมัครไม่สำเร็จ: '+((res&&res.msg)||'')); return; }
     S.member = { custId:res.custId, name:name, phone:phone, priceLevel:'retail' };
     S.priceLevel = 'retail';
+    saveMember();
     document.getElementById('hdMember').textContent = 'สมาชิก: ' + name;
     document.getElementById('nameInp').value = name;
     document.getElementById('memBtn').style.display = 'grid';
@@ -549,6 +605,52 @@ function openMember(){
     document.getElementById('mcQr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data='+encodeURIComponent(r.custId);
     if (S.cfg && S.cfg.company) document.getElementById('mcBrand').textContent = (S.cfg.company+' MEMBER').toUpperCase();
   }).withFailureHandler(function(){ toast('โหลดโปรไฟล์ไม่ได้'); }).lineGetMyProfile(S.member.custId);
+}
+
+// ---------- สถานะออเดอร์ ----------
+function openStatus(){
+  show('scrStatus');
+  var el=document.getElementById('statusList'); el.innerHTML='<div class="spin"></div>';
+  var uid = S.profile?S.profile.userId:''; var ph = S.member?S.member.phone:'';
+  if (!uid && !ph){ el.innerHTML='<div class="empty">เข้าสู่ระบบ/สมัครสมาชิกก่อน เพื่อดูสถานะออเดอร์</div>'; return; }
+  google.script.run.withSuccessHandler(function(res){
+    var os=(res&&res.orders)||[];
+    if (!os.length){ el.innerHTML='<div class="empty">ยังไม่มีออเดอร์</div>'; return; }
+    el.innerHTML = os.map(function(o){
+      var paid = /ชำระเงินแล้ว|จัด|รับสินค้าแล้ว|จัดส่งแล้ว/.test(o.statusLabel);
+      return '<div class="card" style="margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between"><b>#'+o.orderId+'</b><b class="num" style="color:var(--coral2)">฿'+fmt(o.total)+'</b></div>'
+        +'<div class="muted" style="font-size:12px">'+o.dateTime+' · '+(o.delivery==='delivery'?'จัดส่ง':'รับเอง')+'</div>'
+        +'<div style="margin-top:7px"><span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:700;background:'+(paid?'#E6F7EC':'#FFF3E0')+';color:'+(paid?'#1E7A3A':'#C2410C')+'">'+o.statusLabel+'</span></div>'
+        +'</div>';
+    }).join('');
+  }).withFailureHandler(function(){ el.innerHTML='<div class="empty">โหลดไม่ได้</div>'; }).lineGetMyOrders(uid, ph);
+}
+
+// ---------- โปรโมชั่น ----------
+function openPromo(){
+  show('scrPromo');
+  var el=document.getElementById('promoList'); el.innerHTML='<div class="spin"></div>';
+  google.script.run.withSuccessHandler(function(res){
+    var ps=(res&&res.items)||[];
+    if (!ps.length){ el.innerHTML='<div class="empty">ยังไม่มีโปรโมชั่น</div>'; return; }
+    el.innerHTML='<div class="pgrid">'+ps.map(function(p){
+      return '<div class="pcard">'
+        +(p.image?'<img src="'+esc(p.image)+'" style="width:100%;height:96px;object-fit:contain;border-radius:8px;margin-bottom:6px">':'')
+        +'<div class="pn">'+esc(p.name)+'</div>'
+        +'<div class="pp num">฿'+fmt(p.price)+'</div>'
+        +(p.note?'<div class="muted" style="font-size:11px">'+esc(p.note)+'</div>':'')
+        +'</div>';
+    }).join('')+'</div>';
+  }).withFailureHandler(function(){ el.innerHTML='<div class="empty">โหลดไม่ได้</div>'; }).getPromotions();
+}
+
+// ---------- ติดต่อร้าน ----------
+function openContact(){
+  show('scrContact');
+  var c=(S.cfg||{});
+  document.getElementById('ctName').textContent = c.company || 'KLH';
+  document.getElementById('ctPhone').textContent = c.phone || c.shopPhone || '—';
 }
 
 // ---------- KTB dynamic QR ----------

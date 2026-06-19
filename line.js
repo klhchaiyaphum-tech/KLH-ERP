@@ -112,6 +112,25 @@ function createLineOrder(payload) {
   }
 }
 
+// โปรโมชั่น — staff แก้เองใน sheet PROMOTIONS (NAME · PRICE · IMAGE_URL · NOTE · ACTIVE)
+function getPromotions(){
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var s = ss.getSheetByName('PROMOTIONS');
+    if (!s){
+      s = ss.insertSheet('PROMOTIONS');
+      s.getRange(1,1,1,5).setValues([['NAME','PRICE','IMAGE_URL','NOTE','ACTIVE']]);
+      s.getRange(1,1,1,5).setFontWeight('bold').setBackground('#F6704C').setFontColor('#fff');
+      return { ok:true, items:[] };
+    }
+    if (s.getLastRow() <= 1) return { ok:true, items:[] };
+    var rows = s.getRange(2,1,s.getLastRow()-1,5).getValues();
+    var items = rows.filter(function(r){ return r[0] && String(r[4]).toUpperCase() !== 'FALSE'; })
+      .map(function(r){ return { name:String(r[0]), price:Number(r[1])||0, image:String(r[2]||''), note:String(r[3]||'') }; });
+    return { ok:true, items:items };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // สมัครสมาชิกจาก LINE → addCustomer เดิม (บังคับ retail, ไม่มีเครดิต)
 // ลูกค้ากรอกเองได้แค่ฟิลด์พื้นฐาน — ราคาส่ง/เครดิตให้ staff ปรับทีหลัง
 function lineRegisterMember(data) {
