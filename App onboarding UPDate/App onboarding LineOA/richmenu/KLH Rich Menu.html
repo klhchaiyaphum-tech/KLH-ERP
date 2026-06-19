@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KLH — LINE Rich Menu (2500×1686)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@600;700&display=swap" />
+<style>
+:root{
+  --coral:#F6704C; --coral-2:#E2502B; --coral-3:#C73A1B; --coral-soft:#FDEEE6;
+  --cream:#F4EFE6; --paper:#FFFFFF; --ink:#2A2521; --ink-2:#6B6258; --ink-3:#A89E90;
+  --line:#EFE7DA; --green:#34A853;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",system-ui,sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--ff); background:#ECE4D5; min-height:100vh; padding:28px 18px 60px; -webkit-font-smoothing:antialiased; }
+.page-head{ max-width:1000px; margin:0 auto 22px; text-align:center; }
+.page-head h1{ font-size:21px; font-weight:700; color:var(--ink); }
+.page-head p{ font-size:13.5px; color:var(--ink-2); margin-top:6px; line-height:1.5; }
+.controls{ display:flex; gap:10px; justify-content:center; margin-top:14px; flex-wrap:wrap; }
+.ctl{ padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--paper); font-family:inherit; font-size:13px; font-weight:600; color:var(--ink-2); cursor:pointer; }
+.ctl.on{ background:var(--coral); border-color:var(--coral); color:#fff; }
+
+.stage{ display:flex; justify-content:center; }
+/* exact LINE rich menu canvas: 2500×1686, 3×2 cells of ~833×843 */
+.richmenu{ width:2500px; height:1686px; transform-origin:top center; display:grid;
+  grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr); position:relative; overflow:hidden; }
+
+/* ---------- STYLE A: light, coral accents ---------- */
+.styleA{ background:var(--cream); gap:6px; padding:6px; }
+.styleA .cell{ background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; position:relative; padding:30px; text-align:center; }
+.styleA .cell .ic{ width:222px; height:222px; border-radius:60px; display:grid; place-items:center; color:#fff; box-shadow:0 30px 60px -24px var(--cc); }
+.styleA .cell .ic svg{ width:114px; height:114px; }
+.styleA .cell .txt{ display:flex; flex-direction:column; align-items:center; gap:12px; }
+.styleA .cell .lbl{ font-size:72px; font-weight:700; color:var(--ink); line-height:1.08; }
+.styleA .cell .sub{ font-size:38px; color:var(--ink-3); font-weight:500; }
+.styleA .cell.feat{ background:linear-gradient(150deg,var(--coral),var(--coral-3)); }
+.styleA .cell.feat .ic{ background:rgba(255,255,255,.2)!important; box-shadow:none; }
+.styleA .cell.feat .lbl, .styleA .cell.feat .sub{ color:#fff; }
+.styleA .cell.feat .sub{ color:rgba(255,255,255,.85); }
+.styleA .badge{ position:absolute; top:46px; right:54px; min-width:56px; height:56px; padding:0 18px; border-radius:999px; background:var(--coral); color:#fff; font-size:34px; font-weight:700; display:grid; place-items:center; font-family:"IBM Plex Sans",sans-serif; }
+
+/* ---------- STYLE B: warm filled tiles ---------- */
+.styleB{ background:var(--coral-3); gap:5px; padding:5px; }
+.styleB .cell{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:34px; position:relative; background:var(--cc); padding:30px; text-align:center; }
+.styleB .cell .ic{ width:196px; height:196px; border-radius:52px; display:grid; place-items:center; background:rgba(255,255,255,.18); color:#fff; }
+.styleB .cell .ic svg{ width:104px; height:104px; }
+.styleB .cell .txt{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.styleB .cell .lbl{ font-size:70px; font-weight:700; color:#fff; line-height:1.08; }
+.styleB .cell .sub{ font-size:37px; color:rgba(255,255,255,.82); font-weight:500; }
+.styleB .cell.logo{ background:var(--cream); }
+.styleB .cell.logo .lh{ width:560px; height:380px; display:grid; place-items:center; }
+.styleB .cell.logo img{ width:100%; height:100%; object-fit:contain; }
+.styleB .badge{ position:absolute; top:46px; right:54px; min-width:56px; height:56px; padding:0 18px; border-radius:999px; background:#fff; color:var(--coral-2); font-size:34px; font-weight:700; display:grid; place-items:center; font-family:"IBM Plex Sans",sans-serif; }
+
+/* grid guide overlay */
+.guide{ position:absolute; inset:0; pointer-events:none; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr); z-index:5; }
+.guide.off{ display:none; }
+.guide .g{ border:3px dashed rgba(0,0,0,.28); display:flex; align-items:flex-start; }
+.guide .g span{ background:rgba(0,0,0,.6); color:#fff; font-size:30px; padding:8px 16px; font-family:"IBM Plex Sans",sans-serif; font-weight:600; }
+
+.hint{ max-width:900px; margin:26px auto 0; background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 22px; font-size:13.5px; color:var(--ink-2); line-height:1.65; }
+.hint b{ color:var(--ink); }
+.hint code{ background:var(--coral-soft); color:var(--coral-2); padding:1px 7px; border-radius:6px; font-family:"IBM Plex Sans",monospace; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="page-head">
+  <h1>LINE OA Rich Menu — KLH (2500 × 1686 px)</h1>
+  <p>6 ช่อง · ขนาดมาตรฐาน LINE (Large) · แต่ละช่อง 833×843 px — สลับสไตล์/เปิดเส้นกริดเพื่อกำหนด Tap Area</p>
+  <div class="controls">
+    <button class="ctl on" id="btnA" onclick="setStyle('A')">สไตล์ A · สว่าง</button>
+    <button class="ctl" id="btnB" onclick="setStyle('B')">สไตล์ B · สีเต็ม</button>
+    <button class="ctl" id="btnG" onclick="toggleGuide()">เปิด/ปิด เส้นกริด Tap Area</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="richmenu styleA" id="menu"></div>
+</div>
+
+<div class="hint">
+  <b>วิธีใช้:</b> 1) เลือกสไตล์ที่ชอบ → 2) บอกผม "เอาสไตล์ A/B" ผมจะ export เป็นไฟล์ PNG 2500×1686 ให้ → 3) ใน <b>LINE OA Manager → Rich menu → สร้างใหม่</b> เลือกเทมเพลต <b>6 ช่อง (3×2)</b> แล้วอัปโหลดรูปนี้ → 4) ตั้ง Action แต่ละช่องเป็น <b>Link (LIFF URL)</b>:
+  <br/>• สั่งสินค้า → <code>liff.line.me/{LIFF_ID}?tab=shop</code> &nbsp;• ตะกร้า → <code>?tab=cart</code> &nbsp;• สถานะ → <code>?tab=status</code> &nbsp;• โปรโมชั่น → <code>?tab=promo</code> &nbsp;• สมาชิก → <code>?tab=member</code> &nbsp;• ติดต่อร้าน → โทร/ข้อความ
+</div>
+
+<script>
+const CELLS = [
+  { key:"shop",   cc:"#F6704C", feat:true,  lbl:"สั่งสินค้า",   sub:"เลือกสินค้า", ic:'<path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>' },
+  { key:"cart",   cc:"#E0892E",             lbl:"ตะกร้า",       sub:"แก้ไข/ชำระ",  badge:"3", ic:'<circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2.5 3h2l2.3 12.2a1.5 1.5 0 0 0 1.5 1.2h8.7a1.5 1.5 0 0 0 1.5-1.2L21 7H6"/>' },
+  { key:"status", cc:"#3A8DC9",             lbl:"สถานะออเดอร์", sub:"ติดตามพัสดุ", ic:'<path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="m3 7.5 9 4.5 9-4.5M12 12v9"/>' },
+  { key:"promo",  cc:"#E0526E",             lbl:"โปรโมชั่น",    sub:"ส่วนลด/แต้ม", ic:'<path d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7S9 7 8 5.5 9 2.5 12 7Zm0 0s3 0 4-1.5S15 2.5 12 7Z"/>' },
+  { key:"member", cc:"#6A4FC2",             lbl:"สมาชิก",       sub:"บัตร/สิทธิ์",  ic:'<circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>' },
+  { key:"contact",cc:"#3FA46B",             lbl:"ติดต่อร้าน",   sub:"แชต/โทร",     ic:'<path d="M21 11.5a8.5 7.5 0 0 1-11.7 7L3 20l1.6-5A7.5 7.5 0 1 1 21 11.5Z"/>' },
+];
+const GLBL = ["A (ซ้ายบน)","B (กลางบน)","C (ขวาบน)","D (ซ้ายล่าง)","E (กลางล่าง)","F (ขวาล่าง)"];
+let style="A", guide=false;
+const svg=(p)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+
+function render(){
+  const m=document.getElementById("menu");
+  m.className="richmenu style"+style;
+  let html="";
+  CELLS.forEach((c,i)=>{
+    if(style==="A"){
+      html+='<div class="cell'+(c.feat?" feat":"")+'" style="--cc:'+c.cc+'">'
+        + (c.badge?'<span class="badge">'+c.badge+'</span>':'')
+        + '<div class="ic" style="background:'+c.cc+'">'+svg(c.ic)+'</div>'
+        + '<div class="txt"><div class="lbl">'+c.lbl+'</div>'
+        + (c.sub?'<div class="sub">'+c.sub+'</div>':'')+'</div>'
+        + '</div>';
+    } else {
+      html+='<div class="cell" style="--cc:'+c.cc+'">'
+        + (c.badge?'<span class="badge">'+c.badge+'</span>':'')
+        + '<div class="ic">'+svg(c.ic)+'</div>'
+        + '<div class="txt"><div class="lbl">'+c.lbl+'</div>'
+        + (c.sub?'<div class="sub">'+c.sub+'</div>':'')+'</div>'
+        + '</div>';
+    }
+  });
+  // guide overlay
+  html+='<div class="guide'+(guide?"":" off")+'">'+GLBL.map(g=>'<div class="g"><span>'+g+'</span></div>').join("")+'</div>';
+  m.innerHTML=html;
+  fit();
+}
+function setStyle(s){ style=s; document.getElementById("btnA").classList.toggle("on",s==="A"); document.getElementById("btnB").classList.toggle("on",s==="B"); render(); }
+function toggleGuide(){ guide=!guide; document.getElementById("btnG").classList.toggle("on",guide); render(); }
+function fit(){
+  const m=document.getElementById("menu");
+  const avail=Math.min(window.innerWidth-40, 1100);
+  const scale=avail/2500;
+  m.style.transform="scale("+scale+")";
+  m.parentElement.style.height=(1686*scale)+"px";
+}
+window.addEventListener("resize",fit);
+render();
+</script>
+</body>
+</html>
