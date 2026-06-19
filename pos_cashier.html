@@ -6,7 +6,7 @@
 <title>KLH Cashier</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <!-- qrcode via Google Charts — ไม่ต้องการ library -->
 <style>
 /* ── Design tokens — same as POS PC ── */
@@ -63,8 +63,8 @@ input{font-family:inherit;}
 }
 .loaded-tab .rm{background:none;border:none;color:var(--brand-2);cursor:pointer;font-size:11px;opacity:.7;}
 
-/* Items area */
-.items-area{flex:1;overflow-y:auto;padding:8px 16px;}
+/* Items area (loaded order) — capped so the board stays visible */
+.items-area{flex:0 1 auto;max-height:34vh;overflow-y:auto;padding:8px 16px;}
 .items-area::-webkit-scrollbar{width:8px;}
 .items-area::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;}
 .item-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
@@ -72,30 +72,32 @@ input{font-family:inherit;}
 .item-row .ir-unit{font-size:12px;color:var(--ink-3);margin-top:2px;}
 .item-row .ir-qty{font-size:13px;color:var(--ink-2);white-space:nowrap;min-width:40px;text-align:right;}
 .item-row .ir-total{font-weight:700;font-size:13.5px;min-width:70px;text-align:right;flex-shrink:0;}
-.empty-orders{text-align:center;color:var(--ink-3);padding:48px 0;font-size:14px;line-height:1.8;}
+.empty-orders{text-align:center;color:var(--ink-3);padding:16px 0;font-size:13px;line-height:1.7;}
 
-/* Pending orders list (board) */
-.pending-list{flex-shrink:0;border-top:1px solid var(--line);max-height:56vh;overflow-y:auto;background:var(--surface-2);}
-.pending-list::-webkit-scrollbar{width:6px;}
-.pending-hdr{padding:8px 16px;font-size:12px;font-weight:700;color:var(--ink-3);background:var(--surface);border-bottom:1px solid var(--line);}
+/* Pending orders list (board) — fills remaining height, columns scroll inside */
+.pending-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--line);overflow:hidden;background:var(--surface-2);}
+.pending-list #pendingList{flex:1 1 auto;min-height:0;overflow:hidden;}
+.pending-hdr{flex-shrink:0;padding:8px 16px;font-size:12px;font-weight:700;color:var(--ink-3);background:var(--surface);border-bottom:1px solid var(--line);}
 
-/* ── 4-group bubble board ── */
-.board{padding:10px 12px;}
-.bgroup{margin-bottom:12px;}
-.bg-hd{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;padding:6px 11px;border-radius:9px;margin-bottom:7px;}
+/* ── parallel-column board (groups shown side by side, no scroll-to-see) ── */
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;height:100%;padding:9px 11px;}
+.bgroup{display:flex;flex-direction:column;min-height:0;}
+.bcards{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;}
+.bcards::-webkit-scrollbar{width:5px;}
+.col-empty{color:var(--ink-3);font-size:12px;text-align:center;padding:14px 4px;opacity:.6;}
+.bg-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;padding:6px 9px;border-radius:9px;margin-bottom:7px;flex-shrink:0;}
 .bg-hd .cnt{margin-left:auto;background:rgba(0,0,0,.14);color:#fff;border-radius:999px;padding:1px 9px;font-size:11px;}
 .bg-store-pay{background:#FFF1E6;color:#C2410C;}        .bg-store-pay .cnt{background:#C2410C;}
 .bg-line-pay{background:#E9FBF1;color:#0B7A43;}         .bg-line-pay .cnt{background:#06C755;}
 .bg-line-ready{background:#E6F7EE;color:#1E7A3A;}       .bg-line-ready .cnt{background:#1E7A3A;}
 .bg-line-deliver{background:#E8EFFF;color:#1D4ED8;}     .bg-line-deliver .cnt{background:#1D4ED8;}
-.bcard{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line-2);border-radius:11px;padding:9px 11px;margin-bottom:6px;box-shadow:var(--sh-1);}
+.bcard{display:flex;flex-direction:column;gap:5px;background:var(--surface);border:1px solid var(--line-2);border-radius:11px;padding:8px 10px;box-shadow:var(--sh-1);}
 .bcard.line{border-left:4px solid #06C755;}
-.bcard .bc-main{flex:1;min-width:0;}
-.bcard .bc-name{font-size:13.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.bcard .bc-sub{font-size:11px;color:var(--ink-3);margin-top:1px;font-family:var(--ff-num);}
+.bcard .bc-name{font-size:13px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bcard .bc-sub{font-size:10.5px;color:var(--ink-3);font-family:var(--ff-num);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bcard .bc-total{font-weight:800;font-size:15px;color:var(--ink);white-space:nowrap;}
-.bc-btns{display:flex;gap:6px;flex-shrink:0;}
-.bc-btn{padding:7px 12px;border-radius:9px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;color:#fff;white-space:nowrap;}
+.bc-btns{display:flex;gap:5px;}
+.bc-btn{flex:1;padding:8px 6px;border-radius:9px;border:none;font-size:12px;font-weight:700;cursor:pointer;color:#fff;white-space:nowrap;}
 .bc-btn:active{transform:scale(.96);}
 .bc-btn.pay{background:#C2410C;}
 .bc-btn.handover{background:#1E7A3A;}
@@ -253,7 +255,7 @@ input{font-family:inherit;}
     <!-- Pending orders -->
     <div class="pending-list">
       <div class="pending-hdr" style="display:flex;align-items:center">
-      <span>ออเดอร์รอชำระ</span>
+      <span>📋 สถานะออเดอร์ (ทุกกลุ่ม)</span>
       <span id="refreshLabel" style="margin-left:auto;font-size:10px;color:var(--ink-3);font-weight:400"></span>
       <span style="margin-left:6px;width:7px;height:7px;border-radius:999px;background:var(--ok);display:inline-block" title="auto-refresh ทุก 20 วินาที"></span>
     </div>
@@ -652,10 +654,8 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 function _bcard(o, btnsHtml) {
   var isLine = /LINE/i.test(o.source || '');
   return '<div class="bcard'+(isLine?' line':'')+'">'
-    +'<div class="bc-main">'
-    +  '<div class="bc-name">'+esc(o.customerName||'ลูกค้าทั่วไป')+(isLine?' <span style="color:#06C755;font-size:11px">📱</span>':'')+'</div>'
-    +  '<div class="bc-sub">'+esc(o.orderId)+' · '+esc(o.time||o.date)+(o.delivery==='delivery'?' · 🚚 จัดส่ง':'')+'</div>'
-    +'</div>'
+    +'<div class="bc-name">'+esc(o.customerName||'ลูกค้าทั่วไป')+(isLine?' <span style="color:#06C755;font-size:11px">📱</span>':'')+'</div>'
+    +'<div class="bc-sub">'+esc(o.orderId)+' · '+esc(o.time||o.date)+(o.delivery==='delivery'?' · 🚚':'')+'</div>'
     +'<div class="bc-total">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
     +'<div class="bc-btns">'+btnsHtml+'</div>'
     +'</div>';
@@ -669,22 +669,27 @@ function renderBoard(orders) {
     else if (isLine) { (o.delivery==='delivery'?lineDeliver:lineReady).push(o); }
     // PAID หน้าร้าน = จบแล้ว ไม่ต้องแสดง
   });
-  function grp(cls, icon, title, arr, mk){
-    if (!arr.length) return '';
-    return '<div class="bgroup"><div class="bg-hd '+cls+'">'+icon+' '+title+'<span class="cnt">'+arr.length+'</span></div>'
-      + arr.map(function(o){ return _bcard(o, mk(o)); }).join('') + '</div>';
+  // คอลัมน์ขนานกัน — เห็นทุกกลุ่มพร้อมกัน ไม่ต้องเลื่อน
+  function col(cls, icon, title, arr, mk){
+    var cards = arr.length
+      ? arr.map(function(o){ return _bcard(o, mk(o)); }).join('')
+      : '<div class="col-empty">— ว่าง —</div>';
+    return '<div class="bgroup">'
+      + '<div class="bg-hd '+cls+'">'+icon+' '+title+'<span class="cnt">'+arr.length+'</span></div>'
+      + '<div class="bcards">'+cards+'</div>'
+      + '</div>';
   }
-  var slipBtn = function(o){ return '<button class="bc-btn slip" onclick="printPickSlip(\''+o.orderId+'\')">🖨️ ใบจัด</button>'; };
+  var slipBtn = function(o){ return '<button class="bc-btn slip" onclick="printPickSlip(\''+o.orderId+'\')">🖨️</button>'; };
   var html =
-      grp('bg-store-pay','🟠','รอชำระ · หน้าร้าน', storePay, function(o){
+      col('bg-store-pay','🟠','รอชำระ หน้าร้าน', storePay, function(o){
         return '<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
-    + grp('bg-line-pay','📱','รอชำระ · ไลน์ (รับเงินตอนรับของ)', linePay, function(o){
+    + col('bg-line-pay','📱','รอชำระ ไลน์', linePay, function(o){
         return slipBtn(o)+'<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
-    + grp('bg-line-ready','🟢','ชำระแล้ว · ไลน์ รอรับสินค้า', lineReady, function(o){
+    + col('bg-line-ready','🟢','ชำระแล้ว รอรับ', lineReady, function(o){
         return slipBtn(o)+'<button class="bc-btn handover" onclick="handover(\''+o.orderId+'\',\'pickup\')">ส่งมอบ</button>'; })
-    + grp('bg-line-deliver','🚚','รอจัดส่ง · ไลน์', lineDeliver, function(o){
-        return slipBtn(o)+'<button class="bc-btn deliver" onclick="handover(\''+o.orderId+'\',\'delivery\')">จัดส่งแล้ว</button>'; });
-  el.innerHTML = '<div class="board">'+(html || '<div class="board-empty">— ไม่มีออเดอร์ค้าง —</div>')+'</div>';
+    + col('bg-line-deliver','🚚','รอจัดส่ง ไลน์', lineDeliver, function(o){
+        return slipBtn(o)+'<button class="bc-btn deliver" onclick="handover(\''+o.orderId+'\',\'delivery\')">จัดส่ง</button>'; });
+  el.innerHTML = '<div class="board">'+html+'</div>';
 }
 
 // พิมพ์ใบจัดสินค้า (picking slip) — โหลดรายการจากออเดอร์แล้วพิมพ์ + ตั้งสถานะกำลังจัด
