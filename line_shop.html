@@ -10,6 +10,7 @@
 <title>KLH สั่งสินค้า</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   :root{
     --co:#06C755; --co2:#05A648; --coral:#F6704C; --coral2:#E2502B; --coral-soft:#FCE6DC;
@@ -592,14 +593,28 @@ function openPay(){
   S.payMode='order';
   document.getElementById('payOrderId').textContent = ' #'+S.order.orderId;
   document.getElementById('payAmt').textContent = '฿'+fmt(S.order.total);
-  var qr = genKtbQr(S.order.total);
-  document.getElementById('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data=' + encodeURIComponent(qr);
+  setQrImg(genKtbQr(S.order.total));
   document.getElementById('slipStatus').textContent='';
   show('scrPay');
 }
-// บันทึก QR ลงอัลบั้ม — แสดงรูปใหญ่ให้กดค้างบันทึก (วิธีที่ใช้ได้จริงในแอป LINE)
+// สร้าง QR ในเครื่อง (data URL) — บันทึก/กดค้างได้จริงในแอป LINE (รูป cross-origin บันทึกไม่ได้)
+function setQrImg(text){
+  var img=document.getElementById('qrImg'); if(!img) return;
+  var fb='https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data='+encodeURIComponent(text);
+  if(window.QRCode && QRCode.toDataURL){
+    QRCode.toDataURL(text, {width:460, margin:1, errorCorrectionLevel:'M'}, function(err,url){
+      img.src = (!err && url) ? url : fb;
+    });
+  } else { img.src=fb; }
+}
+// บันทึก QR ลงอัลบั้ม — ปุ่มดาวน์โหลด (data URL) + กดค้างบันทึก
 function saveQr(){
   var url=(document.getElementById('qrImg')||{}).src; if(!url) return;
+  var fname='KLH-QR-'+((S.order&&S.order.orderId)||(S.arPay&&S.arPay.arId)||'pay')+'.png';
+  // ดาวน์โหลดตรง (ได้เมื่อเป็น data URL ที่สร้างในเครื่อง)
+  if(url.indexOf('data:')===0){
+    try{ var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }catch(e){}
+  }
   var ov=document.getElementById('qrSaveOv');
   if(!ov){
     ov=document.createElement('div'); ov.id='qrSaveOv';
@@ -609,7 +624,8 @@ function saveQr(){
   }
   ov.innerHTML='<div style="color:#fff;font-size:16px;text-align:center;font-weight:700;line-height:1.5">📷 กดค้างที่รูป QR<br>แล้วเลือก “บันทึกรูปภาพ” ลงอัลบั้ม</div>'
     +'<img src="'+url+'" style="width:80vw;max-width:340px;background:#fff;padding:12px;border-radius:16px">'
-    +'<button style="background:#fff;border:none;border-radius:999px;padding:13px 34px;font-size:15px;font-weight:700" onclick="document.getElementById(\'qrSaveOv\').style.display=\'none\'">ปิด</button>';
+    +'<a href="'+url+'" download="'+fname+'" style="background:#06C755;color:#fff;text-decoration:none;border-radius:999px;padding:13px 30px;font-size:15px;font-weight:700">⬇️ ดาวน์โหลดรูป</a>'
+    +'<button style="background:#fff;border:none;border-radius:999px;padding:11px 30px;font-size:15px;font-weight:700" onclick="document.getElementById(\'qrSaveOv\').style.display=\'none\'">ปิด</button>';
   ov.style.display='flex';
 }
 function onSlip(input){
@@ -757,8 +773,7 @@ function openArPay(arId, amount){
   S.payMode='ar'; S.arPay={ arId:arId, total:amount };
   document.getElementById('payOrderId').textContent=' (หนี้ '+arId+')';
   document.getElementById('payAmt').textContent='฿'+fmt(amount);
-  var qr=genKtbQr(amount);
-  document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data='+encodeURIComponent(qr);
+  setQrImg(genKtbQr(amount));
   document.getElementById('slipStatus').textContent='';
   show('scrPay');
 }

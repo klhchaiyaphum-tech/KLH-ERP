@@ -377,7 +377,29 @@ function lineAttachSlip(orderId, base64, mimeType, expectedAmount) {
   try {
     var verify = verifySlipGemini(base64, mimeType, expectedAmount);
     var saved  = saveSlipToDrive(base64, mimeType, orderId);
-    return { ok: true, verify: verify, saved: saved };
+    var amt = (verify && verify.amount) ? Number(verify.amount) : 0;
+    var matched = amt && Math.abs(amt - Number(expectedAmount)) < 1;
+    // อัปเดตสถานะออเดอร์ + แจ้งกลุ่มให้แคชเชียร์รู้ว่ามีการโอน
+    try {
+      var s = _ordSheet_(), row = _ordRow_(s, orderId);
+      if (row > 0) {
+        var cust = String(s.getRange(row, 9).getValue() || '');
+        var note = String(s.getRange(row, 15).getValue() || '');
+        if (matched) {
+          s.getRange(row, 13).setValue('PAID');                       // col13 = STATUS → ชำระแล้ว
+          s.getRange(row, 15).setValue(note + ' | สลิปยอดตรง ฿' + amt); // บันทึกอ้างอิงในโน้ต
+          pushLineGroup_('💰 ลูกค้าโอนเงินออนไลน์ (ยอดตรง ✅)\n' + orderId + '\nลูกค้า: ' + cust
+            + '\nยอด ฿' + Number(expectedAmount).toLocaleString('th-TH') + '\nสถานะ: ชำระแล้ว — เตรียมจัดสินค้าได้');
+        } else {
+          s.getRange(row, 15).setValue(note + ' | แนบสลิปรอตรวจ' + (amt ? (' ฿'+amt) : ''));
+          pushLineGroup_('⚠️ ลูกค้าแนบสลิปโอนเงิน (รอตรวจ)\n' + orderId + '\nลูกค้า: ' + cust
+            + '\nต้องชำระ ฿' + Number(expectedAmount).toLocaleString('th-TH')
+            + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH')) : '\n(อ่านยอดในสลิปไม่ได้)')
+            + '\nโปรดตรวจสอบสลิปก่อนจัดสินค้า');
+        }
+      }
+    } catch (eU) { Logger.log('lineAttachSlip update: ' + eU); }
+    return { ok: true, verify: verify, saved: saved, matched: matched };
   } catch (e) {
     return { ok: false, msg: e.message };
   }
