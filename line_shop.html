@@ -766,13 +766,25 @@ function openStatus(){
     if (!os.length){ el.innerHTML='<div class="empty">ยังไม่มีออเดอร์</div>'; return; }
     el.innerHTML = os.map(function(o){
       var paid = /ชำระเงินแล้ว|จัด|รับสินค้าแล้ว|จัดส่งแล้ว/.test(o.statusLabel);
+      var confirmBtn = o.canConfirm
+        ? '<button class="btn green" style="margin-top:9px" onclick="confirmReceived(\''+esc(o.orderId)+'\')">✅ '+(o.delivery==='delivery'?'ได้รับสินค้าแล้ว':'รับสินค้าแล้ว')+'</button>'
+        : '';
       return '<div class="card" style="margin-bottom:10px">'
         +'<div style="display:flex;justify-content:space-between"><b>#'+o.orderId+'</b><b class="num" style="color:var(--coral2)">฿'+fmt(o.total)+'</b></div>'
         +'<div class="muted" style="font-size:12px">'+o.dateTime+' · '+(o.delivery==='delivery'?'จัดส่ง':'รับเอง')+'</div>'
         +'<div style="margin-top:7px"><span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:700;background:'+(paid?'#E6F7EC':'#FFF3E0')+';color:'+(paid?'#1E7A3A':'#C2410C')+'">'+o.statusLabel+'</span></div>'
+        +confirmBtn
         +'</div>';
     }).join('');
   }).withFailureHandler(function(){ el.innerHTML='<div class="empty">โหลดไม่ได้</div>'; }).lineGetMyOrders(uid, ph);
+}
+function confirmReceived(orderId){
+  var uid = S.profile?S.profile.userId:''; var ph = S.member?S.member.phone:'';
+  toast('กำลังยืนยัน...');
+  google.script.run.withSuccessHandler(function(res){
+    if(res&&res.ok){ toast('✅ ยืนยันรับสินค้าแล้ว ขอบคุณค่ะ'); openStatus(); }
+    else toast('ไม่สำเร็จ: '+((res&&res.msg)||''));
+  }).withFailureHandler(function(e){ toast('ผิดพลาด: '+e.message); }).lineConfirmReceived(orderId, uid, ph);
 }
 
 // ---------- โปรโมชั่น ----------

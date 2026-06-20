@@ -17,7 +17,7 @@ function _ordRow_(s, orderId) {
 // ป้ายสถานะที่ลูกค้า LINE เห็น (6 ขั้น)
 function lineStatusLabel_(pay, fulfill, delivery) {
   if (fulfill === 'DONE')      return (delivery === 'delivery') ? 'จัดส่งแล้ว' : 'รับสินค้าแล้ว';
-  if (fulfill === 'READY')     return (delivery === 'delivery') ? 'รอจัดส่ง' : 'จัดเสร็จ พร้อมมารับ';
+  if (fulfill === 'READY')     return (delivery === 'delivery') ? 'กำลังจัดส่ง' : 'จัดเสร็จ พร้อมมารับ';
   if (fulfill === 'PREPARING') return 'กำลังจัดสินค้า';
   if (pay === 'PAID')          return 'ชำระเงินแล้ว';
   return 'รอชำระเงิน';
@@ -136,14 +136,30 @@ function lineGetMyOrders(lineUid, phone) {
       return false;
     }).map(function(r) {
       var note = String(r[14] || ''), delivery = /จัดส่ง/.test(note) ? 'delivery' : 'pickup';
+      var fulfill = String(r[15] || 'NEW') || 'NEW';
       return {
         orderId:     sd(r[0]),
         dateTime:    sd(r[2]) + ' ' + sd(r[3]),
         total:       Number(r[11]) || 0,
         delivery:    delivery,
-        statusLabel: lineStatusLabel_(String(r[12] || ''), String(r[15] || 'NEW') || 'NEW', delivery)
+        fulfill:     fulfill,
+        canConfirm:  (fulfill === 'READY'),   // จัดเสร็จ/รอจัดส่ง → ลูกค้ากดยืนยันรับของได้
+        statusLabel: lineStatusLabel_(String(r[12] || ''), fulfill, delivery)
       };
     }).reverse();
     return { ok: true, orders: out };
   } catch(e) { return { ok: false, msg: String(e) }; }
+}
+
+// ── ลูกค้า LINE กดยืนยันว่าได้รับสินค้าแล้ว → ปิดออเดอร์ (DONE) ──
+function lineConfirmReceived(orderId, lineUid, phone) {
+  try {
+    var s = _ordSheet_(); if (!s) return { ok:false, msg:'ไม่พบ ORDERS' };
+    var row = _ordRow_(s, orderId); if (row < 0) return { ok:false, msg:'ไม่พบออเดอร์' };
+    var note = String(s.getRange(row, 15).getValue() || '');
+    var uid = String(lineUid || ''), ph = String(phone || '').replace(/[^0-9]/g, '');
+    var owns = (uid && note.indexOf('UID:' + uid) >= 0) || (ph && ph.length >= 6 && note.indexOf(ph) >= 0);
+    if (!owns) return { ok:false, msg:'ออเดอร์นี้ไม่ใช่ของคุณ' };
+    return setOrderFulfill(orderId, 'DONE');   // จะ push แจ้งกลุ่ม "ลูกค้ารับสินค้าแล้ว" อัตโนมัติ
+  } catch(e) { return { ok:false, msg:String(e) }; }
 }

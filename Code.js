@@ -574,7 +574,7 @@ function doPost(e) {
                    // LINE OA shop
                    'getLineShopConfig','lineFindMember','lineSearchProducts',
                    'createLineOrder','lineAttachSlip','lineRegisterMember','lineGetMyProfile',
-                   'lineGetMyOrders','getPromotions','lineUpdateMember','lineGetMyAr','linePayArSlip',
+                   'lineGetMyOrders','getPromotions','lineUpdateMember','lineGetMyAr','linePayArSlip','lineConfirmReceived',
                    // order lifecycle (POS-PC / Cashier board)
                    'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
