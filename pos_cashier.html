@@ -867,12 +867,30 @@ function renderBoard(orders) {
       col('bg-store-pay','🟠','รอชำระ หน้าร้าน', storePay, function(o){
         return '<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
     + col('bg-line-pay','📱','รอชำระ ไลน์', linePay, function(o){
+        if (o.slipUrl) {  // ลูกค้าแนบสลิปมาแล้ว → ดูสลิป + ยืนยันชำระ
+          return '<button class="bc-btn slip" onclick="viewSlip(\''+o.slipUrl+'\')">🧾 ดูสลิป'+(o.slipAmt?(' ฿'+Number(o.slipAmt).toLocaleString("th-TH")):'')+'</button>'
+               + '<button class="bc-btn handover" onclick="confirmLinePaid(\''+o.orderId+'\')">✓ ยืนยันชำระ</button>';
+        }
         return slipBtn(o)+'<button class="bc-btn pay" onclick="loadOrder(\''+o.orderId+'\')">รับเงิน</button>'; })
     + col('bg-line-ready','🟢','ชำระแล้ว รอรับ', lineReady, function(o){
         return slipBtn(o)+'<button class="bc-btn handover" onclick="handover(\''+o.orderId+'\',\'pickup\')">ส่งมอบ</button>'; })
     + col('bg-line-deliver','🚚','รอจัดส่ง ไลน์', lineDeliver, function(o){
         return slipBtn(o)+'<button class="bc-btn deliver" onclick="handover(\''+o.orderId+'\',\'delivery\')">จัดส่ง</button>'; });
   el.innerHTML = '<div class="board">'+html+'</div>';
+}
+
+// เปิดดูรูปสลิปที่ลูกค้าแนบ
+function viewSlip(url){ if(url) window.open(url, '_blank'); }
+// แคชเชียร์ยืนยันรับชำระจากสลิป (ออนไลน์) → ตั้งสถานะ PAID
+function confirmLinePaid(orderId){
+  Swal.fire({ title:'ยืนยันรับชำระ (สลิปโอน)?', html:orderId+'<br><span style="color:#888;font-size:13px">ตรวจสลิป + ยอดให้ตรงก่อนยืนยัน</span>', icon:'question',
+    showCancelButton:true, confirmButtonText:'ยืนยันชำระแล้ว', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A' })
+  .then(function(r){ if(!r.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(res){
+      if(res&&res.ok){ Swal.fire({icon:'success',title:'ยืนยันชำระแล้ว',timer:1100,showConfirmButton:false}); refreshPending(); }
+      else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).setOrderPaid(orderId);
+  });
 }
 
 // พิมพ์ใบจัดสินค้า (picking slip) — โหลดรายการจากออเดอร์แล้วพิมพ์ + ตั้งสถานะกำลังจัด
@@ -886,16 +904,24 @@ function printPickSlip(orderId) {
     var lines = items.map(function(it){
       return (it.name||it.barcode)+'\n   x '+it.qty+' '+(it.unit||'')+'  ___';
     }).join('\n');
+    var deliv = /จัดส่ง/.test(o.note||'') ? ('🚚 จัดส่ง — '+(o.note||'')) : '🏪 รับที่ร้าน';
     var txt = '*** ใบจัดสินค้า ***\n'+orderId+'\n'
-      +(o.customerName||'ลูกค้า')+'\n'
-      +(/จัดส่ง/.test(o.note||'')?'[ จัดส่ง ] '+(o.note||''):'[ รับที่ร้าน ]')+'\n'
+      +(o.customerName||'ลูกค้า')+'\n'+deliv+'\n'
       +'------------------------------\n'+lines+'\n------------------------------\nรวม '+items.length+' รายการ';
-    // พิมพ์ผ่าน Sunmi bridge ถ้ามี ไม่งั้นพิมพ์ในหน้า
+    // พิมพ์ผ่าน Sunmi bridge (58mm) ถ้ามี
     if (window.AndroidPrint && window.AndroidPrint.printReceipt) {
       try { window.AndroidPrint.printReceipt(txt, orderId); } catch(e){}
     } else {
-      var pa = document.getElementById('printArea');
-      if (pa){ pa.innerHTML = '<pre style="font-size:15px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); }
+      // PC 80mm — หน้าต่างพิมพ์ หัวบิลจัดกลาง ขนาดถูกต้อง
+      var rowsHtml = items.map(function(it){ return '<tr><td>'+esc(it.name||it.barcode)+'</td><td style="text-align:center;white-space:nowrap">x'+it.qty+' '+esc(it.unit||'')+'</td><td style="width:46px">____</td></tr>'; }).join('');
+      var w = window.open('','_blank','width=420,height=700');
+      if (w){
+        w.document.write('<html><head><meta charset="utf-8"><title>ใบจัด '+esc(orderId)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:sans-serif;padding:4mm 3mm;width:80mm;font-size:16px}.c{text-align:center}h3{margin:2px 0;font-size:21px}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:8px 3px;font-size:16px}</style></head><body>'
+          +'<div class="c"><h3>ใบจัดสินค้า</h3><div>'+esc(orderId)+'</div><div>'+esc(o.customerName||'ลูกค้า')+'</div><div>'+esc(deliv)+'</div></div>'
+          +'<table>'+rowsHtml+'</table><div style="margin-top:8px">รวม '+items.length+' รายการ</div>'
+          +'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
+        w.document.close();
+      }
     }
     // ตั้งสถานะ "กำลังจัด"
     google.script.run.withSuccessHandler(function(){ refreshPending(); }).withFailureHandler(function(){}).setOrderFulfill(orderId,'PREPARING');

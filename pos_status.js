@@ -123,6 +123,16 @@ function getOrderForPick(orderId) {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
+// ── แคชเชียร์ยืนยันชำระ (หลังดูสลิป) → ตั้งสถานะ PAID ──
+function setOrderPaid(orderId) {
+  try {
+    var s = _ordSheet_(); if (!s) return { ok:false, msg:'ไม่พบ ORDERS' };
+    var row = _ordRow_(s, orderId); if (row < 0) return { ok:false, msg:'ไม่พบออเดอร์' };
+    s.getRange(row, 13).setValue('PAID');
+    return { ok:true, orderId:orderId };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 // ── บอร์ดออเดอร์ (POS-PC จัดของ + Cashier รับเงิน) — ตัดที่ DONE ออก ──
 function getOrderBoard() {
   try {
@@ -131,6 +141,8 @@ function getOrderBoard() {
     function sd(v){ return v instanceof Date ? Utilities.formatDate(v, 'Asia/Bangkok', 'yyyy-MM-dd') : String(v || ''); }
     var out = rows.map(function(r) {
       var note = String(r[14] || '');
+      var mSlip = note.match(/SLIP:(\S+)/);
+      var mAmt  = note.match(/สลิปยอด:([\d.]+)/);
       return {
         orderId:      sd(r[0]),
         date:         sd(r[2]), time: sd(r[3]),
@@ -140,6 +152,8 @@ function getOrderBoard() {
         payStatus:    sd(r[12]) || 'PENDING',         // PENDING / PAID
         fulfill:      String(r[15] || 'NEW') || 'NEW',// NEW/PREPARING/READY/DONE
         delivery:     /จัดส่ง/.test(note) ? 'delivery' : 'pickup',
+        slipUrl:      mSlip ? mSlip[1] : '',
+        slipAmt:      mAmt ? Number(mAmt[1]) : 0,
         note:         note
       };
     }).filter(function(o){ return o.fulfill !== 'DONE'; });

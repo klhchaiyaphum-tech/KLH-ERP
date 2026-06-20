@@ -375,31 +375,39 @@ function linePayArSlip(custId, arId, amount, base64, mimeType) {
 // แนบสลิปกับออเดอร์ LINE (ตรวจ Gemini + เซฟ Drive — ใช้ของเดิม)
 function lineAttachSlip(orderId, base64, mimeType, expectedAmount) {
   try {
-    var verify = verifySlipGemini(base64, mimeType, expectedAmount);
-    var saved  = saveSlipToDrive(base64, mimeType, orderId);
-    var amt = (verify && verify.amount) ? Number(verify.amount) : 0;
+    var verify = verifySlipGemini(base64, mimeType, expectedAmount) || {};
+    // รูปนี้ไม่ใช่สลิปโอนเงิน → ปฏิเสธ ไม่บันทึก
+    if (verify.isSlip === false) {
+      return { ok: true, isSlip: false, matched: false, msg: 'รูปนี้ไม่ใช่สลิปโอนเงิน' };
+    }
+    var saved   = saveSlipToDrive(base64, mimeType, orderId) || {};
+    var slipUrl = saved.url || '';
+    var amt     = verify.amount ? Number(verify.amount) : 0;
     var matched = amt && Math.abs(amt - Number(expectedAmount)) < 1;
-    // อัปเดตสถานะออเดอร์ + แจ้งกลุ่มให้แคชเชียร์รู้ว่ามีการโอน
+    // อัปเดตออเดอร์ + เก็บลิงก์สลิป + แจ้งกลุ่ม (แคชเชียร์เปิดดูสลิป/ยอดได้)
     try {
       var s = _ordSheet_(), row = _ordRow_(s, orderId);
       if (row > 0) {
         var cust = String(s.getRange(row, 9).getValue() || '');
         var note = String(s.getRange(row, 15).getValue() || '');
+        var add  = ' | SLIP:' + slipUrl + (amt ? (' | สลิปยอด:' + amt) : '');
         if (matched) {
-          s.getRange(row, 13).setValue('PAID');                       // col13 = STATUS → ชำระแล้ว
-          s.getRange(row, 15).setValue(note + ' | สลิปยอดตรง ฿' + amt); // บันทึกอ้างอิงในโน้ต
-          pushLineGroup_('💰 ลูกค้าโอนเงินออนไลน์ (ยอดตรง ✅)\n' + orderId + '\nลูกค้า: ' + cust
-            + '\nยอด ฿' + Number(expectedAmount).toLocaleString('th-TH') + '\nสถานะ: ชำระแล้ว — เตรียมจัดสินค้าได้');
+          s.getRange(row, 13).setValue('PAID');                 // ยอดตรง → ชำระแล้วอัตโนมัติ
+          s.getRange(row, 15).setValue(note + add + ' (ยอดตรง)');
+          pushLineGroup_('💰 โอนออนไลน์ ยอดตรง ✅\n' + orderId + '\nลูกค้า: ' + cust
+            + '\nยอด ฿' + Number(expectedAmount).toLocaleString('th-TH')
+            + (verify.bank ? ('\nธนาคาร: ' + verify.bank) : '')
+            + '\nสลิป: ' + slipUrl + '\nสถานะ: ชำระแล้ว — เตรียมจัดของได้');
         } else {
-          s.getRange(row, 15).setValue(note + ' | แนบสลิปรอตรวจ' + (amt ? (' ฿'+amt) : ''));
-          pushLineGroup_('⚠️ ลูกค้าแนบสลิปโอนเงิน (รอตรวจ)\n' + orderId + '\nลูกค้า: ' + cust
+          s.getRange(row, 15).setValue(note + add + ' (รอตรวจ)');  // คงสถานะ PENDING
+          pushLineGroup_('⚠️ แนบสลิป รอแคชเชียร์ตรวจ\n' + orderId + '\nลูกค้า: ' + cust
             + '\nต้องชำระ ฿' + Number(expectedAmount).toLocaleString('th-TH')
-            + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH')) : '\n(อ่านยอดในสลิปไม่ได้)')
-            + '\nโปรดตรวจสอบสลิปก่อนจัดสินค้า');
+            + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH') + ' (ไม่ตรง)') : '\n(อ่านยอดในสลิปไม่ได้)')
+            + '\nสลิป: ' + slipUrl + '\nกดดูสลิป + ยืนยันที่แคชเชียร์');
         }
       }
     } catch (eU) { Logger.log('lineAttachSlip update: ' + eU); }
-    return { ok: true, verify: verify, saved: saved, matched: matched };
+    return { ok: true, isSlip: true, matched: matched, amt: amt, slipUrl: slipUrl };
   } catch (e) {
     return { ok: false, msg: e.message };
   }

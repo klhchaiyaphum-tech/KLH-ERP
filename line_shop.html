@@ -653,13 +653,11 @@ function onSlip(input){
       return;
     }
     google.script.run.withSuccessHandler(function(res){
-      var v = res && res.verify ? res.verify : {};
-      var amt = v.amount || 0;
-      if (res && res.ok){
-        if (amt && Math.abs(amt - S.order.total) < 1){ st.innerHTML='✅ ยอดตรง ฿'+fmt(amt)+' — ยืนยันแล้ว'; setTimeout(finishOrder, 900); }
-        else if (amt){ st.innerHTML='⚠️ ยอดในสลิป ฿'+fmt(amt)+' ไม่ตรงกับ ฿'+fmt(S.order.total)+' — แอดมินจะตรวจอีกครั้ง'; setTimeout(finishOrder, 1600); }
-        else { st.innerHTML='📤 รับสลิปแล้ว — แอดมินจะตรวจสอบ'; setTimeout(finishOrder, 1400); }
-      } else { st.textContent='ตรวจสลิปไม่สำเร็จ ลองใหม่'; }
+      if (!res || !res.ok){ st.textContent='ตรวจสลิปไม่สำเร็จ ลองใหม่'; return; }
+      if (res.isSlip === false){ st.innerHTML='❌ รูปนี้ไม่ใช่สลิปโอนเงิน<br>กรุณาแนบรูปสลิปจริงอีกครั้ง'; return; }  // ให้แนบใหม่ ไม่ปิดออเดอร์
+      if (res.matched){ st.innerHTML='✅ ยอดตรง ฿'+fmt(res.amt)+' — ยืนยันชำระแล้ว'; setTimeout(finishOrder, 900); }
+      else if (res.amt){ st.innerHTML='📤 ส่งสลิปแล้ว (ยอด ฿'+fmt(res.amt)+' ไม่ตรง) — รอร้านตรวจสอบ'; setTimeout(finishOrder, 1800); }
+      else { st.innerHTML='📤 ส่งสลิปแล้ว — รอร้านตรวจสอบ'; setTimeout(finishOrder, 1500); }
     }).withFailureHandler(function(){ st.textContent='อัปโหลดไม่สำเร็จ'; }).lineAttachSlip(S.order.orderId, b64, f.type, S.order.total);
   };
   r.readAsDataURL(f);

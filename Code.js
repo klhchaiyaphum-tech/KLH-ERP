@@ -604,7 +604,7 @@ function doPost(e) {
                    'createLineOrder','lineAttachSlip','lineRegisterMember','lineGetMyProfile',
                    'lineGetMyOrders','getPromotions','lineUpdateMember','lineGetMyAr','linePayArSlip','lineConfirmReceived',
                    // order lifecycle (POS-PC / Cashier board)
-                   'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
+                   'getOrderBoard','setOrderFulfill','setOrderPaid','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
                    'getArByCustomer','payArEntry','getArAlerts','receiveArPayment','getSalesHistory',
                    'getReceiptConfig','saveReceiptConfig'];

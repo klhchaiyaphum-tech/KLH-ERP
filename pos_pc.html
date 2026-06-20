@@ -569,8 +569,8 @@ function pcPrintPick(orderId){
         +'</div>'
       : '';
     var w=window.open('','_blank','width=420,height=760');
-    w.document.write('<html><head><title>ใบจัด '+escPc(orderId)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:sans-serif;padding:4mm 3mm;width:80mm;font-size:16px}h3{margin:2px 0;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:8px 3px;font-size:16px}img{display:block;margin:6px auto}</style></head><body>'
-      +'<h3>ใบจัดสินค้า</h3><div>'+escPc(orderId)+'</div><div>'+escPc(o.customerName||'')+'</div><div>'+(o.delivery==='delivery'?'🚚 จัดส่ง — '+escPc(o.note||''):'🏪 รับที่ร้าน')+'</div>'
+    w.document.write('<html><head><title>ใบจัด '+escPc(orderId)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:sans-serif;padding:4mm 3mm;width:80mm;font-size:16px}.c{text-align:center}h3{margin:2px 0;font-size:21px}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:8px 3px;font-size:16px}img{display:block;margin:6px auto}</style></head><body>'
+      +'<div class="c"><h3>ใบจัดสินค้า</h3><div>'+escPc(orderId)+'</div><div>'+escPc(o.customerName||'')+'</div><div>'+(o.delivery==='delivery'?'🚚 จัดส่ง — '+escPc(o.note||''):'🏪 รับที่ร้าน')+'</div></div>'
       +'<table>'+rows+'</table><div style="margin-top:8px">รวม '+items.length+' รายการ</div>'
       +qrBlock
       +'<scr'+'ipt>function go(){window.print();} window.onload=function(){ var im=document.images; if(im.length){ var n=0,t=im.length; for(var i=0;i<t;i++){ if(im[i].complete){ if(++n===t) go(); } else { im[i].onload=im[i].onerror=function(){ if(++n===t) go(); }; } } } else go(); };</scr'+'ipt></body></html>');
