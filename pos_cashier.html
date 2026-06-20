@@ -701,6 +701,7 @@ function refreshPending() {
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function nowStamp(){ var d=new Date(); return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+(d.getFullYear()+543)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
 
 // ── ตั้งค่าหัว/ท้ายใบเสร็จ ─────────────────────────────────
 function openReceiptSettings(){
@@ -709,13 +710,13 @@ function openReceiptSettings(){
     html:'<div style="text-align:left;display:flex;flex-direction:column;gap:6px">'
       +'<label style="font-size:.8rem;font-weight:600">ชื่อร้าน (หัวบิล)</label><input id="rcS" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.store)+'">'
       +'<label style="font-size:.8rem;font-weight:600">Tel / Line ID</label><input id="rcT" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.tel)+'">'
-      +'<label style="font-size:.8rem;font-weight:600">พนักงาน (เลข)</label><input id="rcSt" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.staff)+'">'
       +'<label style="font-size:.8rem;font-weight:600">ข้อความท้ายบิล</label><input id="rcF" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.footer)+'">'
+      +'<div style="font-size:11px;color:#999">* พนักงานขายจะดึงจากการ login อัตโนมัติ (Phase ถัดไป)</div>'
       +'</div>',
     width:480, showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ปิด', confirmButtonColor:'#1E7A3A',
     preConfirm:function(){
       return { store:document.getElementById('rcS').value.trim(), tel:document.getElementById('rcT').value.trim(),
-               staff:document.getElementById('rcSt').value.trim(), footer:document.getElementById('rcF').value.trim() };
+               staff:_rcCfg.staff, footer:document.getElementById('rcF').value.trim() };
     }
   }).then(function(r){
     if(!r.isConfirmed) return;
@@ -828,7 +829,7 @@ function printArReceipt(a, amt, bal, method){
     +'------------------------------\n'
     +'รับชำระ ('+mLabel+')  ฿'+Number(amt).toLocaleString('th-TH')+'\n'
     +'คงเหลือ       ฿'+Number(bal||0).toLocaleString('th-TH')+'\n'
-    +'------------------------------\n'+new Date().toLocaleString('th-TH')+'\n';
+    +'------------------------------\n'+nowStamp()+'\n';
   if(window.AndroidPrint && window.AndroidPrint.printReceipt){ try{window.AndroidPrint.printReceipt(txt,a.arId);}catch(e){} }
   else { var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:15px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } }
 }
@@ -1203,14 +1204,15 @@ function printReceipt() {
   var custName = (_loadedOrders[0] && _loadedOrders[0].customerName) || 'ลูกค้าทั่วไป';
   var d = new Date();
   var dateStr = ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+(d.getFullYear()+543);
-  var timeStr = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2);
+  var timeStr = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
   var B = function(n){ return Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
   // ── Sunmi 58mm (ข้อความ ชิดซ้าย เน้นยอดสุทธิ) ──
   var lns = '';
   items.forEach(function(it){ var q=it.qty||it.pieces||1; lns += it.name+'\n  x'+q+' '+(it.unit||'')+'   '+B(it.lineTotal)+'\n'; });
   var txt = _rcCfg.store + '\nTel/Line ID : ' + _rcCfg.tel + '\n'
-    + 'พนักงาน : ' + _rcCfg.staff + '\n' + dateStr + ' ' + timeStr + '  ' + _lastSaleId + '\n'
+    + 'พนักงาน : ' + _rcCfg.staff + '\n' + dateStr + ' ' + timeStr + '\n'
+    + 'เลขที่ : ' + _lastSaleId + '\n'
     + 'ลูกค้า : ' + custCode + ' / ' + custName + '\n'
     + '--------------------------------\n'
     + 'รายการ\n' + lns
@@ -1235,7 +1237,8 @@ function printReceipt() {
     +'<div class="rc-store">'+esc(_rcCfg.store)+'</div>'
     +'<div class="rc-sub">Tel/Line ID : '+esc(_rcCfg.tel)+'</div>'
     +'<div class="rc-line">พนักงาน : '+esc(_rcCfg.staff)+'</div>'
-    +'<div class="rc-line">'+dateStr+'  '+timeStr+'　'+esc(_lastSaleId)+'</div>'
+    +'<div class="rc-line">'+dateStr+'  '+timeStr+'</div>'
+    +'<div class="rc-line">เลขที่ : '+esc(_lastSaleId)+'</div>'
     +'<div class="rc-line">ลูกค้า : '+esc(custCode)+' / '+esc(custName)+'</div>'
     +'<div class="rc-div"></div>'
     +'<div class="rc-th"><span class="nm">รายการ</span><span class="qt">จำนวน</span><span class="pr">ราคา</span></div>'

@@ -509,10 +509,20 @@ function goHome() {
 function escPc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 var _seenLinePc = null;
 function pcBeep(){ try{var a=new (window.AudioContext||window.webkitAudioContext)();var o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sine';o.frequency.value=880;g.gain.setValueAtTime(0.15,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.4);}catch(e){} }
+// ── KTB ถุงเงิน QR (dynamic ตามยอด) สำหรับใบจัดที่ยังไม่จ่าย ──
+var _KTB_QR_STATIC_PC='00020101021130690016A000000677010112011501075370008820502192A036354TB2000326PG0303KLH53037645802TH620807040000630499B3';
+function crc16Pc(str){ var crc=0xFFFF; for(var i=0;i<str.length;i++){ crc^=str.charCodeAt(i)<<8; for(var j=0;j<8;j++){ if(crc&0x8000)crc=(crc<<1)^0x1021; else crc<<=1; crc&=0xFFFF; } } return crc; }
+function genKtbQrPc(amount){
+  if(!amount||amount<=0) return _KTB_QR_STATIC_PC;
+  var base=_KTB_QR_STATIC_PC.replace('010211','010212').slice(0,-8);
+  var amtStr=Number(amount).toFixed(2), amtTag='54'+String(amtStr.length).padStart(2,'0')+amtStr;
+  base=base.replace('5802TH', amtTag+'5802TH')+'6304';
+  return base+crc16Pc(base).toString(16).toUpperCase().padStart(4,'0');
+}
 function refreshLineBoard(){
   google.script.run.withSuccessHandler(function(res){
     var all=(res&&res.orders)||[];
-    var ids=all.filter(function(o){return /LINE/i.test(o.source||'');}).map(function(o){return o.orderId;});
+    var ids=all.filter(function(o){return /LINE/i.test(o.source||'') && o.fulfill!=='READY';}).map(function(o){return o.orderId;});
     var badge=document.getElementById('lineOrdBadge');
     if(badge){ if(ids.length){ badge.style.display=''; badge.textContent=ids.length; } else badge.style.display='none'; }
     if(_seenLinePc===null){ _seenLinePc=ids; return; }
@@ -523,7 +533,7 @@ function refreshLineBoard(){
 }
 function openLineBoard(){
   google.script.run.withSuccessHandler(function(res){
-    var line=((res&&res.orders)||[]).filter(function(o){return /LINE/i.test(o.source||'');});
+    var line=((res&&res.orders)||[]).filter(function(o){return /LINE/i.test(o.source||'') && o.fulfill!=='READY';});
     var html;
     if(!line.length){ html='<div style="padding:24px;color:#888">— ไม่มีออเดอร์ไลน์ค้าง —</div>'; }
     else { html='<div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-height:62vh;overflow:auto;padding:2px">'
@@ -548,11 +558,21 @@ function pcPrintPick(orderId){
     if(!res||!res.ok){ Swal.fire('Error',(res&&res.msg)||'โหลดไม่สำเร็จ','error'); return; }
     var o=res.order, items=o.items||[];
     var rows=items.map(function(it){ return '<tr><td>'+escPc(it.name||it.barcode)+'</td><td style="text-align:center;white-space:nowrap">x'+it.qty+' '+escPc(it.unit||'')+'</td><td style="width:46px">____</td></tr>'; }).join('');
-    var w=window.open('','_blank','width=420,height=680');
-    w.document.write('<html><head><title>ใบจัด '+escPc(orderId)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:sans-serif;padding:4mm 3mm;width:80mm;font-size:16px}h3{margin:2px 0;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:8px 3px;font-size:16px}</style></head><body>'
+    var unpaid = String(o.status||'') !== 'PAID';
+    var total = Number(o.total)||0;
+    var qrBlock = (unpaid && total>0)
+      ? '<div style="text-align:center;margin-top:10px;border-top:1px dashed #999;padding-top:8px">'
+        +'<div style="font-weight:700">สแกนจ่ายเงิน (KTB ถุงเงิน)</div>'
+        +'<div style="font-size:18px;font-weight:800">฿'+total.toLocaleString('th-TH',{minimumFractionDigits:2})+'</div>'
+        +'<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=6&data='+encodeURIComponent(genKtbQrPc(total))+'" style="width:48mm;height:48mm">'
+        +'</div>'
+      : '';
+    var w=window.open('','_blank','width=420,height=760');
+    w.document.write('<html><head><title>ใบจัด '+escPc(orderId)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:sans-serif;padding:4mm 3mm;width:80mm;font-size:16px}h3{margin:2px 0;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:8px 3px;font-size:16px}img{display:block;margin:6px auto}</style></head><body>'
       +'<h3>ใบจัดสินค้า</h3><div>'+escPc(orderId)+'</div><div>'+escPc(o.customerName||'')+'</div><div>'+(o.delivery==='delivery'?'🚚 จัดส่ง — '+escPc(o.note||''):'🏪 รับที่ร้าน')+'</div>'
       +'<table>'+rows+'</table><div style="margin-top:8px">รวม '+items.length+' รายการ</div>'
-      +'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
+      +qrBlock
+      +'<scr'+'ipt>function go(){window.print();} window.onload=function(){ var im=document.images; if(im.length){ var n=0,t=im.length; for(var i=0;i<t;i++){ if(im[i].complete){ if(++n===t) go(); } else { im[i].onload=im[i].onerror=function(){ if(++n===t) go(); }; } } } else go(); };</scr'+'ipt></body></html>');
     w.document.close();
     google.script.run.withSuccessHandler(function(){ refreshLineBoard(); }).withFailureHandler(function(){}).setOrderFulfill(orderId,'PREPARING');
   }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).getOrderForPick(orderId);
