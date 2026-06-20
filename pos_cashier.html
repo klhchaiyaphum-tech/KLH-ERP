@@ -209,6 +209,7 @@ input{font-family:inherit;}
   <div class="devchip" style="background:#F0EEEA;color:#9a8c7e;border-color:#ddd6cc;padding:6px 9px" title="Tigercashbox · ลิ้นชัก 2 — เตรียมไว้ ค่อยเปิดใช้ภายหลัง"><span class="ld" style="background:#c9bcae"></span>ลิ้นชัก 2</div>
   <span id="shiftChip" style="font-size:11.5px;font-weight:700;color:var(--ink-3);white-space:nowrap"></span>
   <div style="flex:1"></div>
+  <button class="btn-hdr" onclick="openArCollect()" style="background:#FDECEC;border-color:#F3C7C0;color:#C2410C">📝 รับชำระหนี้</button>
   <button class="btn-hdr" id="btnOpenShift" onclick="openShift()" style="background:#EAF7EE;border-color:#CBE6D1;color:#1E7A3A">🟢 เปิดกะ</button>
   <button class="btn-hdr" onclick="showShiftSummary()" style="background:#FFF4E6;border-color:#F3D9A6;color:#B45309">📊 สรุป/ปิดกะ</button>
   <button class="btn-hdr" onclick="refreshPending()" title="รีเฟรช">
@@ -661,6 +662,71 @@ function refreshPending() {
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+
+// ── รับชำระหนี้ลูกค้า (AR) ที่เคาน์เตอร์ ─────────────────────
+var _arOpen = [];
+function openArCollect(){
+  showLoad('โหลดลูกหนี้...');
+  google.script.run.withSuccessHandler(function(res){
+    hideLoad();
+    var items = (res && res.items) || [];
+    _arOpen = items.filter(function(a){ return (Number(a.balance)||0) > 0; });
+    if(!_arOpen.length){ Swal.fire({icon:'info',title:'ไม่มีลูกหนี้ค้างชำระ',timer:1600,showConfirmButton:false}); return; }
+    Swal.fire({
+      title:'📝 รับชำระหนี้ลูกค้า (AR)',
+      html:'<input id="arq" class="swal2-input" placeholder="ค้นหา ชื่อ / รหัส / เลขบิล" style="margin:0 0 8px;width:100%">'
+        +'<div id="arlist" style="max-height:54vh;overflow:auto;text-align:left"></div>',
+      width:540, confirmButtonText:'ปิด',
+      didOpen:function(){
+        renderArList('');
+        var q=document.getElementById('arq'); if(q) q.addEventListener('input', function(e){ renderArList(e.target.value); });
+      }
+    });
+  }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).getArByCustomer('','');
+}
+function renderArList(q){
+  var ql=(q||'').toLowerCase();
+  var rows=_arOpen.filter(function(a){ return !ql || ((a.custName+a.arId+a.saleId+a.custId).toLowerCase().indexOf(ql)>=0); });
+  var el=document.getElementById('arlist'); if(!el) return;
+  if(!rows.length){ el.innerHTML='<div style="padding:18px;color:#888;text-align:center">ไม่พบลูกหนี้</div>'; return; }
+  el.innerHTML=rows.map(function(a){
+    return '<div style="border:1px solid #ECE6DA;border-radius:14px;padding:10px 11px;margin-bottom:7px;display:flex;align-items:center;gap:10px">'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(a.custName||a.custId)+'</div>'
+      +'<div style="font-size:11px;color:#888">'+esc(a.arId)+' · บิล '+esc(a.saleId||'-')+' · ครบ '+esc(a.dueDate||'-')+'</div></div>'
+      +'<div style="font-weight:800;color:#D9512B;white-space:nowrap">฿'+Number(a.balance).toLocaleString('th-TH')+'</div>'
+      +'<button class="swal2-styled" style="margin:0;background:#1E7A3A;padding:8px 14px" onclick="arCollectPay(\''+a.arId+'\')">รับชำระ</button>'
+      +'</div>';
+  }).join('');
+}
+function arCollectPay(arId){
+  var a=_arOpen.filter(function(x){return x.arId===arId;})[0]; if(!a) return;
+  Swal.fire({
+    title:'รับชำระหนี้', html:esc(a.custName||'')+'<br><span style="color:#888">คงเหลือ ฿'+Number(a.balance).toLocaleString('th-TH')+'</span>',
+    input:'number', inputValue:Number(a.balance).toFixed(2), inputAttributes:{min:'0',step:'1'},
+    showCancelButton:true, confirmButtonText:'รับเงิน + พิมพ์', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A'
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    var amt=Number(r.value)||0; if(amt<=0){ Swal.fire('แจ้งเตือน','จำนวนเงินไม่ถูกต้อง','warning'); return; }
+    showLoad('บันทึกรับชำระ...');
+    google.script.run.withSuccessHandler(function(res){
+      hideLoad();
+      if(res&&res.ok){
+        printArReceipt(a, amt, res.balance);
+        try{ openDrawer(); }catch(e){}
+        Swal.fire({icon:'success',title:res.msg||'รับชำระแล้ว',timer:1800,showConfirmButton:false});
+      } else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).payArEntry(arId, amt);
+  });
+}
+function printArReceipt(a, amt, bal){
+  var txt='***  ใบรับชำระหนี้  ***\n'+(a.custName||'')+'\nAR: '+a.arId+(a.saleId?('\nบิล: '+a.saleId):'')+'\n'
+    +'------------------------------\n'
+    +'รับชำระ       ฿'+Number(amt).toLocaleString('th-TH')+'\n'
+    +'คงเหลือ       ฿'+Number(bal||0).toLocaleString('th-TH')+'\n'
+    +'------------------------------\n'+new Date().toLocaleString('th-TH')+'\n';
+  if(window.AndroidPrint && window.AndroidPrint.printReceipt){ try{window.AndroidPrint.printReceipt(txt,a.arId);}catch(e){} }
+  else { var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } }
+}
 function _bcard(o, btnsHtml) {
   var isLine = /LINE/i.test(o.source || '');
   return '<div class="bcard'+(isLine?' line':'')+'">'
