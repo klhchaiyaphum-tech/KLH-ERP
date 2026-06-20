@@ -1153,9 +1153,9 @@ function printSlip(orderId, entity, items, total) {
   _lastSlipData = {orderId:orderId, entity:entity, items:items, total:total};
   // ── แอป Android (มี bridge เครื่องพิมพ์ Sunmi) → สั่งพิมพ์ตรง ──
   if (window.AndroidPrint && typeof window.AndroidPrint.printReceipt === 'function') {
-    var lns = items.map(function(it){ return it.name + '  x' + it.qty + '  ' + Number(it.lineTotal).toLocaleString('th-TH'); }).join('\n');
+    var lns = items.map(function(it){ return it.name + '\n  x' + it.qty + '   ' + Number(it.lineTotal).toLocaleString('th-TH',{minimumFractionDigits:2}); }).join('\n');
     var txt = entity + '\nใบรายการขาย — ชำระที่แคชเชียร์\n--------------------------------\n'
-            + lns + '\n--------------------------------\nรวม ฿' + Number(total).toLocaleString('th-TH',{minimumFractionDigits:2})
+            + lns + '\n--------------------------------\n** รวม ฿' + Number(total).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' **'
             + '\nเลขที่: ' + orderId + '\n(สแกน QR ที่แคชเชียร์)';
     try { window.AndroidPrint.printReceipt(txt, orderId); return; } catch(e){}
   }

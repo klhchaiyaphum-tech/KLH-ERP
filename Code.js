@@ -194,6 +194,34 @@ function getConfig() {
   } catch(e) { return { error: "ปัญหาที่ CONFIG: " + e.toString() }; }
 }
 
+// ── ตั้งค่าหัว/ท้ายใบเสร็จ (แก้ได้จากหน้า Cashier) — เก็บใน CONFIG ──
+function getReceiptConfig() {
+  try {
+    var cfg = getConfig();
+    return { ok:true,
+      store:  cfg.RECEIPT_STORE  || 'กวงล่งเฮง แบ้คช็อป',
+      tel:    cfg.RECEIPT_TEL    || cfg.SHOP_PHONE || '083-007-4505',
+      footer: cfg.RECEIPT_FOOTER || 'ขอบคุณที่มาใช้บริการ',
+      staff:  cfg.RECEIPT_STAFF  || '01' };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+function saveReceiptConfig(data) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var s = ss.getSheetByName('CONFIG') || ss.getSheetByName('Config');
+    if (!s) { s = ss.insertSheet('CONFIG'); s.getRange(1,1,1,2).setValues([['KEY','VALUE']]); }
+    var map = { RECEIPT_STORE:String((data&&data.store)||''), RECEIPT_TEL:String((data&&data.tel)||''),
+                RECEIPT_FOOTER:String((data&&data.footer)||''), RECEIPT_STAFF:String((data&&data.staff)||'') };
+    var rows = s.getDataRange().getValues();
+    Object.keys(map).forEach(function(k){
+      var found = false;
+      for (var i=1;i<rows.length;i++){ if (String(rows[i][0]).trim().toUpperCase()===k){ s.getRange(i+1,2).setValue(map[k]); found=true; break; } }
+      if (!found) s.appendRow([k, map[k]]);
+    });
+    return { ok:true, msg:'บันทึกข้อมูลใบเสร็จแล้ว' };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 function getDropdownData() {
   try {
     const cfg = getConfig();
@@ -578,7 +606,8 @@ function doPost(e) {
                    // order lifecycle (POS-PC / Cashier board)
                    'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
-                   'getArByCustomer','payArEntry','getArAlerts','receiveArPayment','getSalesHistory'];
+                   'getArByCustomer','payArEntry','getArAlerts','receiveArPayment','getSalesHistory',
+                   'getReceiptConfig','saveReceiptConfig'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {

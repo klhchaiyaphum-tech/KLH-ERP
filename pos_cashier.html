@@ -196,12 +196,22 @@ input{font-family:inherit;}
 @media print{
   body>*{display:none!important;}
   #printArea{display:block!important;width:80mm;margin:0;padding:4mm 3mm;color:#000;font-family:'IBM Plex Sans Thai',sans-serif;font-size:15px;line-height:1.5;}
-  #printArea .rc-store{font-size:21px;font-weight:800;text-align:center;}
-  #printArea .rc-sub{font-size:14px;text-align:center;margin-bottom:4px;}
+  #printArea .rc-store{font-size:22px;font-weight:800;text-align:center;}
+  #printArea .rc-sub{font-size:14px;text-align:center;margin-bottom:2px;}
+  #printArea .rc-cust-tag{font-size:12px;text-align:right;}
   #printArea .rc-div{border-top:1px dashed #000;margin:5px 0;}
-  #printArea .rc-row{display:flex;justify-content:space-between;gap:8px;font-size:15px;}
-  #printArea .rc-total{font-size:19px;font-weight:800;}
-  #printArea .rc-meta{font-size:13px;color:#222;}
+  #printArea .rc-line{font-size:14px;}
+  #printArea .rc-th{display:flex;font-size:13px;font-weight:700;}
+  #printArea .rc-it{display:flex;font-size:14.5px;align-items:flex-start;}
+  #printArea .rc-it .nm{flex:1;padding-right:4px;}
+  #printArea .rc-it .qt{width:64px;text-align:center;white-space:nowrap;}
+  #printArea .rc-it .pr{width:64px;text-align:right;}
+  #printArea .rc-amt{display:flex;justify-content:space-between;font-size:15px;}
+  #printArea .rc-amt .lb{width:42%;}
+  #printArea .rc-amt .vl{flex:1;text-align:right;}
+  #printArea .rc-amt .un{width:34px;text-align:right;}
+  #printArea .rc-amt.big{font-weight:800;font-size:18px;}
+  #printArea .rc-foot{text-align:center;font-weight:700;margin-top:9px;font-size:15px;}
   @page{margin:0;size:80mm auto;}
 }
 </style>
@@ -226,6 +236,7 @@ input{font-family:inherit;}
   <button class="btn-hdr" onclick="refreshPending()" title="รีเฟรช">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
   </button>
+  <button class="btn-hdr" onclick="openReceiptSettings()" title="ตั้งค่าใบเสร็จ">⚙️</button>
   <button class="btn-hdr" onclick="goHome()" title="กลับเมนูหลัก">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>
   </button>
@@ -473,11 +484,13 @@ var _drawerOpen  = false;
 var _warehouses  = [];
 var _lastSaleId  = '';
 var _payDone     = false;
+var _rcCfg = { store:'กวงล่งเฮง แบ้คช็อป', tel:'083-007-4505', footer:'ขอบคุณที่มาใช้บริการ', staff:'01' };
 
 // ── Boot ──────────────────────────────────────────────
 window.onload = function() {
   updateClock(); setInterval(updateClock, 30000);
   updateShiftChip();
+  google.script.run.withSuccessHandler(function(c){ if(c&&c.ok){ _rcCfg={store:c.store,tel:c.tel,footer:c.footer,staff:c.staff}; } }).withFailureHandler(function(){}).getReceiptConfig();
   buildKeypad();
   // มาจากหน้า Customer/AR: ?ar=CUST-xxxx → เปิดรับชำระหนี้อัตโนมัติ
   try { var _ar=new URLSearchParams(location.search).get('ar'); if(_ar){ _arPrefill=_ar; setTimeout(openArCollect, 700); } } catch(e){}
@@ -688,6 +701,32 @@ function refreshPending() {
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+
+// ── ตั้งค่าหัว/ท้ายใบเสร็จ ─────────────────────────────────
+function openReceiptSettings(){
+  Swal.fire({
+    title:'⚙️ ตั้งค่าใบเสร็จ',
+    html:'<div style="text-align:left;display:flex;flex-direction:column;gap:6px">'
+      +'<label style="font-size:.8rem;font-weight:600">ชื่อร้าน (หัวบิล)</label><input id="rcS" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.store)+'">'
+      +'<label style="font-size:.8rem;font-weight:600">Tel / Line ID</label><input id="rcT" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.tel)+'">'
+      +'<label style="font-size:.8rem;font-weight:600">พนักงาน (เลข)</label><input id="rcSt" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.staff)+'">'
+      +'<label style="font-size:.8rem;font-weight:600">ข้อความท้ายบิล</label><input id="rcF" class="swal2-input" style="margin:0;width:100%" value="'+esc(_rcCfg.footer)+'">'
+      +'</div>',
+    width:480, showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ปิด', confirmButtonColor:'#1E7A3A',
+    preConfirm:function(){
+      return { store:document.getElementById('rcS').value.trim(), tel:document.getElementById('rcT').value.trim(),
+               staff:document.getElementById('rcSt').value.trim(), footer:document.getElementById('rcF').value.trim() };
+    }
+  }).then(function(r){
+    if(!r.isConfirmed) return;
+    showLoad('บันทึก...');
+    google.script.run.withSuccessHandler(function(res){
+      hideLoad();
+      if(res&&res.ok){ _rcCfg=r.value; Swal.fire({icon:'success',title:'บันทึกแล้ว',timer:1400,showConfirmButton:false}); }
+      else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).saveReceiptConfig(r.value);
+  });
+}
 
 // ── ประวัติการขายที่เสร็จแล้ว (ฝั่งร้าน) ──────────────────────
 function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1154,34 +1193,61 @@ function showSuccess(saleId, total, method, change) {
 function printReceipt() {
   var items = [];
   (_loadedOrders||[]).forEach(function(o){ (o.items||[]).forEach(function(it){ items.push(it); }); });
-  var chg = _payMethod==='CASH' ? Math.max(0, _cashRecv - _grandTotal) : 0;
-  var pay = _payMethod==='CASH' ? ('เงินสด ฿'+Number(_cashRecv).toLocaleString('th-TH')+'  ทอน ฿'+Number(chg).toLocaleString('th-TH'))
-          : (_payMethod==='QR' ? 'พร้อมเพย์ QR' : 'เครดิต/เชื่อ');
-  var ent = (_loadedOrders[0] && _loadedOrders[0].entity) || 'KLH';
-  // ── Sunmi 58mm (ข้อความ ผ่าน bridge) ──
+  var subtotal = (_orderTotal && _orderTotal>0) ? _orderTotal : items.reduce(function(s,it){ return s+(Number(it.lineTotal)||0); },0);
+  var disc = Number(_discount)||0;
+  var net  = Number(_grandTotal)||0;
+  var cashRecv = _payMethod==='CASH' ? Number(_cashRecv)||0 : net;
+  var chg  = _payMethod==='CASH' ? Math.max(0, cashRecv - net) : 0;
+  var payLabel = _payMethod==='CASH' ? 'เงินสด' : (_payMethod==='QR' ? 'เงินโอน/QR' : 'เครดิต/เชื่อ');
+  var custCode = (_loadedOrders[0] && _loadedOrders[0].customerCode) || '001';
+  var custName = (_loadedOrders[0] && _loadedOrders[0].customerName) || 'ลูกค้าทั่วไป';
+  var d = new Date();
+  var dateStr = ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+(d.getFullYear()+543);
+  var timeStr = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2);
+  var B = function(n){ return Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+  // ── Sunmi 58mm (ข้อความ ชิดซ้าย เน้นยอดสุทธิ) ──
   var lns = '';
-  items.forEach(function(it){ var q=it.qty||it.pieces||1; lns += it.name+'  x'+q+'  '+Number(it.lineTotal||0).toLocaleString('th-TH')+'\n'; });
-  var txt = ent + '\nใบเสร็จรับเงิน\n--------------------------------\n'
-          + lns + '--------------------------------\n'
-          + 'รวม ฿' + Number(_grandTotal).toLocaleString('th-TH',{minimumFractionDigits:2}) + '\n'
-          + 'ชำระ: ' + pay + '\nเลขที่: ' + _lastSaleId;
+  items.forEach(function(it){ var q=it.qty||it.pieces||1; lns += it.name+'\n  x'+q+' '+(it.unit||'')+'   '+B(it.lineTotal)+'\n'; });
+  var txt = _rcCfg.store + '\nTel/Line ID : ' + _rcCfg.tel + '\n'
+    + 'พนักงาน : ' + _rcCfg.staff + '\n' + dateStr + ' ' + timeStr + '  ' + _lastSaleId + '\n'
+    + 'ลูกค้า : ' + custCode + ' / ' + custName + '\n'
+    + '--------------------------------\n'
+    + 'รายการ\n' + lns
+    + '--------------------------------\n'
+    + 'มูลค่าสินค้า   ' + B(subtotal) + '\n'
+    + 'ส่วนลด        ' + B(disc) + '\n'
+    + '** มูลค่าสุทธิ ' + B(net) + ' บาท **\n'
+    + 'รับเงิน(' + payLabel + ') ' + B(cashRecv) + '\n'
+    + 'เงินทอน       ' + B(chg) + '\n'
+    + '**** ' + _rcCfg.footer + ' ****';
   if (window.AndroidPrint && typeof window.AndroidPrint.printReceipt === 'function') {
     try { window.AndroidPrint.printReceipt(txt, _lastSaleId); return; } catch(e) {}
   }
-  // ── PC 80mm (HTML ฟอนต์ใหญ่) ──
+
+  // ── PC 80mm (HTML แบบใบเสร็จ) ──
   var itemsHtml = items.map(function(it){
     var q = it.qty || it.pieces || 1;
-    return '<div class="rc-row"><span style="flex:1">'+esc(it.name)+' x'+q+'</span><span>'+Number(it.lineTotal||0).toLocaleString('th-TH')+'</span></div>';
+    return '<div class="rc-it"><span class="nm">'+esc(it.name)+'</span><span class="qt">'+q+' '+esc(it.unit||'')+'</span><span class="pr">'+B(it.lineTotal)+'</span></div>';
   }).join('');
-  var html = '<div class="rc-store">'+esc(ent)+'</div>'
-    +'<div class="rc-sub">ใบเสร็จรับเงิน</div>'
+  function amt(lb,v,big){ return '<div class="rc-amt'+(big?' big':'')+'"><span class="lb">'+lb+'</span><span class="vl">'+B(v)+'</span><span class="un">บาท</span></div>'; }
+  var html = '<div class="rc-cust-tag">สำหรับลูกค้า</div>'
+    +'<div class="rc-store">'+esc(_rcCfg.store)+'</div>'
+    +'<div class="rc-sub">Tel/Line ID : '+esc(_rcCfg.tel)+'</div>'
+    +'<div class="rc-line">พนักงาน : '+esc(_rcCfg.staff)+'</div>'
+    +'<div class="rc-line">'+dateStr+'  '+timeStr+'　'+esc(_lastSaleId)+'</div>'
+    +'<div class="rc-line">ลูกค้า : '+esc(custCode)+' / '+esc(custName)+'</div>'
     +'<div class="rc-div"></div>'
+    +'<div class="rc-th"><span class="nm">รายการ</span><span class="qt">จำนวน</span><span class="pr">ราคา</span></div>'
     + itemsHtml
+    +'<div class="rc-line" style="text-align:right;margin-top:2px">รวมรายการสินค้า '+items.length+' รายการ</div>'
     +'<div class="rc-div"></div>'
-    +'<div class="rc-row rc-total"><span>รวม</span><span>฿'+Number(_grandTotal).toLocaleString('th-TH',{minimumFractionDigits:2})+'</span></div>'
-    +'<div class="rc-meta" style="margin-top:4px">ชำระ: '+esc(pay)+'</div>'
-    +'<div class="rc-meta">เลขที่: '+esc(_lastSaleId)+'</div>'
-    +'<div class="rc-sub" style="margin-top:8px">ขอบคุณที่ใช้บริการ</div>';
+    + amt('มูลค่าสินค้า', subtotal)
+    + amt('ส่วนลด', disc)
+    + amt('มูลค่าสุทธิ', net, true)
+    + amt('รับเงิน', cashRecv)
+    + amt('เงินทอน', chg)
+    +'<div class="rc-foot">**** '+esc(_rcCfg.footer)+' ****</div>';
   var area = document.getElementById('printArea');
   if (!area) { area = document.createElement('div'); area.id='printArea'; document.body.appendChild(area); }
   area.innerHTML = html;
