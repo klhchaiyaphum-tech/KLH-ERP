@@ -24,6 +24,7 @@ function doGet(e) {
     wms_analytics: 'wms_analytics',// วิเคราะห์คลัง ABC/EOQ/ROP/Dead stock
     pl:          'pl',             // งบกำไรขาดทุน (Phase 6.3)
     bank:        'bank_ledger',    // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
+    bank_m:      'bank_m',         // สมุดเงินธนาคาร — จอมือถือ (สรุปเร็ว)
     promo:       'promo'           // จัดการโปรโมชั่น LINE OA (staff)
   };
   const tpl = pageMap[page] || 'main';
@@ -44,6 +45,7 @@ function doGet(e) {
     wms_analytics: 'KLH วิเคราะห์คลัง',
     pl: 'KLH งบกำไรขาดทุน',
     bank: 'KLH สมุดเงินธนาคาร',
+    bank_m: 'KLH สรุปธนาคาร (มือถือ)',
     promo: 'KLH จัดการโปรโมชั่น'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);

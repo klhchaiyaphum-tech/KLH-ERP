@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>KLH สรุปธนาคาร (มือถือ)</title>
+<style>
+:root{--coral:#F6704C;--coral2:#E2502B;--ink:#2B2620;--ink2:#7A7065;--ink3:#A89E90;--line:#ECE6DA;
+  --blue:#3A37C9;--green:#2E9E55;--purple:#6A1B9A;--orange:#D98A0B;--cyan:#1565C0;--red:#D9512B;--miss:#C2410C;
+  --paper:#F4EEE2;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,system-ui,sans-serif;font-size:15px;padding-bottom:40px;}
+.num{font-variant-numeric:tabular-nums;}
+.top{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#FF7A2E,#F4701E 55%,#E2502B);color:#fff;padding:12px 14px;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+.top h1{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.top .home{margin-left:auto;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:9px;padding:5px 10px;font-size:13px;}
+.mrow{display:flex;align-items:center;gap:8px;margin-top:9px;}
+.mrow input{flex:1;border:none;border-radius:10px;padding:8px 11px;font-size:15px;font-family:inherit;}
+.mrow button{background:#fff;color:var(--coral2);border:none;border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px;}
+.latest{font-size:12px;color:rgba(255,255,255,.92);margin-top:6px;}
+.wrap{padding:12px;}
+.lbl{font-size:12.5px;font-weight:800;color:var(--ink2);margin:14px 2px 8px;display:flex;align-items:center;gap:6px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.bub{background:#fff;border:1px solid var(--line);border-radius:16px;padding:11px 12px;box-shadow:0 1px 3px rgba(60,40,25,.06);}
+.bub .v{font-size:19px;font-weight:800;line-height:1.1;}
+.bub .k{font-size:11.5px;color:var(--ink2);margin-top:3px;line-height:1.35;}
+.bub.wide{grid-column:1 / -1;}
+.bub .sub{font-size:10.5px;color:var(--ink3);margin-top:2px;}
+.tf-line{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ink2);}
+.tf-line b{font-size:16px;font-weight:800;font-family:inherit;}
+.tf-div{border-top:1px dashed var(--line);margin:7px 0;}
+/* เป้าผู้บริหาร */
+.goal{background:linear-gradient(135deg,#fff,#FFF6F0);border:1.5px solid #F3C7B8;border-radius:18px;padding:14px;box-shadow:0 2px 8px rgba(226,80,43,.08);}
+.goal .gt{font-size:13px;color:var(--coral2);font-weight:800;}
+.goal .gv{font-size:26px;font-weight:800;color:var(--coral2);line-height:1.1;margin:2px 0 2px;}
+.goal .grow{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px dashed #F3D9CE;}
+.goal .grow:first-of-type{border-top:none;}
+.goal .grow b{font-weight:700;}
+.pos{color:var(--green);} .neg{color:var(--miss);}
+/* flow cards */
+.flow{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:9px 11px;margin-bottom:7px;}
+.flow .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.flow .fn{flex:1;font-size:12.5px;color:var(--ink2);line-height:1.3;}
+.flow .fv{font-weight:800;font-size:15px;white-space:nowrap;}
+/* daily */
+.day{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 11px;margin-bottom:6px;}
+.day .dd{font-weight:700;font-size:13px;width:78px;}
+.day .ds{flex:1;font-size:11px;color:var(--ink3);}
+.day .dv{font-weight:800;color:var(--coral2);font-size:14px;}
+.loading,.err{text-align:center;color:var(--ink3);padding:30px 0;}
+.err{color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>📱 สรุปธนาคาร <button class="home" onclick="goHome()">หลัก</button></h1>
+  <div class="mrow">
+    <input type="month" id="month">
+    <button onclick="load()">โหลดเดือนนี้</button>
+  </div>
+  <div class="latest" id="latest">—</div>
+</div>
+
+<div class="wrap" id="wrap">
+  <div class="loading">กำลังโหลด...</div>
+</div>
+
+<script>
+var _execUrl='';
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+function goHome(){ if(_execUrl) window.top.location.href=_execUrl+'?page=index'; else window.location.href='?page=index'; }
+
+(function(){
+  var d=new Date();
+  document.getElementById('month').value = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
+})();
+
+window.onload = function(){
+  google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
+  load();
+};
+
+function groupOf(t){
+  if(t.bank==='KTB') return t.dir==='IN'?'k_in':'k_out';
+  if(t.bank==='BAY'){ if(t.dir==='IN') return t.cat==='TRANSFER'?'b_tf':'b_pp'; return 'b_out'; }
+  return t.dir==='IN'?'bc_in':'bc_out';
+}
+var FLOWS=[
+  {id:'k_in',  n:'กรุงไทย เข้า (ขาย)',        c:'var(--blue)'},
+  {id:'k_out', n:'กรุงไทย ออก (โยก)',          c:'var(--orange)'},
+  {id:'b_pp',  n:'กรุงศรี PromptPay เข้า (ขาย)', c:'var(--green)'},
+  {id:'b_tf',  n:'กรุงศรีออม เข้า (โยกจากกรุงไทย)', c:'var(--purple)'},
+  {id:'b_out', n:'กรุงศรีออม ออก (โยกไปกระแส)',  c:'var(--orange)'},
+  {id:'bc_in', n:'กรุงศรีกระแส เข้า (โยกจากออม)', c:'var(--cyan)'},
+  {id:'bc_out',n:'กรุงศรีกระแส ออก (จ่าย/ชำระ)',  c:'var(--red)'}
+];
+
+function load(){
+  var ym=document.getElementById('month').value;
+  document.getElementById('wrap').innerHTML='<div class="loading">กำลังโหลด...</div>';
+  document.getElementById('latest').textContent='กำลังโหลด...';
+  // โหลดธนาคาร + เป้าภาษี พร้อมกัน
+  var bank=null, tax=null, done=0;
+  function fin(){ if(++done>=2) render(bank, tax); }
+  google.script.run.withSuccessHandler(function(r){ bank=(r&&r.ok)?r:{txns:[]}; fin(); })
+    .withFailureHandler(function(){ bank={txns:[]}; fin(); }).getBankTxns(ym);
+  google.script.run.withSuccessHandler(function(r){ tax=(r&&r.ok)?r:null; fin(); })
+    .withFailureHandler(function(){ tax=null; fin(); }).getPP30(ym);
+}
+
+function render(bank, tax){
+  var txns=(bank&&bank.txns)||[];
+  if(!txns.length && !tax){ document.getElementById('wrap').innerHTML='<div class="err">ไม่มีข้อมูลเดือนนี้</div>'; document.getElementById('latest').textContent='ไม่มีข้อมูล'; return; }
+
+  var sums={k_in:0,k_out:0,b_pp:0,b_tf:0,b_out:0,bc_in:0,bc_out:0};
+  var cSale=0,cOther=0,cPay=0,cExp=0,b2c=0,latest='';
+  txns.forEach(function(t){
+    sums[groupOf(t)] += t.amount;
+    if(t.cat==='SALE'||t.cat==='AR') cSale+=t.amount;
+    else if(t.cat==='OTHER') cOther+=t.amount;
+    else if(t.cat==='PAYMENT') cPay+=t.amount;
+    else if(t.cat==='EXPENSE') cExp+=t.amount;
+    if(t.bank==='BAYC'&&t.dir==='IN'&&t.cat==='TRANSFER') b2c+=t.amount;
+    if(t.date>latest) latest=t.date;
+  });
+  document.getElementById('latest').textContent = latest ? ('📅 ข้อมูลล่าสุด: '+latest) : 'ยังไม่มีรายการเดือนนี้';
+
+  var h='';
+
+  // ── เป้าผู้บริหาร (จากหน้า ภพ.30) ──
+  if(tax){
+    var est=tax.estimate, actual=Number(tax.actualSales)||0;
+    h+='<div class="lbl">🎯 เป้าผู้บริหาร (เดือนนี้)</div><div class="goal">';
+    if(est){
+      var diff=actual-(est.targetSales||0);
+      h+='<div class="gt">ยอดขายเป้า (+'+est.execPercent+'% เหนือต้นทุนภาษีซื้อ)</div>'
+        +'<div class="gv num">฿'+nf(est.targetSales)+'</div>'
+        +'<div class="grow"><span>ยอดรับจริงเดือนนี้</span><b class="num '+(actual>=(est.targetSales||0)?'pos':'neg')+'">฿'+nf(actual)+'</b></div>'
+        +'<div class="grow"><span>ส่วนต่างจากเป้า</span><b class="num '+(diff>=0?'pos':'neg')+'">'+(diff>=0?'+':'')+nf(diff)+'</b></div>';
+      if(est.lastYearAvg){
+        var d2=actual-est.lastYearAvg;
+        h+='<div class="grow"><span>📅 ยอดขายปีที่แล้ว (เฉลี่ย/เดือน)</span><b class="num">฿'+nf(est.lastYearAvg)+'</b></div>'
+          +'<div class="grow"><span>เทียบปีที่แล้ว</span><b class="num '+(d2>=0?'pos':'neg')+'">'+(d2>=0?'+':'')+nf(d2)+'</b></div>';
+      }
+    } else {
+      h+='<div class="gt">ยังไม่ได้ตั้งเป้าเดือนนี้</div><div class="sub" style="color:var(--ink3);font-size:12px;margin-top:4px">ตั้งเป้าได้ที่หน้า ภพ.30 (PC)</div>';
+    }
+    h+='<div class="grow" style="margin-top:4px"><span>ภาษีซื้อ / ภาษีขาย</span><b class="num">฿'+nf(tax.input&&tax.input.vat)+' / ฿'+nf(tax.outputVatActual)+'</b></div>'
+      +'<div class="grow"><span>VAT สุทธิ (นำส่ง)</span><b class="num '+((Number(tax.netVat)||0)>=0?'pos':'neg')+'">฿'+nf(tax.netVat)+'</b></div>';
+    h+='</div>';
+  }
+
+  // ── สรุปรายรับ ──
+  h+='<div class="lbl">💰 รายรับ</div><div class="grid2">'
+    +'<div class="bub"><div class="v num" style="color:var(--blue)">฿'+nf(sums.k_in)+'</div><div class="k">กรุงไทย เข้า (ขาย)</div></div>'
+    +'<div class="bub"><div class="v num" style="color:var(--green)">฿'+nf(sums.b_pp)+'</div><div class="k">กรุงศรี PromptPay (ขาย)</div><div class="sub">ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
+    +'<div class="bub wide"><div class="v num" style="color:var(--coral2)">฿'+nf(cSale)+'</div><div class="k">💰 ฐานยอดขายภาษีรวม (ไม่รวมรายได้อื่น/โยกเงิน)</div></div>'
+    +'<div class="bub wide"><div class="v num" style="color:#00897B">฿'+nf(cOther)+'</div><div class="k">รายได้อื่น/เงินคืน (เช่น ADJ FEE คืน)</div></div>'
+    +'</div>';
+
+  // ── เงินออก / โยกเงิน (โยก = ออก vs เข้า) ──
+  h+='<div class="lbl">💸 เงินออก / โยกเงิน</div><div class="grid2">'
+    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกเงินออกจากกรุงไทย</span><b class="num" style="color:var(--orange)">฿'+nf(sums.k_out)+'</b></div>'
+      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีออมทรัพย์</span><b class="num" style="color:var(--purple)">฿'+nf(sums.b_tf)+'</b></div></div>'
+    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกเงินออกจากกรุงศรีออม</span><b class="num" style="color:var(--orange)">฿'+nf(sums.b_out)+'</b></div>'
+      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีกระแส</span><b class="num" style="color:var(--cyan)">฿'+nf(b2c)+'</b></div></div>'
+    +'<div class="bub"><div class="v num" style="color:var(--purple)">฿'+nf(cPay)+'</div><div class="k">ชำระเจ้าหนี้การค้า</div></div>'
+    +'<div class="bub"><div class="v num" style="color:var(--red)">฿'+nf(cExp)+'</div><div class="k">ค่าใช้จ่าย</div></div>'
+    +'</div>';
+
+  // ── 7 ช่องเงินเข้า-ออก 3 บัญชี ──
+  h+='<div class="lbl">🏦 7 ช่องเงินเข้า-ออก (3 บัญชี)</div>';
+  FLOWS.forEach(function(f){
+    h+='<div class="flow"><span class="dot" style="background:'+f.c+'"></span><span class="fn">'+f.n+'</span><span class="fv num" style="color:'+f.c+'">฿'+nf(sums[f.id])+'</span></div>';
+  });
+
+  // ── สรุปรายวัน (เฉพาะสรุป) ──
+  var days={};
+  txns.forEach(function(t){
+    var d=days[t.date]||(days[t.date]={inAmt:0,outAmt:0,sale:0});
+    if(t.dir==='IN') d.inAmt+=t.amount; else d.outAmt+=t.amount;
+    if(t.cat==='SALE'||t.cat==='AR') d.sale+=t.amount;
+  });
+  var keys=Object.keys(days).sort().reverse();
+  h+='<div class="lbl">📅 สรุปรายวัน ('+keys.length+' วัน)</div>';
+  if(!keys.length) h+='<div class="bub">ไม่มีรายการ</div>';
+  keys.forEach(function(k){ var d=days[k];
+    h+='<div class="day"><span class="dd num">'+k.slice(5)+'</span>'
+      +'<span class="ds">เข้า ฿'+nf(d.inAmt)+' · ออก ฿'+nf(d.outAmt)+'</span>'
+      +'<span class="dv num">ขาย ฿'+nf(d.sale)+'</span></div>';
+  });
+
+  document.getElementById('wrap').innerHTML=h;
+}
+</script>
+</body>
+</html>

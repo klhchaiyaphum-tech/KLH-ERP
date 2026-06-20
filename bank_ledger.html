@@ -90,6 +90,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
     <div><h1>สมุดเงินธนาคาร</h1><p>ตรวจทุกการเคลื่อนไหว · จับคู่โยกเงิน · เติมหมายเหตุ ชำระหนี้ใคร/ค่าใช้จ่ายอะไร</p></div>
     <div class="actions">
       <button class="btn" onclick="goBack()">← หน้าหลัก</button>
+      <button class="btn" onclick="goMobile()" title="จอสรุปสำหรับมือถือ">📱 มือถือ</button>
       <input type="month" id="month">
       <button class="btn primary" onclick="load()">โหลด</button>
       <button class="btn" onclick="reconKtb()" id="reconBtn" title="เช็คว่ายอด KTB เดือนนี้ครบทุกวันไหม (มีวันขาดไหม)">🔍 กระทบยอด KTB</button>
@@ -166,6 +167,7 @@ var _lastTxns = [];    // เก็บ txns ล่าสุด ไว้ re-rend
 function filterDay(d){ _dayFilter = (_dayFilter===d) ? '' : d; render(_lastTxns); }
 
 function goBack(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=index'; }).getExecUrl(); }
+function goMobile(){ google.script.run.withSuccessHandler(function(u){ window.top.location.href=u+'?page=bank_m'; }).getExecUrl(); }
 function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
 function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 (function(){ var d=new Date();
