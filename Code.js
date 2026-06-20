@@ -889,11 +889,12 @@ function getArByCustomer(custId, status) {
                (!status  || String(r[10]) === status);
       })
       .map(function(r){
+        function ds(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||''); }
         return {
-          arId: r[0], saleId: r[1], custId: r[2], custName: r[3], entity: r[4],
-          invDate: r[5], dueDate: r[6],
+          arId: String(r[0]||''), saleId: String(r[1]||''), custId: String(r[2]||''), custName: String(r[3]||''), entity: String(r[4]||''),
+          invDate: ds(r[5]), dueDate: ds(r[6]),
           amount: Number(r[7])||0, paidAmt: Number(r[8])||0, balance: Number(r[9])||0,
-          status: r[10], note: r[11]
+          status: String(r[10]||''), note: String(r[11]||'')
         };
       });
     return { ok:true, items:rows };

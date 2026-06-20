@@ -240,11 +240,13 @@
       <div class="muted">สแกนจ่ายผ่านแอปธนาคาร (KTB ถุงเงิน)</div>
       <div class="amt num" id="payAmt">฿0</div>
       <img class="qrimg" id="qrImg" alt="QR">
+      <button class="btn" onclick="saveQr()" style="background:#fff;border:1px solid var(--coral);color:var(--coral2);margin-top:8px">💾 บันทึกรูป QR (ไปสแกนในแอปธนาคาร)</button>
     </div>
     <div class="card">
-      <span class="label">โอนแล้ว → แนบสลิปเพื่อยืนยัน</span>
-      <input type="file" id="slipInp" accept="image/*" capture="environment" onchange="onSlip(this)" style="display:none">
-      <button class="btn coral" onclick="document.getElementById('slipInp').click()">📷 แนบสลิปโอนเงิน</button>
+      <span class="label">โอนแล้ว → แนบสลิปเพื่อยืนยัน (ระบบตรวจยอดให้อัตโนมัติ)</span>
+      <input type="file" id="slipInp" accept="image/*" onchange="onSlip(this)" style="display:none">
+      <button class="btn coral" onclick="document.getElementById('slipInp').click()">🖼️ เลือก/ถ่ายรูปสลิปโอนเงิน</button>
+      <div class="muted" style="font-size:12px;margin-top:6px;text-align:center">เลือกสลิปที่บันทึกไว้ หรือถ่ายรูปใหม่ก็ได้</div>
       <div id="slipStatus" style="margin-top:10px;text-align:center;font-size:13.5px"></div>
     </div>
   </div>
@@ -563,6 +565,16 @@ function openPay(){
   document.getElementById('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data=' + encodeURIComponent(qr);
   document.getElementById('slipStatus').textContent='';
   show('scrPay');
+}
+// บันทึกรูป QR ลงเครื่อง เพื่อนำไปสแกนในแอปธนาคาร (อัปโหลด QR จากแกลเลอรี)
+function saveQr(){
+  var img=document.getElementById('qrImg'); var url=img.src; if(!url) return;
+  var fname='KLH-QR-'+((S.order&&S.order.orderId)||'pay')+'.png';
+  fetch(url).then(function(r){ return r.blob(); }).then(function(b){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname;
+    document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); URL.revokeObjectURL(a.href); }, 1500);
+    toast('บันทึกรูป QR แล้ว');
+  }).catch(function(){ window.open(url,'_blank'); });
 }
 function onSlip(input){
   var f = input.files[0]; if (!f) return;
