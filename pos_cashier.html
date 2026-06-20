@@ -193,7 +193,17 @@ input{font-family:inherit;}
 .pending-item.line-order{border-left:4px solid #06C755;background:#F0FBF4;}
 /* พิมพ์ในหน้า (fallback เบราว์เซอร์) */
 #printArea{display:none;}
-@media print{ body>*{display:none!important;} #printArea{display:block!important;width:72mm;margin:0;padding:6px;color:#000;} @page{margin:0;} }
+@media print{
+  body>*{display:none!important;}
+  #printArea{display:block!important;width:80mm;margin:0;padding:4mm 3mm;color:#000;font-family:'IBM Plex Sans Thai',sans-serif;font-size:15px;line-height:1.5;}
+  #printArea .rc-store{font-size:21px;font-weight:800;text-align:center;}
+  #printArea .rc-sub{font-size:14px;text-align:center;margin-bottom:4px;}
+  #printArea .rc-div{border-top:1px dashed #000;margin:5px 0;}
+  #printArea .rc-row{display:flex;justify-content:space-between;gap:8px;font-size:15px;}
+  #printArea .rc-total{font-size:19px;font-weight:800;}
+  #printArea .rc-meta{font-size:13px;color:#222;}
+  @page{margin:0;size:80mm auto;}
+}
 </style>
 </head>
 <body>
@@ -648,8 +658,8 @@ function printShiftReport(res, opening, drawer){
       + res.bills.map(function(b){ return '<div style="display:flex;justify-content:space-between;font-size:12px"><span>'+esc((b.time||'')+' '+(b.method||''))+'</span><span>'+fmtB(b.total)+'</span></div>'; }).join('')
     : '';
   var w = window.open('','_blank','width=420,height=680');
-  if(!w){ var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } return; }
-  w.document.write('<html><head><meta charset="utf-8"><title>สรุปกะ '+esc(res.date)+'</title><style>body{font-family:monospace;padding:12px;width:300px;color:#000}pre{white-space:pre-wrap;font-size:13px;margin:0}</style></head><body><pre>'+esc(txt)+'</pre>'+billsHtml+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
+  if(!w){ var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:15px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } return; }
+  w.document.write('<html><head><meta charset="utf-8"><title>สรุปกะ '+esc(res.date)+'</title><style>@page{size:80mm auto;margin:0}body{font-family:monospace;padding:4mm 3mm;width:80mm;color:#000}pre{white-space:pre-wrap;font-size:15px;margin:0}</style></head><body><pre>'+esc(txt)+'</pre>'+billsHtml+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
   w.document.close();
 }
 function closeShift(res, opening, drawer){
@@ -781,7 +791,7 @@ function printArReceipt(a, amt, bal, method){
     +'คงเหลือ       ฿'+Number(bal||0).toLocaleString('th-TH')+'\n'
     +'------------------------------\n'+new Date().toLocaleString('th-TH')+'\n';
   if(window.AndroidPrint && window.AndroidPrint.printReceipt){ try{window.AndroidPrint.printReceipt(txt,a.arId);}catch(e){} }
-  else { var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } }
+  else { var pa=document.getElementById('printArea'); if(pa){ pa.innerHTML='<pre style="font-size:15px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); } }
 }
 function _bcard(o, btnsHtml) {
   var isLine = /LINE/i.test(o.source || '');
@@ -844,7 +854,7 @@ function printPickSlip(orderId) {
       try { window.AndroidPrint.printReceipt(txt, orderId); } catch(e){}
     } else {
       var pa = document.getElementById('printArea');
-      if (pa){ pa.innerHTML = '<pre style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); }
+      if (pa){ pa.innerHTML = '<pre style="font-size:15px;white-space:pre-wrap;margin:0">'+esc(txt)+'</pre>'; window.print(); }
     }
     // ตั้งสถานะ "กำลังจัด"
     google.script.run.withSuccessHandler(function(){ refreshPending(); }).withFailureHandler(function(){}).setOrderFulfill(orderId,'PREPARING');
@@ -1142,27 +1152,39 @@ function showSuccess(saleId, total, method, change) {
 }
 
 function printReceipt() {
-  var lns = '';
-  (_loadedOrders||[]).forEach(function(o){ (o.items||[]).forEach(function(it){
-    var q = it.qty || it.pieces || 1;
-    lns += it.name + '  x' + q + '  ' + Number(it.lineTotal||0).toLocaleString('th-TH') + '\n';
-  }); });
+  var items = [];
+  (_loadedOrders||[]).forEach(function(o){ (o.items||[]).forEach(function(it){ items.push(it); }); });
   var chg = _payMethod==='CASH' ? Math.max(0, _cashRecv - _grandTotal) : 0;
   var pay = _payMethod==='CASH' ? ('เงินสด ฿'+Number(_cashRecv).toLocaleString('th-TH')+'  ทอน ฿'+Number(chg).toLocaleString('th-TH'))
           : (_payMethod==='QR' ? 'พร้อมเพย์ QR' : 'เครดิต/เชื่อ');
   var ent = (_loadedOrders[0] && _loadedOrders[0].entity) || 'KLH';
+  // ── Sunmi 58mm (ข้อความ ผ่าน bridge) ──
+  var lns = '';
+  items.forEach(function(it){ var q=it.qty||it.pieces||1; lns += it.name+'  x'+q+'  '+Number(it.lineTotal||0).toLocaleString('th-TH')+'\n'; });
   var txt = ent + '\nใบเสร็จรับเงิน\n--------------------------------\n'
           + lns + '--------------------------------\n'
           + 'รวม ฿' + Number(_grandTotal).toLocaleString('th-TH',{minimumFractionDigits:2}) + '\n'
           + 'ชำระ: ' + pay + '\nเลขที่: ' + _lastSaleId;
-  // แอป Android → สั่งเครื่องพิมพ์ Sunmi ตรง
   if (window.AndroidPrint && typeof window.AndroidPrint.printReceipt === 'function') {
     try { window.AndroidPrint.printReceipt(txt, _lastSaleId); return; } catch(e) {}
   }
-  // fallback (เบราว์เซอร์): พิมพ์ในหน้า
+  // ── PC 80mm (HTML ฟอนต์ใหญ่) ──
+  var itemsHtml = items.map(function(it){
+    var q = it.qty || it.pieces || 1;
+    return '<div class="rc-row"><span style="flex:1">'+esc(it.name)+' x'+q+'</span><span>'+Number(it.lineTotal||0).toLocaleString('th-TH')+'</span></div>';
+  }).join('');
+  var html = '<div class="rc-store">'+esc(ent)+'</div>'
+    +'<div class="rc-sub">ใบเสร็จรับเงิน</div>'
+    +'<div class="rc-div"></div>'
+    + itemsHtml
+    +'<div class="rc-div"></div>'
+    +'<div class="rc-row rc-total"><span>รวม</span><span>฿'+Number(_grandTotal).toLocaleString('th-TH',{minimumFractionDigits:2})+'</span></div>'
+    +'<div class="rc-meta" style="margin-top:4px">ชำระ: '+esc(pay)+'</div>'
+    +'<div class="rc-meta">เลขที่: '+esc(_lastSaleId)+'</div>'
+    +'<div class="rc-sub" style="margin-top:8px">ขอบคุณที่ใช้บริการ</div>';
   var area = document.getElementById('printArea');
   if (!area) { area = document.createElement('div'); area.id='printArea'; document.body.appendChild(area); }
-  area.innerHTML = '<pre style="font-family:\'IBM Plex Sans Thai\',monospace;font-size:12px;white-space:pre-wrap;margin:0">'+txt.replace(/</g,'&lt;')+'</pre>';
+  area.innerHTML = html;
   setTimeout(function(){ try { window.print(); } catch(e){} }, 200);
 }
 
