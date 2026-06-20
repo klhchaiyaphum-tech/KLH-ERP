@@ -565,6 +565,7 @@ function pcPrintPick(orderId){
         +'<div style="font-weight:700">สแกนจ่ายเงิน (KTB ถุงเงิน)</div>'
         +'<div style="font-size:18px;font-weight:800">฿'+total.toLocaleString('th-TH',{minimumFractionDigits:2})+'</div>'
         +'<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=6&data='+encodeURIComponent(genKtbQrPc(total))+'" style="width:48mm;height:48mm">'
+        +'<div style="font-size:14px;margin-top:4px">หรือไปชำระเงินที่ แคชเชียร์</div>'
         +'</div>'
       : '';
     var w=window.open('','_blank','width=420,height=760');

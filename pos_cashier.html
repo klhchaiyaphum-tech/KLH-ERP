@@ -420,11 +420,12 @@ input{font-family:inherit;}
         <div style="font-size:21px;font-weight:700;">ปิดบิลสำเร็จ!</div>
         <div style="color:var(--ink-2);margin-top:4px;font-size:14px" id="successDetail">—</div>
         <div class="devchip" id="drawerOpenedChip" style="display:none;margin:8px auto 0"><span class="ld"></span>ลิ้นชัก 1 เปิดแล้ว</div>
+        <div id="successCountdown" style="margin-top:8px;font-size:12.5px;color:var(--ink-3)"></div>
       </div>
       <div class="success-btns">
         <button class="btn-ghost" onclick="printReceipt()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/></svg>
-          พิมพ์
+          พิมพ์อีกครั้ง
         </button>
         <button class="btn-dark" onclick="resetCashier()">ปิดบิลถัดไป</button>
       </div>
@@ -1181,6 +1182,7 @@ function doCloseSale() {
     .closeSale(payload);
 }
 
+var _successTimer=null, _successInt=null;
 function showSuccess(saleId, total, method, change) {
   var detail = 'Sale: '+saleId+' · ฿'+total.toLocaleString('th-TH');
   if (method==='CASH' && change > 0) detail += ' · ทอน ฿'+change.toLocaleString('th-TH');
@@ -1189,6 +1191,14 @@ function showSuccess(saleId, total, method, change) {
   document.getElementById('successDetail').textContent = detail;
   if (_drawerOpen) document.getElementById('drawerOpenedChip').style.display='inline-flex';
   document.getElementById('successOverlay').style.display = 'flex';
+  // พิมพ์ใบเสร็จอัตโนมัติ
+  setTimeout(function(){ try { printReceipt(); } catch(e){} }, 300);
+  // นับถอยหลัง 10 วินาที → กลับหน้าแคชเชียร์เอง
+  clearInterval(_successInt); clearTimeout(_successTimer);
+  var n=10, cd=document.getElementById('successCountdown');
+  if(cd) cd.textContent='กลับหน้าแคชเชียร์อัตโนมัติใน '+n+' วินาที';
+  _successInt=setInterval(function(){ n--; if(cd) cd.textContent = n>0 ? ('กลับหน้าแคชเชียร์อัตโนมัติใน '+n+' วินาที') : ''; if(n<=0) clearInterval(_successInt); }, 1000);
+  _successTimer=setTimeout(function(){ resetCashier(); }, 10000);
 }
 
 function printReceipt() {
@@ -1258,6 +1268,8 @@ function printReceipt() {
 }
 
 function resetCashier() {
+  clearInterval(_successInt); clearTimeout(_successTimer);
+  var cd=document.getElementById('successCountdown'); if(cd) cd.textContent='';
   _loadedOrders = [];
   _grandTotal   = 0;
   _cashRecv     = 0;
