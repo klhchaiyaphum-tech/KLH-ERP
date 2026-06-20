@@ -161,9 +161,28 @@
       <div class="mstat"><b class="num" id="mcSpent">฿0</b><span>ยอดซื้อรวม</span></div>
     </div>
     <div class="card">
-      <span class="label">ข้อมูลของฉัน</span>
-      <div class="minfo"><span>เบอร์โทร</span><b class="num" id="mcPhone">—</b></div>
-      <div class="minfo"><span>ที่อยู่</span><b id="mcAddr" style="text-align:right;max-width:60%">—</b></div>
+      <div style="display:flex;align-items:center"><span class="label" style="flex:1">ข้อมูลของฉัน</span>
+        <button class="btn" style="width:auto;padding:5px 12px;font-size:13px;background:#fff;border:1px solid var(--coral);color:var(--coral2)" onclick="toggleMemberEdit(true)">✏️ แก้ไข</button></div>
+      <div id="mcView">
+        <div class="minfo"><span>ชื่อ</span><b id="mcNameV">—</b></div>
+        <div class="minfo"><span>เบอร์โทร</span><b class="num" id="mcPhone">—</b></div>
+        <div class="minfo"><span>ที่อยู่</span><b id="mcAddr" style="text-align:right;max-width:60%">—</b></div>
+      </div>
+      <div id="mcEdit" style="display:none">
+        <span class="label" style="margin-top:6px">ชื่อ</span><input class="inp" id="meName" placeholder="ชื่อ-นามสกุล">
+        <span class="label">เบอร์โทร</span><input class="inp" id="mePhone" inputmode="tel" placeholder="08x-xxx-xxxx">
+        <span class="label">ที่อยู่</span><textarea class="inp" id="meAddr" rows="2" placeholder="บ้านเลขที่ / ถนน / ตำบล"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn green" onclick="saveMemberEdit()">บันทึก</button>
+          <button class="btn" style="background:#eee" onclick="toggleMemberEdit(false)">ยกเลิก</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="mcArCard" style="display:none">
+      <div style="display:flex;align-items:center"><span class="label" style="flex:1">บิลค้างชำระ</span>
+        <b id="mcArTotal" style="color:var(--coral2)">฿0</b></div>
+      <div id="mcArList"></div>
     </div>
   </div>
 </div>
@@ -234,7 +253,7 @@
 
 <!-- ===== SCREEN: PAYMENT (QR + slip) ===== -->
 <div class="scr" id="scrPay">
-  <div class="hd"><div><b>ชำระเงิน</b><span id="payOrderId"></span></div></div>
+  <div class="hd"><button class="back" onclick="cancelPay()">←</button><div><b>ชำระเงิน</b><span id="payOrderId"></span></div></div>
   <div class="body">
     <div class="qrwrap">
       <div class="muted">สแกนจ่ายผ่านแอปธนาคาร (KTB ถุงเงิน)</div>
@@ -327,7 +346,7 @@ var S = {
   cfg:null, profile:null, member:null, priceLevel:'retail',
   products:[], cat:'', searchQ:'',
   cart:{},   // key barcode|unit -> line
-  delivery:'pickup', payMethod:'now', order:null, ktbQr:''
+  delivery:'pickup', payMethod:'now', payMode:'order', arPay:null, order:null, ktbQr:''
 };
 
 // ---------- boot ----------
@@ -535,6 +554,9 @@ function setPay(m){
 function syncFulfil(){
   document.getElementById('sumCount').textContent = cartCount()+' ชิ้น';
   document.getElementById('sumTotal').textContent = '฿'+fmt(cartTotal());
+  // เติมชื่อ/ที่อยู่จากข้อมูลสมาชิกให้อัตโนมัติ
+  var ni=document.getElementById('nameInp'); if(ni && !ni.value && S.member && S.member.name) ni.value=S.member.name;
+  var ai=document.getElementById('addrInp'); if(ai && !ai.value && S.member && S.member.address) ai.value=S.member.address;
 }
 
 // ---------- place order ----------
@@ -564,6 +586,7 @@ function placeOrder(){
 
 // ---------- payment ----------
 function openPay(){
+  S.payMode='order';
   document.getElementById('payOrderId').textContent = ' #'+S.order.orderId;
   document.getElementById('payAmt').textContent = '฿'+fmt(S.order.total);
   var qr = genKtbQr(S.order.total);
@@ -587,6 +610,16 @@ function onSlip(input){
   var r = new FileReader();
   r.onload = function(e){
     var b64 = e.target.result.split(',')[1];
+    if (S.payMode === 'ar'){   // ชำระหนี้ออนไลน์
+      google.script.run.withSuccessHandler(function(res){
+        if (res && res.ok){
+          st.innerHTML = (res.matched ? '✅ ' : '📤 ') + res.msg;
+          setTimeout(function(){ toast(res.msg); S.payMode='order'; openMember(); }, 1500);
+        } else { st.textContent='ตรวจสลิปไม่สำเร็จ ลองใหม่'; }
+      }).withFailureHandler(function(){ st.textContent='อัปโหลดไม่สำเร็จ'; })
+        .linePayArSlip(S.member.custId, S.arPay.arId, S.arPay.total, b64, f.type);
+      return;
+    }
     google.script.run.withSuccessHandler(function(res){
       var v = res && res.verify ? res.verify : {};
       var amt = v.amount || 0;
@@ -656,16 +689,70 @@ function openMember(){
   google.script.run.withSuccessHandler(function(r){
     if (!r || !r.ok){ toast('โหลดโปรไฟล์ไม่ได้'); return; }
     document.getElementById('mcName').textContent   = r.name;
+    document.getElementById('mcNameV').textContent  = r.name || '—';
     document.getElementById('mcId').textContent     = r.custId;
     document.getElementById('mcLevel').textContent  = r.priceLevel;
-    document.getElementById('mcPhone').textContent  = r.phone || '—';
+    document.getElementById('mcPhone').textContent  = phonePad(r.phone) || '—';
     document.getElementById('mcAddr').textContent   = r.address || '—';
+    document.getElementById('meName').value  = r.name || '';
+    document.getElementById('mePhone').value = phonePad(r.phone) || '';
+    document.getElementById('meAddr').value  = r.address || '';
+    if (S.member){ S.member.address = r.address || ''; S.member.name = r.name || S.member.name; saveMember(); }
+    toggleMemberEdit(false);
+    loadMemberAr();
     document.getElementById('mcPoints').textContent = fmt(r.points);
     document.getElementById('mcOrders').textContent = fmt(r.orders);
     document.getElementById('mcSpent').textContent  = '฿'+fmt(r.spent);
     document.getElementById('mcQr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data='+encodeURIComponent(r.custId);
     if (S.cfg && S.cfg.company) document.getElementById('mcBrand').textContent = (S.cfg.company+' MEMBER').toUpperCase();
   }).withFailureHandler(function(){ toast('โหลดโปรไฟล์ไม่ได้'); }).lineGetMyProfile(S.member.custId);
+}
+function toggleMemberEdit(on){
+  document.getElementById('mcEdit').style.display = on?'block':'none';
+  document.getElementById('mcView').style.display = on?'none':'block';
+}
+function saveMemberEdit(){
+  var d={ name:document.getElementById('meName').value.trim(),
+          phone:document.getElementById('mePhone').value.trim(),
+          address:document.getElementById('meAddr').value.trim() };
+  if(!d.name){ toast('กรอกชื่อ'); return; }
+  toast('กำลังบันทึก...');
+  google.script.run.withSuccessHandler(function(res){
+    if(res&&res.ok){ S.member.name=d.name; S.member.phone=d.phone; S.member.address=d.address; saveMember(); setMemberHeader();
+      toast('บันทึกแล้ว'); openMember(); }
+    else toast('ผิดพลาด: '+((res&&res.msg)||''));
+  }).withFailureHandler(function(e){ toast('ผิดพลาด: '+e.message); }).lineUpdateMember(S.member.custId, d);
+}
+function loadMemberAr(){
+  var card=document.getElementById('mcArCard'), list=document.getElementById('mcArList');
+  list.innerHTML='<div class="spin"></div>';
+  google.script.run.withSuccessHandler(function(res){
+    var items=(res&&res.items)||[];
+    if(!items.length){ card.style.display='none'; return; }
+    card.style.display='block';
+    document.getElementById('mcArTotal').textContent='฿'+fmt(res.total);
+    list.innerHTML=items.map(function(a){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #f0eadf">'
+        +'<div style="flex:1"><div style="font-size:13px">บิล '+esc(a.saleId||a.arId)+'</div>'
+        +'<div class="muted" style="font-size:11px">ครบกำหนด '+esc(a.dueDate||'-')+'</div></div>'
+        +'<b class="num" style="color:var(--coral2)">฿'+fmt(a.balance)+'</b>'
+        +'<button class="btn green" style="width:auto;padding:7px 14px" onclick="openArPay(\''+esc(a.arId)+'\','+Number(a.balance)+')">ชำระ</button>'
+        +'</div>';
+    }).join('');
+  }).withFailureHandler(function(){ card.style.display='none'; }).lineGetMyAr(S.member.custId);
+}
+function cancelPay(){
+  if (S.payMode==='ar'){ S.payMode='order'; openMember(); }
+  else { show('scrBrowse'); }
+}
+function openArPay(arId, amount){
+  S.payMode='ar'; S.arPay={ arId:arId, total:amount };
+  document.getElementById('payOrderId').textContent=' (หนี้ '+arId+')';
+  document.getElementById('payAmt').textContent='฿'+fmt(amount);
+  var qr=genKtbQr(amount);
+  document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=460x460&margin=0&data='+encodeURIComponent(qr);
+  document.getElementById('slipStatus').textContent='';
+  show('scrPay');
 }
 
 // ---------- สถานะออเดอร์ ----------

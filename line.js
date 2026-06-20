@@ -332,6 +332,46 @@ function lineGetMyProfile(custId) {
   }
 }
 
+// สมาชิก LINE แก้ข้อมูลตัวเอง (ชื่อ/เบอร์/ที่อยู่ — ไม่แตะราคา/เครดิต)
+function lineUpdateMember(custId, data) {
+  try {
+    if (!custId) return { ok:false, msg:'ยังไม่ได้เป็นสมาชิก' };
+    return updateCustomer(custId, { name:data.name, phone:data.phone, address:data.address });
+  } catch (e) { return { ok:false, msg:String(e) }; }
+}
+
+// สมาชิก LINE ดูบิลค้างชำระของตัวเอง
+function lineGetMyAr(custId) {
+  try {
+    if (!custId) return { ok:true, items:[], total:0 };
+    var r = getArByCustomer(custId, '');
+    if (!r || !r.ok) return r || { ok:false, msg:'โหลดไม่สำเร็จ' };
+    var items = (r.items || []).filter(function(a){ return (Number(a.balance)||0) > 0; });
+    var total = items.reduce(function(t,a){ return t + (Number(a.balance)||0); }, 0);
+    return { ok:true, items:items, total:total };
+  } catch (e) { return { ok:false, msg:String(e) }; }
+}
+
+// สมาชิก LINE ชำระหนี้ออนไลน์ (แนบสลิป → ตรวจ Gemini → ถ้ายอดตรงตัดให้เลย ไม่ตรงแจ้งแอดมิน)
+function linePayArSlip(custId, arId, amount, base64, mimeType) {
+  try {
+    var verify = verifySlipGemini(base64, mimeType, amount);
+    saveSlipToDrive(base64, mimeType, arId);
+    var amt = (verify && verify.amount) ? Number(verify.amount) : 0;
+    var matched = amt && Math.abs(amt - Number(amount)) < 1;
+    if (matched) {
+      payArEntry(arId, Number(amount));
+      pushLineGroup_('💰 ลูกค้าชำระหนี้ออนไลน์ (ยอดตรง ✅)\nAR: ' + arId + '\nลูกค้า: ' + custId
+        + '\nยอด: ฿' + Number(amount).toLocaleString('th-TH') + '\nตัดยอดให้อัตโนมัติแล้ว');
+      return { ok:true, matched:true, msg:'ชำระสำเร็จ — ยอดตรง ตัดหนี้ให้แล้ว' };
+    }
+    pushLineGroup_('⚠️ ลูกค้าแนบสลิปชำระหนี้ (รอตรวจ)\nAR: ' + arId + '\nลูกค้า: ' + custId
+      + '\nต้องชำระ ฿' + Number(amount).toLocaleString('th-TH') + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH')) : '')
+      + '\nโปรดตรวจสอบและตัดยอดที่แคชเชียร์');
+    return { ok:true, matched:false, msg:'รับสลิปแล้ว แอดมินจะตรวจสอบและตัดยอดให้' };
+  } catch (e) { return { ok:false, msg:String(e) }; }
+}
+
 // แนบสลิปกับออเดอร์ LINE (ตรวจ Gemini + เซฟ Drive — ใช้ของเดิม)
 function lineAttachSlip(orderId, base64, mimeType, expectedAmount) {
   try {
