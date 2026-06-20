@@ -740,9 +740,9 @@ function getPriceListItems(catName) {
         size:      String(r[3]  || ''),
         mult:      safeN(r[4])  || 1,
         unit:      String(r[5]  || ''),
-        cost:      safeN(r[17]),
-        retail:    safeN(r[22]),
-        wholesale: safeN(r[20]),
+        cost:      safeN(r[17]),  // R = ทุน
+        retail:    safeN(r[23]),  // X = ราคาปลีก
+        wholesale: safeN(r[21]),  // V = ราคาส่ง
         dozenBarcode: String(r[33] || ''),  // AH
         dozenPrice:   safeN(r[34])          // AI = ราคาโหล (12 ชิ้น)
       });
