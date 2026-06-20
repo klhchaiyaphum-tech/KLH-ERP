@@ -986,3 +986,91 @@ function getArAlerts() {
              overdueAmt:sum(overdue), dueTodayAmt:sum(dueToday), dueSoonAmt:sum(dueSoon) };
   } catch(e) { return { ok:false, msg:String(e) }; }
 }
+
+// ── วางบิล (Billing Statement) — รวมบิลค้างของลูกค้า 1 ราย ──────────
+function _billSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('BILLING_NOTE');
+  if (!s) {
+    s = ss.insertSheet('BILLING_NOTE');
+    s.getRange(1,1,1,10).setValues([['NOTE_ID','DATE','CUST_ID','CUST_NAME','ENTITY','BILL_COUNT','TOTAL','DUE_DATE','AR_IDS','STATUS']]);
+    s.getRange(1,1,1,10).setFontWeight('bold').setBackground('#F6704C').setFontColor('#fff');
+  }
+  return s;
+}
+function _arUnpaidByCust_(custId) {
+  var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName('AR_LEDGER');
+  if (!s || s.getLastRow() <= 1) return [];
+  var tz='Asia/Bangkok';
+  function ds(v){ return v instanceof Date ? Utilities.formatDate(v,tz,'yyyy-MM-dd') : String(v||'').slice(0,10); }
+  return s.getRange(2,1,s.getLastRow()-1,12).getValues()
+    .filter(function(r){ return String(r[2])===String(custId) && (Number(r[9])||0)>0; })
+    .map(function(r){
+      var due = r[6] instanceof Date ? r[6] : new Date(ds(r[6])+'T00:00:00');
+      return { arId:String(r[0]||''), saleId:String(r[1]||''), custName:String(r[3]||''), entity:String(r[4]||''),
+               invDate:ds(r[5]), dueDate:ds(r[6]), dueObj:due, balance:Number(r[9])||0 };
+    });
+}
+function _weightedDue_(items) {
+  var sumBal=0, sumW=0;
+  items.forEach(function(it){ var t=(it.dueObj&&!isNaN(it.dueObj))?it.dueObj.getTime():0; if(t){ sumBal+=it.balance; sumW+=it.balance*t; } });
+  if(!sumBal) return '';
+  return Utilities.formatDate(new Date(Math.round(sumW/sumBal)),'Asia/Bangkok','yyyy-MM-dd');
+}
+function generateBillingNote(custId) {
+  try {
+    var items = _arUnpaidByCust_(custId);
+    if (!items.length) return { ok:false, msg:'ลูกค้านี้ไม่มีหนี้ค้าง' };
+    var total = items.reduce(function(t,x){ return t+x.balance; },0);
+    var due = _weightedDue_(items);
+    var s = _billSheet_();
+    var noteId = 'BN-' + Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd-HHmmss');
+    s.appendRow([ noteId, Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd'),
+      custId, items[0].custName, items[0].entity, items.length, total, due,
+      items.map(function(x){return x.arId;}).join(','), 'OPEN' ]);
+    return { ok:true, note:{ noteId:noteId, date:Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd'),
+      custId:custId, custName:items[0].custName, entity:items[0].entity, billCount:items.length, total:total, dueDate:due,
+      bills:items.map(function(x){return {arId:x.arId,saleId:x.saleId,invDate:x.invDate,dueDate:x.dueDate,balance:x.balance};}) } };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+function generateAllBillingNotes() {
+  try {
+    var debtors = getAllCustomers().filter(function(c){ return (Number(c.outstanding)||0)>0; });
+    var made=[];
+    debtors.forEach(function(c){ var r=generateBillingNote(c.custId); if(r.ok) made.push(r.note); });
+    return { ok:true, count:made.length, notes:made };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+function getBillingNotes() {
+  try {
+    var s = _billSheet_(); if (s.getLastRow() <= 1) return { ok:true, items:[] };
+    function ds(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var items = s.getRange(2,1,s.getLastRow()-1,10).getValues().map(function(r){
+      return { noteId:String(r[0]), date:ds(r[1]), custId:String(r[2]), custName:String(r[3]), entity:String(r[4]),
+               billCount:Number(r[5])||0, total:Number(r[6])||0, dueDate:ds(r[7]), arIds:String(r[8]||''), status:String(r[9]||'OPEN') };
+    }).reverse();
+    return { ok:true, items:items };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+function getBillingNoteDetail(noteId) {
+  try {
+    var s = _billSheet_(); if (s.getLastRow() <= 1) return { ok:false, msg:'ไม่พบ' };
+    function ds(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var rows = s.getRange(2,1,s.getLastRow()-1,10).getValues();
+    for (var i=0;i<rows.length;i++){
+      if (String(rows[i][0])===String(noteId)){
+        var arIds = String(rows[i][8]||'').split(',');
+        var bills=[];
+        var ar = SpreadsheetApp.openById(SHEET_ID).getSheetByName('AR_LEDGER');
+        if (ar && ar.getLastRow()>1){
+          ar.getRange(2,1,ar.getLastRow()-1,12).getValues().forEach(function(r){
+            if (arIds.indexOf(String(r[0]))>=0) bills.push({ arId:String(r[0]), saleId:String(r[1]), invDate:ds(r[5]), dueDate:ds(r[6]), balance:Number(r[9])||0 });
+          });
+        }
+        return { ok:true, note:{ noteId:String(rows[i][0]), date:ds(rows[i][1]), custId:String(rows[i][2]), custName:String(rows[i][3]),
+          entity:String(rows[i][4]), billCount:Number(rows[i][5])||0, total:Number(rows[i][6])||0, dueDate:ds(rows[i][7]), bills:bills } };
+      }
+    }
+    return { ok:false, msg:'ไม่พบใบวางบิล' };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}

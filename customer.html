@@ -93,6 +93,7 @@ input:focus, select:focus, textarea:focus{border-color:#F6704C !important;box-sh
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('customers',this)"><i class="bi bi-people"></i> สมาชิก</button>
   <button class="tab-btn" onclick="switchTab('ar',this)"><i class="bi bi-cash-stack"></i> ลูกหนี้การค้า (AR)</button>
+  <button class="tab-btn" onclick="switchTab('billing',this);loadBilling()"><i class="bi bi-receipt"></i> วางบิล</button>
 </div>
 
 <!-- Tab: Customers -->
@@ -153,6 +154,36 @@ input:focus, select:focus, textarea:focus{border-color:#F6704C !important;box-sh
       </table>
     </div>
     <div class="count-bar" id="arBar"></div>
+  </div>
+</div>
+
+<!-- Billing notes panel -->
+<div id="panel-billing" class="tab-panel">
+  <div class="toolbar">
+    <span style="flex:1;color:#8a7f70;font-size:.85rem">รวมบิลค้างของลูกค้าเป็นใบวางบิล · ครบกำหนด = เฉลี่ยถ่วงน้ำหนักตามมูลค่าบิล</span>
+    <button class="btn btn-primary" onclick="genAllBilling()"><i class="bi bi-collection"></i> สร้างวางบิลทั้งหมด (สิ้นเดือน)</button>
+    <button class="btn btn-primary" onclick="loadBilling()" style="background:#6B6258"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+
+  <h3 style="font-size:.95rem;margin:6px 0 8px;color:#6B6258"><i class="bi bi-people"></i> ลูกค้าที่มีหนี้ค้าง</h3>
+  <div class="card" style="margin-bottom:18px">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>รหัส</th><th>ลูกค้า</th><th class="r">ยอดค้าง</th><th>จำนวนบิล</th><th>ครบกำหนดใกล้สุด</th><th>วางบิล</th></tr></thead>
+        <tbody id="billDebtors"><tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">—</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3 style="font-size:.95rem;margin:6px 0 8px;color:#6B6258"><i class="bi bi-receipt"></i> ใบวางบิลที่สร้างแล้ว</h3>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>เลขที่</th><th>วันที่</th><th>ลูกค้า</th><th class="r">ยอดรวม</th><th>จำนวนบิล</th><th>ครบกำหนด</th><th>พิมพ์</th></tr></thead>
+        <tbody id="billNotes"><tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">—</td></tr></tbody>
+      </table>
+    </div>
+    <div class="count-bar" id="billBar"></div>
   </div>
 </div>
 
@@ -374,6 +405,85 @@ function payAr(arId, balance) {
       .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
       .payArEntry(arId, amount);
   });
+}
+
+// ── วางบิล (Billing Statement) ───────────────────────────────
+var _billNotes = [];
+function loadBilling(){
+  renderDebtors();
+  showLoad('โหลดใบวางบิล...');
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad(); _billNotes=(res&&res.items)||[]; renderBillNotes(); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getBillingNotes();
+}
+function renderDebtors(){
+  var tb=document.getElementById('billDebtors');
+  var rows=_allCust.filter(function(c){ return (Number(c.outstanding)||0)>0; });
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">ไม่มีลูกค้าค้างชำระ</td></tr>'; return; }
+  tb.innerHTML=rows.map(function(c){
+    var a=arDueAlert(c.nearestDue);
+    return '<tr><td><code style="color:var(--blue)">'+c.custId+'</code></td>'
+      +'<td style="font-weight:500">'+c.name+'</td>'
+      +'<td class="r" style="color:var(--red);font-weight:600">฿'+Number(c.outstanding).toLocaleString('th-TH')+'</td>'
+      +'<td>'+(c.arCount||0)+' บิล</td>'
+      +'<td>'+(c.nearestDue||'—')+(a?' <span class="'+a.cls+'">'+a.label+'</span>':'')+'</td>'
+      +'<td><button class="btn btn-sm btn-primary" onclick="genBilling(\''+c.custId+'\')"><i class="bi bi-receipt"></i> สร้าง</button></td></tr>';
+  }).join('');
+}
+function renderBillNotes(){
+  var tb=document.getElementById('billNotes');
+  if(!_billNotes.length){ tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">ยังไม่มีใบวางบิล</td></tr>'; document.getElementById('billBar').textContent=''; return; }
+  tb.innerHTML=_billNotes.map(function(n){
+    return '<tr><td><code style="font-size:.78rem">'+n.noteId+'</code></td>'
+      +'<td>'+n.date+'</td><td style="font-weight:500">'+n.custName+'</td>'
+      +'<td class="r" style="font-weight:600">฿'+Number(n.total).toLocaleString('th-TH')+'</td>'
+      +'<td>'+n.billCount+' บิล</td><td>'+n.dueDate+'</td>'
+      +'<td><button class="btn btn-sm btn-edit" onclick="reprintBilling(\''+n.noteId+'\')"><i class="bi bi-printer"></i> พิมพ์</button></td></tr>';
+  }).join('');
+  document.getElementById('billBar').textContent=_billNotes.length+' ใบ';
+}
+function genBilling(custId){
+  showLoad('สร้างใบวางบิล...');
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad();
+      if(res&&res.ok){ printBillingNote(res.note); loadBilling(); }
+      else Swal.fire('แจ้งเตือน',(res&&res.msg)||'ไม่สำเร็จ','warning'); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .generateBillingNote(custId);
+}
+function genAllBilling(){
+  Swal.fire({title:'สร้างวางบิลทั้งหมด?',text:'สร้างใบวางบิลให้ลูกค้าที่มีหนี้ค้างทุกราย',icon:'question',showCancelButton:true,confirmButtonText:'สร้างทั้งหมด',cancelButtonText:'ยกเลิก',confirmButtonColor:'#F6704C'})
+  .then(function(r){ if(!r.isConfirmed) return;
+    showLoad('กำลังสร้าง...');
+    google.script.run
+      .withSuccessHandler(function(res){ hideLoad();
+        if(res&&res.ok){ Swal.fire({icon:'success',title:'สร้าง '+res.count+' ใบ',timer:1800,showConfirmButton:false}); loadBilling(); }
+        else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error'); })
+      .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+      .generateAllBillingNotes();
+  });
+}
+function reprintBilling(noteId){
+  showLoad('โหลดใบวางบิล...');
+  google.script.run
+    .withSuccessHandler(function(res){ hideLoad(); if(res&&res.ok) printBillingNote(res.note); else Swal.fire('Error',(res&&res.msg)||'ไม่พบ','error'); })
+    .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
+    .getBillingNoteDetail(noteId);
+}
+function printBillingNote(n){
+  var rows=(n.bills||[]).map(function(b){ return '<tr><td>'+b.saleId+'</td><td>'+b.invDate+'</td><td>'+b.dueDate+'</td><td style="text-align:right">฿'+Number(b.balance).toLocaleString('th-TH',{minimumFractionDigits:2})+'</td></tr>'; }).join('');
+  var w=window.open('','_blank','width=720,height=820');
+  w.document.write('<html><head><title>ใบวางบิล '+n.noteId+'</title><meta charset="utf-8"><style>body{font-family:"IBM Plex Sans Thai",sans-serif;padding:24px;color:#000}h2{margin:0}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #999;padding:6px 8px;font-size:14px}th{background:#eee}.tot{text-align:right;font-size:18px;font-weight:bold;margin-top:10px}</style></head><body>'
+   +'<h2>ใบวางบิล / ใบแจ้งหนี้</h2><div>'+(n.entity||'ห้างหุ้นส่วนจำกัด เคแอลเอช')+'</div><hr>'
+   +'<div>เลขที่: '+n.noteId+' &nbsp; วันที่: '+n.date+'</div>'
+   +'<div>ลูกค้า: <b>'+n.custName+'</b> ('+n.custId+')</div>'
+   +'<table><thead><tr><th>เลขบิล</th><th>วันที่ออก</th><th>ครบกำหนด</th><th>ยอดคงเหลือ</th></tr></thead><tbody>'+rows+'</tbody></table>'
+   +'<div class="tot">รวมทั้งสิ้น ฿'+Number(n.total).toLocaleString('th-TH',{minimumFractionDigits:2})+'</div>'
+   +'<div style="margin-top:8px">กำหนดชำระ (เฉลี่ยถ่วงน้ำหนัก): <b>'+n.dueDate+'</b></div>'
+   +'<div style="margin-top:44px;display:flex;justify-content:space-between"><div>ผู้วางบิล ____________</div><div>ผู้รับวางบิล ____________</div></div>'
+   +'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
+  w.document.close();
 }
 </script>
 </body>
