@@ -198,6 +198,9 @@ var _execUrl = '';
 var _allCust = [], _allAr = [];
 var _codeMap = {};
 
+// เบอร์โทร: ถ้าถูกเก็บเป็นตัวเลข (เลข 0 หน้าหาย) เติม 0 ให้ครบ 10 หลัก
+function phoneDisp(p){ var s=String(p||'').replace(/[^0-9]/g,''); if(s.length===9) s='0'+s; return s||'—'; }
+
 // ป้ายเตือนครบกำหนด: เกิน / ครบวันนี้ / ใกล้ครบ (≤7 วัน)
 function arDueAlert(dueStr){
   if(!dueStr) return null;
@@ -248,7 +251,7 @@ function renderCustomers(rows) {
     return '<tr>'
       +'<td><code style="font-size:.78rem;color:var(--blue)">'+r.custId+'</code></td>'
       +'<td style="font-weight:500">'+r.name+'</td>'
-      +'<td>'+r.phone+'</td>'
+      +'<td>'+phoneDisp(r.phone)+'</td>'
       +'<td>'+lvl+'</td>'
       +'<td class="r">'+(r.creditLimit>0?'฿'+r.creditLimit.toLocaleString('th-TH'):'—')+'</td>'
       +'<td class="r" style="'+ovCls+'">'+(r.outstanding>0
@@ -283,7 +286,7 @@ function custFormHtml(r) {
   return '<div style="text-align:left">'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
     +'<div><label style="font-size:.78rem">ชื่อ *</label><input id="cf-name" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.name||'')+'"></div>'
-    +'<div><label style="font-size:.78rem">เบอร์โทร</label><input id="cf-phone" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.phone||'')+'"></div>'
+    +'<div><label style="font-size:.78rem">เบอร์โทร</label><input id="cf-phone" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.phone?phoneDisp(r.phone):'')+'"></div>'
     +'<div><label style="font-size:.78rem">เลขผู้เสียภาษี</label><input id="cf-tax" class="swal2-input" style="margin:2px 0;width:100%" value="'+(r.taxId||'')+'"></div>'
     +'<div><label style="font-size:.78rem">ระดับราคา</label><select id="cf-level" class="swal2-input" style="margin:2px 0;width:100%">'
     +'<option value="retail"'+(r.priceLevel==='retail'?' selected':'')+'>ราคาปลีก</option>'
@@ -365,7 +368,7 @@ function renderAr(rows) {
     var label = {UNPAID:'ยังไม่ชำระ',PARTIAL:'ชำระบางส่วน',PAID:'ชำระแล้ว',OVERDUE:'เกินกำหนด'}[status] || status;
     var statusBadge = '<span class="status-'+status.toLowerCase()+'">'+label+'</span>';
     var payBtn = status!=='PAID'
-      ? '<button class="btn btn-sm btn-pay" onclick="payAr(\''+r.arId+'\','+r.balance+')"><i class="bi bi-cash"></i> รับเงิน</button>' : '';
+      ? '<button class="btn btn-sm btn-pay" onclick="goCashierAr(\''+r.custId+'\')"><i class="bi bi-shop"></i> รับที่แคชเชียร์</button>' : '';
     return '<tr>'
       +'<td><code style="font-size:.78rem">'+r.arId+'</code></td>'
       +'<td><code style="font-size:.78rem;color:#555">'+r.saleId+'</code></td>'
@@ -389,6 +392,14 @@ function filterAr(q) {
   renderAr(ql ? _allAr.filter(function(r){ return (r.arId+r.saleId+r.custName+r.custId).toLowerCase().indexOf(ql)>=0; }) : _allAr);
 }
 
+// รับชำระหนี้ให้ไปทำที่หน้าแคชเชียร์ (รับเงิน+เปิดลิ้นชัก+พิมพ์ใบเสร็จ)
+function goCashierAr(custId){
+  Swal.fire({ title:'ไปรับเงินที่แคชเชียร์', text:'เปิดหน้าแคชเชียร์เพื่อรับชำระหนี้ลูกค้า '+custId, icon:'question',
+    showCancelButton:true, confirmButtonText:'ไปแคชเชียร์', cancelButtonText:'ยกเลิก', confirmButtonColor:'#F6704C' })
+  .then(function(r){ if(!r.isConfirmed) return;
+    window.top.location.href = 'https://klhchaiyaphum-tech.github.io/KLH-ERP/pos_cashier.html?ar=' + encodeURIComponent(custId);
+  });
+}
 function payAr(arId, balance) {
   Swal.fire({
     title: 'รับชำระเงิน', text: 'AR: '+arId+' | คงเหลือ ฿'+balance.toLocaleString('th-TH'),
@@ -423,12 +434,13 @@ function renderDebtors(){
   if(!rows.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">ไม่มีลูกค้าค้างชำระ</td></tr>'; return; }
   tb.innerHTML=rows.map(function(c){
     var a=arDueAlert(c.nearestDue);
+    var hasNote=_billNotes.some(function(n){return n.custId===c.custId;});
     return '<tr><td><code style="color:var(--blue)">'+c.custId+'</code></td>'
-      +'<td style="font-weight:500">'+c.name+'</td>'
+      +'<td style="font-weight:500">'+c.name+(hasNote?' <span class="due-soon" style="background:#E8F5E9;color:#2E7D46">✓ วางบิลแล้ว</span>':'')+'</td>'
       +'<td class="r" style="color:var(--red);font-weight:600">฿'+Number(c.outstanding).toLocaleString('th-TH')+'</td>'
       +'<td>'+(c.arCount||0)+' บิล</td>'
       +'<td>'+(c.nearestDue||'—')+(a?' <span class="'+a.cls+'">'+a.label+'</span>':'')+'</td>'
-      +'<td><button class="btn btn-sm btn-primary" onclick="genBilling(\''+c.custId+'\')"><i class="bi bi-receipt"></i> สร้าง</button></td></tr>';
+      +'<td><button class="btn btn-sm btn-primary" onclick="genBilling(\''+c.custId+'\')"><i class="bi bi-receipt"></i> '+(hasNote?'สร้างใหม่':'สร้าง')+'</button></td></tr>';
   }).join('');
 }
 function renderBillNotes(){
@@ -442,13 +454,17 @@ function renderBillNotes(){
       +'<td><button class="btn btn-sm btn-edit" onclick="reprintBilling(\''+n.noteId+'\')"><i class="bi bi-printer"></i> พิมพ์</button></td></tr>';
   }).join('');
   document.getElementById('billBar').textContent=_billNotes.length+' ใบ';
+  renderDebtors();  // อัปเดตป้าย "วางบิลแล้ว"
 }
 function genBilling(custId){
   showLoad('สร้างใบวางบิล...');
   google.script.run
     .withSuccessHandler(function(res){ hideLoad();
-      if(res&&res.ok){ printBillingNote(res.note); loadBilling(); }
-      else Swal.fire('แจ้งเตือน',(res&&res.msg)||'ไม่สำเร็จ','warning'); })
+      if(res&&res.ok){
+        Swal.fire({icon:'success',title:'สร้างใบวางบิลแล้ว',text:res.note.noteId,timer:1500,showConfirmButton:false});
+        try{ printBillingNote(res.note); }catch(e){}
+        loadBilling();
+      } else Swal.fire('แจ้งเตือน',(res&&res.msg)||'ไม่สำเร็จ','warning'); })
     .withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); })
     .generateBillingNote(custId);
 }
@@ -474,6 +490,7 @@ function reprintBilling(noteId){
 function printBillingNote(n){
   var rows=(n.bills||[]).map(function(b){ return '<tr><td>'+b.saleId+'</td><td>'+b.invDate+'</td><td>'+b.dueDate+'</td><td style="text-align:right">฿'+Number(b.balance).toLocaleString('th-TH',{minimumFractionDigits:2})+'</td></tr>'; }).join('');
   var w=window.open('','_blank','width=720,height=820');
+  if(!w){ Swal.fire('แจ้งเตือน','เบราว์เซอร์บล็อก popup — อนุญาต popup เพื่อพิมพ์ใบวางบิล','warning'); return; }
   w.document.write('<html><head><title>ใบวางบิล '+n.noteId+'</title><meta charset="utf-8"><style>body{font-family:"IBM Plex Sans Thai",sans-serif;padding:24px;color:#000}h2{margin:0}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #999;padding:6px 8px;font-size:14px}th{background:#eee}.tot{text-align:right;font-size:18px;font-weight:bold;margin-top:10px}</style></head><body>'
    +'<h2>ใบวางบิล / ใบแจ้งหนี้</h2><div>'+(n.entity||'ห้างหุ้นส่วนจำกัด เคแอลเอช')+'</div><hr>'
    +'<div>เลขที่: '+n.noteId+' &nbsp; วันที่: '+n.date+'</div>'

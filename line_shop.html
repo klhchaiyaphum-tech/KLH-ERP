@@ -334,6 +334,7 @@ var S = {
 window.onload = function(){
   // จำสมาชิกเดิม (ไม่ต้อง login ใหม่ทุกครั้งที่เข้า Rich Menu)
   try { var sv=JSON.parse(localStorage.getItem('klh_line_member')||'null'); if(sv&&(sv.phone||sv.custId)){ S.member=sv; S.priceLevel=sv.priceLevel||'retail'; } } catch(e){}
+  loadCart(); updateCartBar();   // กู้ตะกร้าที่ค้างไว้ (กันเลือกของแล้วหายเมื่อกลับเข้ามาใหม่)
   routeByTo();          // นำทางทันที ไม่รอ config (กันค้างหน้า login)
   if (window.liff) {
     liff.init({ liffId: LIFF_ID }).then(function(){
@@ -355,10 +356,11 @@ function autoLoginByUid(){
   }).withFailureHandler(function(){}).lineFindMember('', S.profile.userId);
 }
 function saveMember(){ try { if (S.member) localStorage.setItem('klh_line_member', JSON.stringify(S.member)); } catch(e){} }
+function phonePad(p){ var s=String(p||'').replace(/[^0-9]/g,''); if(s.length===9) s='0'+s; return s; }
 function setMemberHeader(){
   var h=document.getElementById('hdMember'); if(!h) return;
   if (!S.member){ h.textContent='ลูกค้าทั่วไป'; return; }
-  var nm=S.member.name||S.member.phone||'';
+  var nm=S.member.name||phonePad(S.member.phone)||'';
   h.textContent=(S.member.custId?'สมาชิก: ':'')+nm+(S.member.custId?(' · '+S.priceLevel):'');
   if (S.member.custId){ var mb=document.getElementById('memBtn'); if(mb) mb.style.display='grid'; }
   var ni=document.getElementById('nameInp'); if(ni && S.member.name && !ni.value) ni.value=S.member.name;
@@ -490,7 +492,10 @@ function updateCartBar(){
   if (n>0){ bar.style.display='flex'; badge.style.display='grid'; badge.textContent=n;
     document.getElementById('cbTotal').textContent='฿'+fmt(t); document.getElementById('cbCount').textContent=n+' ชิ้น'; }
   else { bar.style.display='none'; badge.style.display='none'; }
+  saveCart();
 }
+function saveCart(){ try{ localStorage.setItem('klh_line_cart', JSON.stringify(S.cart||{})); }catch(e){} }
+function loadCart(){ try{ var c=JSON.parse(localStorage.getItem('klh_line_cart')||'{}'); if(c&&typeof c==='object') S.cart=c; }catch(e){} }
 function goCart(){
   var arr=cartArr();
   if (!arr.length){ toast('ตะกร้าว่าง'); return; }
@@ -601,6 +606,7 @@ function finishOrder(){
     ? '<div style="margin-top:8px;color:#B45309;font-weight:700">💰 ชำระเงิน '+(S.delivery==='delivery'?'ปลายทางตอนรับของ':'ที่ร้านตอนรับของ')+'</div>'
     : '';
   document.getElementById('doneMsg').innerHTML = 'เลขออเดอร์ <b>#'+S.order.orderId+'</b><br>'+line2+' ขอบคุณค่ะ 🙏'+pay;
+  S.cart={}; saveCart();   // เคลียร์ตะกร้าหลังสั่งสำเร็จ
   show('scrDone');
 }
 function restart(){ S.cart={}; S.order=null; updateCartBar(); show('scrBrowse'); renderProducts(); }

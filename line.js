@@ -16,15 +16,34 @@ function getLineShopConfig() {
       ok: true,
       company:    cfg.COMPANY_NAME || 'KLH',
       logoUrl:    cfg.LOGO_URL || '',
-      phone:      cfg.SHOP_PHONE || cfg.PHONE || cfg.TEL || '',
-      email:      cfg.SHOP_EMAIL || cfg.EMAIL || '',
-      address:    cfg.SHOP_ADDRESS || cfg.ADDRESS || '',
+      phone:      cfg.SHOP_PHONE || cfg.PHONE || cfg.TEL || '044-811-040',
+      email:      cfg.SHOP_EMAIL || cfg.EMAIL || 'KLH.CHAIYAPHUM@GMAIL.COM',
+      address:    cfg.SHOP_ADDRESS || cfg.ADDRESS || 'หน้าตลาดสดเทศบาล 1 ชัยภูมิ',
       ktbQr:      KTB_QR_STATIC_LINE,
       categories: getPosCategories()
     };
   } catch (e) {
     return { ok: false, msg: e.message, ktbQr: KTB_QR_STATIC_LINE, categories: [] };
   }
+}
+
+// เขียนข้อมูลติดต่อร้านลง CONFIG (รันครั้งเดียวใน GAS Editor เพื่อบันทึกถาวร)
+function setupShopContact() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('CONFIG');
+  if (!s) { s = ss.insertSheet('CONFIG'); s.getRange(1,1,1,2).setValues([['KEY','VALUE']]); }
+  var want = {
+    SHOP_PHONE:   '044-811-040',
+    SHOP_EMAIL:   'KLH.CHAIYAPHUM@GMAIL.COM',
+    SHOP_ADDRESS: 'หน้าตลาดสดเทศบาล 1 ชัยภูมิ'
+  };
+  var rows = s.getDataRange().getValues();
+  Object.keys(want).forEach(function(k){
+    var found = false;
+    for (var i=1;i<rows.length;i++){ if (String(rows[i][0])===k){ s.getRange(i+1,2).setValue(want[k]); found=true; break; } }
+    if (!found) s.appendRow([k, want[k]]);
+  });
+  return 'CONFIG updated: ' + JSON.stringify(want);
 }
 
 // ค้นหาสินค้า (ใช้ posSearchProducts เดิม) — คลัง W1
@@ -40,13 +59,14 @@ function lineSearchProducts(query, catFilter) {
 // หาสมาชิกจากเบอร์โทร (CUSTOMER_MASTER: 0 CUST_ID, 1 NAME, 2 PHONE, 5 PRICE_LEVEL, 10 ENTITY)
 function lineFindMember(phone, lineUid) {
   try {
-    var p = String(phone || '').replace(/[^0-9]/g, '');
+    function normPh(x){ return String(x || '').replace(/[^0-9]/g, '').replace(/^0+/, ''); }
+    var p = normPh(phone);
     if (p.length < 6) return { ok: false, msg: 'เบอร์โทรไม่ถูกต้อง' };
     var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName('CUSTOMER_MASTER');
     if (!s) return { ok: false, msg: 'ไม่พบ CUSTOMER_MASTER' };
     var rows = s.getDataRange().getValues();
     for (var i = 1; i < rows.length; i++) {
-      var ph = String(rows[i][2] || '').replace(/[^0-9]/g, '');
+      var ph = normPh(rows[i][2]);
       if (ph && ph === p) {
         // ผูก LINE UID ลง NOTE col ถ้ายังไม่มี (เก็บแบบเบาๆ)
         return {

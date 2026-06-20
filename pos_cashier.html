@@ -468,6 +468,8 @@ window.onload = function() {
   updateClock(); setInterval(updateClock, 30000);
   updateShiftChip();
   buildKeypad();
+  // มาจากหน้า Customer/AR: ?ar=CUST-xxxx → เปิดรับชำระหนี้อัตโนมัติ
+  try { var _ar=new URLSearchParams(location.search).get('ar'); if(_ar){ _arPrefill=_ar; setTimeout(openArCollect, 700); } } catch(e){}
   google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
   // render static QR ก่อน (ยอด 0 = ไม่ระบุยอด)
   renderKtbQr(_ktbQrData, 0);
@@ -665,6 +667,7 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 // ── รับชำระหนี้ลูกค้า (AR) ที่เคาน์เตอร์ ─────────────────────
 var _arOpen = [];
+var _arPrefill = '';
 function openArCollect(){
   showLoad('โหลดลูกหนี้...');
   google.script.run.withSuccessHandler(function(res){
@@ -678,8 +681,11 @@ function openArCollect(){
         +'<div id="arlist" style="max-height:54vh;overflow:auto;text-align:left"></div>',
       width:540, confirmButtonText:'ปิด',
       didOpen:function(){
-        renderArList('');
-        var q=document.getElementById('arq'); if(q) q.addEventListener('input', function(e){ renderArList(e.target.value); });
+        var q=document.getElementById('arq');
+        if(_arPrefill && q){ q.value=_arPrefill; }
+        renderArList(_arPrefill||'');
+        _arPrefill='';
+        if(q) q.addEventListener('input', function(e){ renderArList(e.target.value); });
       }
     });
   }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).getArByCustomer('','');

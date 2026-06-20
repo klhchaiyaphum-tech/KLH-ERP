@@ -664,22 +664,8 @@ function updateCustomer(custId, data) {
   } catch(e) { return { ok:false, msg:e.message }; }
 }
 
-function getAllCustomers() {
-  try {
-    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_CUST);
-    if (!s || s.getLastRow() <= 1) return [];
-    return s.getDataRange().getValues().slice(1)
-      .filter(function(r){ return r[0]; })
-      .map(function(r){
-        var outstanding = getCustomerOutstanding_(String(r[0]));
-        return {
-          custId: r[0], name: r[1], phone: r[2], address: r[3], taxId: r[4],
-          priceLevel: r[5], creditLimit: Number(r[6])||0, creditDays: Number(r[7])||0,
-          outstanding: outstanding, note: r[9], entity: r[10]
-        };
-      });
-  } catch(e) { return []; }
-}
+// getAllCustomers() ย้ายไปรวมศูนย์ที่ Code.js (คำนวณ outstanding + arCount + nearestDue สดจาก AR_LEDGER)
+// อย่านิยามซ้ำที่นี่ — ฟังก์ชันชื่อซ้ำใน GAS จะทับกันแบบคาดเดายาก
 
 // ══════════════════════════════════════════════════════════════
 //  AR LEDGER (ลูกหนี้การค้า)
