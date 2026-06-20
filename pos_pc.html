@@ -6,7 +6,17 @@
 <title>KLH POS PC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style id="klh-swal">
+.swal2-popup{border-radius:28px!important;background:rgba(255,255,255,.97)!important;backdrop-filter:blur(8px);box-shadow:0 18px 55px rgba(60,40,25,.22)!important;}
+.swal2-container.swal2-backdrop-show{background:rgba(58,51,44,.32)!important;}
+.swal2-title{font-weight:800!important;}
+.swal2-actions{gap:10px;}
+.swal2-styled{border-radius:999px!important;font-weight:700!important;box-shadow:none!important;padding:10px 26px!important;}
+.swal2-input,.swal2-textarea,.swal2-select{border-radius:14px!important;}
+.swal2-icon{border-radius:50%!important;}
+.swal2-toast{border-radius:18px!important;}
+</style>
 <style>
 /* ── Design tokens (handoff: pos.css + desktop.css) ── */
 :root{
@@ -206,6 +216,7 @@ input{font-family:inherit;}
     <!-- Order tabs -->
     <div style="display:flex;align-items:flex-end;gap:6px;flex:1;min-width:0;overflow-x:auto;padding-top:6px" id="orderTabs"></div>
     <!-- Right side -->
+    <button id="lineOrdBtn" onclick="openLineBoard()" title="ออเดอร์จาก LINE — พิมพ์ใบจัด" style="position:relative;padding:7px 13px;border-radius:10px;border:1px solid #CBE6D1;background:#EAF7EE;color:#1E7A3A;font-size:13px;font-weight:700;flex-shrink:0;cursor:pointer">📱 ออเดอร์ไลน์<span id="lineOrdBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#06C755;color:#fff;border-radius:999px;min-width:19px;height:19px;font-size:11px;line-height:19px;text-align:center;padding:0 4px">0</span></button>
     <div class="devchip"><span class="ld"></span>Tigercashbox</div>
     <div style="text-align:right;line-height:1.2;flex-shrink:0">
       <div style="font-size:12.5px;font-weight:600">แคชเชียร์</div>
@@ -485,11 +496,72 @@ window.onload = function() {
     })
     .withFailureHandler(function(){ hideLoad(); loadProducts('','all'); })
     .getPosPageData();
+  refreshLineBoard();
+  setInterval(refreshLineBoard, 20000);
 };
 
 function goHome() {
   if (_execUrl) window.top.location.href = _execUrl;
   else window.location.href = '?page=index';
+}
+
+// ── ออเดอร์จาก LINE (จัดของ + พิมพ์ใบจัด) ─────────────────────
+function escPc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+var _seenLinePc = null;
+function pcBeep(){ try{var a=new (window.AudioContext||window.webkitAudioContext)();var o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sine';o.frequency.value=880;g.gain.setValueAtTime(0.15,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.start();o.stop(a.currentTime+0.4);}catch(e){} }
+function refreshLineBoard(){
+  google.script.run.withSuccessHandler(function(res){
+    var all=(res&&res.orders)||[];
+    var ids=all.filter(function(o){return /LINE/i.test(o.source||'');}).map(function(o){return o.orderId;});
+    var badge=document.getElementById('lineOrdBadge');
+    if(badge){ if(ids.length){ badge.style.display=''; badge.textContent=ids.length; } else badge.style.display='none'; }
+    if(_seenLinePc===null){ _seenLinePc=ids; return; }
+    var fresh=ids.filter(function(id){return _seenLinePc.indexOf(id)<0;});
+    _seenLinePc=ids;
+    if(fresh.length){ pcBeep(); Swal.fire({icon:'success',title:'📱 ออเดอร์ไลน์ใหม่ '+fresh.length+' รายการ',toast:true,position:'top-end',timer:3500,showConfirmButton:false}); }
+  }).withFailureHandler(function(){}).getOrderBoard();
+}
+function openLineBoard(){
+  google.script.run.withSuccessHandler(function(res){
+    var line=((res&&res.orders)||[]).filter(function(o){return /LINE/i.test(o.source||'');});
+    var html;
+    if(!line.length){ html='<div style="padding:24px;color:#888">— ไม่มีออเดอร์ไลน์ค้าง —</div>'; }
+    else { html='<div style="display:flex;flex-direction:column;gap:10px;text-align:left;max-height:62vh;overflow:auto;padding:2px">'
+      + line.map(function(o){
+          var paid=o.payStatus==='PAID';
+          var st = paid ? (o.delivery==='delivery'?'จ่ายแล้ว · รอจัดส่ง':'จ่ายแล้ว · รอรับ') : 'รอชำระ (จ่ายที่ร้าน)';
+          var fl = o.fulfill==='PREPARING'?' · กำลังจัด':(o.fulfill==='READY'?' · จัดเสร็จ':'');
+          return '<div style="border:1px solid #ECE6DA;border-radius:16px;padding:12px;background:rgba(255,255,255,.75)">'
+            +'<div style="font-weight:800">'+escPc(o.customerName||'ลูกค้า')+' <span style="color:#06C755">📱</span></div>'
+            +'<div style="font-size:12px;color:#888">'+escPc(o.orderId)+' · '+escPc(o.time||o.date)+' · '+st+fl+'</div>'
+            +'<div style="font-weight:800;color:#E2502B;margin:5px 0">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
+            +'<div style="display:flex;gap:8px">'
+            +'<button class="swal2-styled" style="background:#fff;color:#3A332C;border:1px solid #ECE6DA;margin:0;padding:8px 16px" onclick="pcPrintPick(\''+o.orderId+'\')">🖨️ พิมพ์ใบจัด</button>'
+            +'<button class="swal2-styled" style="background:#1E7A3A;margin:0;padding:8px 16px" onclick="pcMarkReady(\''+o.orderId+'\')">✅ จัดเสร็จ</button>'
+            +'</div></div>';
+        }).join('') + '</div>'; }
+    Swal.fire({ title:'📱 ออเดอร์จาก LINE', html:html, width:500, confirmButtonText:'ปิด' });
+  }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).getOrderBoard();
+}
+function pcPrintPick(orderId){
+  google.script.run.withSuccessHandler(function(res){
+    if(!res||!res.ok){ Swal.fire('Error',(res&&res.msg)||'โหลดไม่สำเร็จ','error'); return; }
+    var o=res.order, items=o.items||[];
+    var rows=items.map(function(it){ return '<tr><td>'+escPc(it.name||it.barcode)+'</td><td style="text-align:center;white-space:nowrap">x'+it.qty+' '+escPc(it.unit||'')+'</td><td style="width:46px">____</td></tr>'; }).join('');
+    var w=window.open('','_blank','width=400,height=640');
+    w.document.write('<html><head><title>ใบจัด '+escPc(orderId)+'</title><style>body{font-family:sans-serif;padding:12px}h3{margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:6px}td{border-bottom:1px solid #ccc;padding:7px 3px;font-size:14px}</style></head><body>'
+      +'<h3>ใบจัดสินค้า</h3><div>'+escPc(orderId)+'</div><div>'+escPc(o.customerName||'')+'</div><div>'+(o.delivery==='delivery'?'🚚 จัดส่ง — '+escPc(o.note||''):'🏪 รับที่ร้าน')+'</div>'
+      +'<table>'+rows+'</table><div style="margin-top:8px">รวม '+items.length+' รายการ</div>'
+      +'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
+    w.document.close();
+    google.script.run.withSuccessHandler(function(){ refreshLineBoard(); }).withFailureHandler(function(){}).setOrderFulfill(orderId,'PREPARING');
+  }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).getOrderForPick(orderId);
+}
+function pcMarkReady(orderId){
+  google.script.run.withSuccessHandler(function(res){
+    if(res&&res.ok){ Swal.fire({icon:'success',title:'จัดเสร็จแล้ว',timer:1000,showConfirmButton:false}); refreshLineBoard(); setTimeout(openLineBoard,1050); }
+    else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
+  }).withFailureHandler(function(e){ Swal.fire('Error',''+e,'error'); }).setOrderFulfill(orderId,'READY');
 }
 function updateClock() {
   var d = new Date();

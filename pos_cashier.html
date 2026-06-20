@@ -7,6 +7,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style id="klh-swal">
+.swal2-popup{border-radius:28px!important;background:rgba(255,255,255,.97)!important;backdrop-filter:blur(8px);box-shadow:0 18px 55px rgba(60,40,25,.22)!important;}
+.swal2-container.swal2-backdrop-show{background:rgba(58,51,44,.32)!important;}
+.swal2-title{font-weight:800!important;}
+.swal2-actions{gap:10px;}
+.swal2-styled{border-radius:999px!important;font-weight:700!important;box-shadow:none!important;padding:10px 26px!important;}
+.swal2-input,.swal2-textarea,.swal2-select{border-radius:14px!important;}
+.swal2-icon{border-radius:50%!important;}
+.swal2-toast{border-radius:18px!important;}
+</style>
 <!-- qrcode via Google Charts — ไม่ต้องการ library -->
 <style>
 /* ── Design tokens — same as POS PC ── */
@@ -63,8 +73,8 @@ input{font-family:inherit;}
 }
 .loaded-tab .rm{background:none;border:none;color:var(--brand-2);cursor:pointer;font-size:11px;opacity:.7;}
 
-/* Items area (loaded order) — capped so the board stays visible */
-.items-area{flex:0 1 auto;max-height:34vh;overflow-y:auto;padding:8px 16px;}
+/* Items area (loaded order) — grows to fill the top half */
+.items-area{flex:1 1 auto;min-height:96px;overflow-y:auto;padding:8px 16px;}
 .items-area::-webkit-scrollbar{width:8px;}
 .items-area::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;}
 .item-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
@@ -74,8 +84,8 @@ input{font-family:inherit;}
 .item-row .ir-total{font-weight:700;font-size:13.5px;min-width:70px;text-align:right;flex-shrink:0;}
 .empty-orders{text-align:center;color:var(--ink-3);padding:16px 0;font-size:13px;line-height:1.7;}
 
-/* Pending orders list (board) — fills remaining height, columns scroll inside */
-.pending-list{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--line);overflow:hidden;background:var(--surface-2);}
+/* Pending orders list (board) — capped under half screen, columns scroll inside */
+.pending-list{flex:0 0 auto;height:44vh;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--line);overflow:hidden;background:var(--surface-2);}
 .pending-list #pendingList{flex:1 1 auto;min-height:0;overflow:hidden;}
 .pending-hdr{flex-shrink:0;padding:8px 16px;font-size:12px;font-weight:700;color:var(--ink-3);background:var(--surface);border-bottom:1px solid var(--line);}
 
