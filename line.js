@@ -43,6 +43,36 @@ function pushLineGroup_(text) {
   } catch (e) { Logger.log('pushLineGroup_ ' + e); }
 }
 
+// ทดสอบส่งข้อความเข้ากลุ่ม + บอกผลตรวจ (เรียกผ่าน API ได้)
+function testLinePush() {
+  try {
+    var cfg = getConfig();
+    var token = cfg.LINE_CHANNEL_TOKEN;
+    var gid   = cfg.LINE_GROUP_ID;
+    var out = {
+      ok: true,
+      tokenFound: !!token,
+      tokenPreview: token ? (String(token).slice(0,12) + '...') : '',
+      groupIdFromConfig: gid || '',
+      lineKeysInConfig: Object.keys(cfg).filter(function(k){ return String(k).indexOf('LINE') >= 0; })
+    };
+    if (!token) { out.ok = false; out.msg = '❌ ไม่พบ LINE_CHANNEL_TOKEN ใน CONFIG'; return out; }
+    var g = gid || 'C9936ac4af81efc524493fe83a0a7b328';
+    out.sentTo = g;
+    var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method:'post',
+      headers:{ 'Authorization':'Bearer '+token, 'Content-Type':'application/json' },
+      payload: JSON.stringify({ to:g, messages:[{ type:'text', text:'🔔 ทดสอบแจ้งเตือน KLH เข้ากลุ่ม\n'+ Utilities.formatDate(new Date(),'Asia/Bangkok','dd/MM/yyyy HH:mm:ss') }] }),
+      muteHttpExceptions:true
+    });
+    out.httpCode = resp.getResponseCode();
+    out.lineResponse = resp.getContentText();
+    out.sent = (out.httpCode === 200);
+    if (!out.sent) out.ok = false;
+    return out;
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 // ตั้งกลุ่ม LINE สำหรับแจ้งเตือน (รันครั้งเดียวใน GAS Editor) — เปลี่ยนทุกการแจ้งเตือนให้เข้าห้องกลุ่ม
 function setLineNotifyGroup() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
