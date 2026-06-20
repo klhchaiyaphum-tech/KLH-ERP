@@ -578,7 +578,7 @@ function doPost(e) {
                    // order lifecycle (POS-PC / Cashier board)
                    'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
-                   'getArByCustomer','payArEntry','getArAlerts','receiveArPayment'];
+                   'getArByCustomer','payArEntry','getArAlerts','receiveArPayment','getSalesHistory'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {

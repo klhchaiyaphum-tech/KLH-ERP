@@ -74,6 +74,31 @@ function getShiftSummary(dateStr) {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
+// ── ประวัติการขายที่เสร็จแล้ว (SALES_HEADER) สำหรับฝั่งร้านดูที่แคชเชียร์ ──
+function getSalesHistory(dateStr, limit) {
+  try {
+    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_SALH);
+    if (!s || s.getLastRow() <= 1) return { ok:true, items:[], total:0, count:0 };
+    var tz = 'Asia/Bangkok';
+    function sd(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v||'').slice(0,10); }
+    function st(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'HH:mm') : String(v||'').slice(0,5); }
+    var rows = s.getRange(2, 1, s.getLastRow()-1, 15).getValues();
+    var out = rows.map(function(r){
+      var m = String(r[10]||'').toUpperCase();
+      var mLabel = (m.indexOf('CREDIT')>=0) ? 'เงินเชื่อ' : (m.indexOf('CASH')>=0) ? 'เงินสด' : 'โอน/QR';
+      var sid = String(r[0]||'');
+      return { saleId:sid, date:sd(r[2]), time:st(r[3]), customer:String(r[6]||'ลูกค้าทั่วไป'),
+               total:Number(r[9])||0, method:mLabel, note:String(r[14]||''),
+               isAr: sid.indexOf('ARR-')===0 };
+    });
+    if (dateStr) out = out.filter(function(x){ return x.date === dateStr; });
+    out = out.reverse();
+    var total = out.reduce(function(t,x){ return t + x.total; }, 0), count = out.length;
+    if (limit && out.length > limit) out = out.slice(0, limit);
+    return { ok:true, items:out, total:total, count:count };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 // ── ดึงรายการสินค้าของออเดอร์ (ทุกสถานะ) สำหรับพิมพ์ใบจัดสินค้า ──
 function getOrderForPick(orderId) {
   try {
