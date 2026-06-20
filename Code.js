@@ -224,6 +224,26 @@ function saveReceiptConfig(data) {
   } catch(e) { return { ok:false, msg:String(e) }; }
 }
 
+// ── ตัวตรวจระบบชั่วคราว (เช็ค GEMINI_API_KEY + triggers) ──
+function diagSystemCheck() {
+  try {
+    var cfg = getConfig();
+    var keys = Object.keys(cfg);
+    var has = function(k){ return keys.indexOf(k) >= 0 && String(cfg[k]||'').length > 0; };
+    var triggers = ScriptApp.getProjectTriggers().map(function(t){ return t.getHandlerFunction(); });
+    return {
+      ok: true,
+      gemini: has('GEMINI_API_KEY'),
+      lineToken: has('LINE_CHANNEL_TOKEN'),
+      lineGroupId: cfg.LINE_GROUP_ID || '(ไม่มี)',
+      receiptStore: cfg.RECEIPT_STORE || '(ใช้ default)',
+      shopPhone: cfg.SHOP_PHONE || '(ใช้ default)',
+      configKeys: keys,
+      triggers: triggers
+    };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 function getDropdownData() {
   try {
     const cfg = getConfig();
