@@ -607,25 +607,33 @@ function setQrImg(text){
     });
   } else { img.src=fb; }
 }
-// บันทึก QR ลงอัลบั้ม — ปุ่มดาวน์โหลด (data URL) + กดค้างบันทึก
+// บันทึก QR ลงอัลบั้ม — ใช้ Web Share (แผ่นแชร์ระบบ → "บันทึกรูปภาพ") กลับหน้าเดิมเอง ไม่หลุด LIFF
 function saveQr(){
   var url=(document.getElementById('qrImg')||{}).src; if(!url) return;
-  var fname='KLH-QR-'+((S.order&&S.order.orderId)||(S.arPay&&S.arPay.arId)||'pay')+'.png';
-  // ดาวน์โหลดตรง (ได้เมื่อเป็น data URL ที่สร้างในเครื่อง)
-  if(url.indexOf('data:')===0){
-    try{ var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }catch(e){}
+  if(url.indexOf('data:')===0 && navigator.share && navigator.canShare){
+    try{
+      var arr=url.split(','), mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/png';
+      var bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
+      while(n--) u8[n]=bstr.charCodeAt(n);
+      var file=new File([u8], 'KLH-QR.png', {type:mime});
+      if(navigator.canShare({files:[file]})){
+        navigator.share({files:[file], title:'QR ชำระเงิน KLH'}).catch(function(){});
+        return;   // ระบบจัดการ → เลือก "บันทึกรูปภาพ" → เด้งกลับหน้าเดิม
+      }
+    }catch(e){}
   }
+  qrSaveFallback(url);   // อุปกรณ์ไม่รองรับแชร์ไฟล์ → กดค้างบันทึก
+}
+function qrSaveFallback(url){
   var ov=document.getElementById('qrSaveOv');
   if(!ov){
     ov=document.createElement('div'); ov.id='qrSaveOv';
-    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px';
-    ov.addEventListener('click', function(e){ if(e.target===ov) ov.style.display='none'; });
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px';
     document.body.appendChild(ov);
   }
-  ov.innerHTML='<div style="color:#fff;font-size:16px;text-align:center;font-weight:700;line-height:1.5">📷 กดค้างที่รูป QR<br>แล้วเลือก “บันทึกรูปภาพ” ลงอัลบั้ม</div>'
-    +'<img src="'+url+'" style="width:80vw;max-width:340px;background:#fff;padding:12px;border-radius:16px">'
-    +'<a href="'+url+'" download="'+fname+'" style="background:#06C755;color:#fff;text-decoration:none;border-radius:999px;padding:13px 30px;font-size:15px;font-weight:700">⬇️ ดาวน์โหลดรูป</a>'
-    +'<button style="background:#fff;border:none;border-radius:999px;padding:11px 30px;font-size:15px;font-weight:700" onclick="document.getElementById(\'qrSaveOv\').style.display=\'none\'">ปิด</button>';
+  ov.innerHTML='<div style="color:#fff;font-size:16px;text-align:center;font-weight:700;line-height:1.5">กดค้างที่รูป → เลือก “บันทึกรูปภาพ”</div>'
+    +'<img src="'+url+'" style="width:78vw;max-width:330px;background:#fff;padding:12px;border-radius:16px">'
+    +'<button style="background:#06C755;color:#fff;border:none;border-radius:999px;padding:13px 36px;font-size:15px;font-weight:700" onclick="document.getElementById(\'qrSaveOv\').style.display=\'none\'">← กลับไปแนบสลิป</button>';
   ov.style.display='flex';
 }
 function onSlip(input){
