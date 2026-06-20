@@ -57,6 +57,9 @@ tbody td.r{text-align:right;}
 .status-partial{background:#FFF3E0;color:var(--orange);border-radius:10px;padding:2px 8px;font-size:.75rem;}
 .status-paid{background:#E8F5E9;color:var(--green);border-radius:10px;padding:2px 8px;font-size:.75rem;}
 .status-overdue{background:#FCE4EC;color:#880E4F;border-radius:10px;padding:2px 8px;font-size:.75rem;}
+.due-over{background:#FCE4EC;color:#880E4F;border-radius:10px;padding:1px 7px;font-size:.7rem;font-weight:600;}
+.due-today{background:#FFF3E0;color:#E65100;border-radius:10px;padding:1px 7px;font-size:.7rem;font-weight:600;}
+.due-soon{background:#FFFDE7;color:#9A7D00;border-radius:10px;padding:1px 7px;font-size:.7rem;font-weight:600;}
 .count-bar{padding:7px 14px;font-size:.78rem;color:#888;background:#fafafa;border-top:1px solid #eee;}
 #overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;}
 .spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
@@ -164,6 +167,19 @@ var _execUrl = '';
 var _allCust = [], _allAr = [];
 var _codeMap = {};
 
+// ป้ายเตือนครบกำหนด: เกิน / ครบวันนี้ / ใกล้ครบ (≤7 วัน)
+function arDueAlert(dueStr){
+  if(!dueStr) return null;
+  var d = new Date(String(dueStr).slice(0,10)+'T00:00:00');
+  if(isNaN(d)) return null;
+  var t = new Date(); t.setHours(0,0,0,0);
+  var diff = Math.round((d - t)/86400000);
+  if(diff < 0)  return {cls:'due-over',  label:'เกิน '+(-diff)+' วัน'};
+  if(diff === 0)return {cls:'due-today', label:'ครบวันนี้'};
+  if(diff <= 7) return {cls:'due-soon',  label:'อีก '+diff+' วัน'};
+  return null;
+}
+
 window.onload = function() {
   google.script.run.withSuccessHandler(function(u){ _execUrl=u||''; }).withFailureHandler(function(){}).getExecUrl();
   loadCustomers();
@@ -204,7 +220,11 @@ function renderCustomers(rows) {
       +'<td>'+r.phone+'</td>'
       +'<td>'+lvl+'</td>'
       +'<td class="r">'+(r.creditLimit>0?'฿'+r.creditLimit.toLocaleString('th-TH'):'—')+'</td>'
-      +'<td class="r" style="'+ovCls+'">'+(r.outstanding>0?'฿'+r.outstanding.toLocaleString('th-TH'):'—')+'</td>'
+      +'<td class="r" style="'+ovCls+'">'+(r.outstanding>0
+          ? '฿'+r.outstanding.toLocaleString('th-TH')
+            +'<div style="font-size:.7rem;color:#999;font-weight:400;margin-top:2px">'+(r.arCount||0)+' บิล'
+            +((function(){var a=arDueAlert(r.nearestDue);return a?' <span class="'+a.cls+'">'+a.label+'</span>':'';})())+'</div>'
+          : '—')+'</td>'
       +'<td>'+(r.creditDays||0)+' วัน</td>'
       +'<td style="white-space:nowrap">'
       +  '<button class="btn btn-sm btn-edit" onclick="openEditCust(\''+r.custId+'\')"><i class="bi bi-pencil"></i></button> '
@@ -321,7 +341,8 @@ function renderAr(rows) {
       +'<td style="font-weight:500">'+r.custName+'</td>'
       +'<td style="font-size:.78rem;color:#666">'+r.entity+'</td>'
       +'<td>'+r.invDate+'</td>'
-      +'<td style="color:'+(status==='OVERDUE'?'var(--red)':'inherit')+'">'+r.dueDate+'</td>'
+      +'<td style="color:'+(status==='OVERDUE'?'var(--red)':'inherit')+'">'+r.dueDate
+        +((function(){ if(status==='PAID')return''; var a=arDueAlert(r.dueDate); return a?'<br><span class="'+a.cls+'">'+a.label+'</span>':''; })())+'</td>'
       +'<td class="r">฿'+r.amount.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'
       +'<td class="r" style="color:var(--green)">฿'+r.paidAmt.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'
       +'<td class="r" style="font-weight:600">฿'+r.balance.toLocaleString('th-TH',{minimumFractionDigits:2})+'</td>'

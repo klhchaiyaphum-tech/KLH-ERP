@@ -694,7 +694,7 @@ function renderArList(q){
       +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(a.custName||a.custId)+'</div>'
       +'<div style="font-size:11px;color:#888">'+esc(a.arId)+' · บิล '+esc(a.saleId||'-')+' · ครบ '+esc(a.dueDate||'-')+'</div></div>'
       +'<div style="font-weight:800;color:#D9512B;white-space:nowrap">฿'+Number(a.balance).toLocaleString('th-TH')+'</div>'
-      +'<button class="swal2-styled" style="margin:0;background:#1E7A3A;padding:8px 14px" onclick="arCollectPay(\''+a.arId+'\')">รับชำระ</button>'
+      +'<button class="swal2-styled" style="margin:0;background:#1E7A3A;color:#fff;padding:8px 14px" onclick="arCollectPay(\''+a.arId+'\')">รับชำระ</button>'
       +'</div>';
   }).join('');
 }

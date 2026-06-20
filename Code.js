@@ -578,7 +578,7 @@ function doPost(e) {
                    // order lifecycle (POS-PC / Cashier board)
                    'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
-                   'getArByCustomer','payArEntry'];
+                   'getArByCustomer','payArEntry','getArAlerts'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {
@@ -818,15 +818,33 @@ function updateCustomer(custId, data) {
 
 function getAllCustomers() {
   try {
-    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName('CUSTOMER_MASTER');
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var s = ss.getSheetByName('CUSTOMER_MASTER');
     if (!s || s.getLastRow() <= 1) return [];
+    // ── รวมยอดลูกหนี้สดจาก AR_LEDGER ต่อรหัสลูกค้า ──
+    var arMap = {};
+    var ar = ss.getSheetByName('AR_LEDGER');
+    var today = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd');
+    if (ar && ar.getLastRow() > 1) {
+      ar.getRange(2,1,ar.getLastRow()-1,12).getValues().forEach(function(r){
+        var cid = String(r[2]||''); if(!cid) return;
+        var bal = Number(r[9])||0; if (bal <= 0) return;
+        var due = r[6] instanceof Date ? Utilities.formatDate(r[6],'Asia/Bangkok','yyyy-MM-dd') : String(r[6]||'').slice(0,10);
+        var m = arMap[cid] || (arMap[cid]={out:0,cnt:0,due:'',overdue:0});
+        m.out += bal; m.cnt += 1;
+        if (!m.due || (due && due < m.due)) m.due = due;
+        if (due && due < today) m.overdue += bal;
+      });
+    }
     return s.getDataRange().getValues().slice(1)
       .filter(function(r){ return r[0]; })
       .map(function(r){
+        var m = arMap[String(r[0])] || {out:0,cnt:0,due:'',overdue:0};
         return {
           custId: r[0], name: r[1], phone: r[2], address: r[3], taxId: r[4],
           priceLevel: r[5], creditLimit: Number(r[6])||0, creditDays: Number(r[7])||0,
-          outstanding: Number(r[8])||0, note: r[9], entity: r[10]
+          outstanding: m.out, arCount: m.cnt, nearestDue: m.due, overdue: m.overdue,
+          note: r[9], entity: r[10]
         };
       });
   } catch(e) { return []; }
@@ -941,4 +959,30 @@ function getArSummary(entity, status) {
     });
     return { ok:true, total:total, overdue:overdue, count:rows.length };
   } catch(e) { return { ok:false, msg:e.message }; }
+}
+
+// ── แจ้งเตือนครบกำหนดลูกหนี้ (สำหรับ Dashboard) — ใกล้ครบ ≤7 วัน / ครบวันนี้ / เกินกำหนด ──
+function getArAlerts() {
+  try {
+    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName('AR_LEDGER');
+    var empty = { ok:true, overdue:[], dueToday:[], dueSoon:[], overdueAmt:0, dueTodayAmt:0, dueSoonAmt:0 };
+    if (!s || s.getLastRow() <= 1) return empty;
+    var tz='Asia/Bangkok';
+    var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    function ds(v){ return v instanceof Date ? Utilities.formatDate(v,tz,'yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var overdue=[], dueToday=[], dueSoon=[];
+    s.getRange(2,1,s.getLastRow()-1,12).getValues().forEach(function(r){
+      var bal=Number(r[9])||0; if(bal<=0) return;
+      var due=ds(r[6]); if(!due) return;
+      var diff = Math.round((new Date(due+'T00:00:00') - new Date(today+'T00:00:00'))/86400000);
+      if(isNaN(diff)) return;
+      var item={ arId:String(r[0]||''), saleId:String(r[1]||''), custId:String(r[2]||''), custName:String(r[3]||''), dueDate:due, balance:bal, daysLeft:diff };
+      if(diff<0) overdue.push(item);
+      else if(diff===0) dueToday.push(item);
+      else if(diff<=7) dueSoon.push(item);
+    });
+    function sum(a){ return a.reduce(function(t,x){return t+x.balance;},0); }
+    return { ok:true, overdue:overdue, dueToday:dueToday, dueSoon:dueSoon,
+             overdueAmt:sum(overdue), dueTodayAmt:sum(dueToday), dueSoonAmt:sum(dueSoon) };
+  } catch(e) { return { ok:false, msg:String(e) }; }
 }

@@ -537,7 +537,7 @@ function openLineBoard(){
             +'<div style="font-weight:800;color:#E2502B;margin:5px 0">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
             +'<div style="display:flex;gap:8px">'
             +'<button class="swal2-styled" style="background:#fff;color:#3A332C;border:1px solid #ECE6DA;margin:0;padding:8px 16px" onclick="pcPrintPick(\''+o.orderId+'\')">🖨️ พิมพ์ใบจัด</button>'
-            +'<button class="swal2-styled" style="background:#1E7A3A;margin:0;padding:8px 16px" onclick="pcMarkReady(\''+o.orderId+'\')">✅ จัดเสร็จ</button>'
+            +'<button class="swal2-styled" style="background:#1E7A3A;color:#fff;margin:0;padding:8px 16px" onclick="pcMarkReady(\''+o.orderId+'\')">✅ จัดเสร็จ</button>'
             +'</div></div>';
         }).join('') + '</div>'; }
     Swal.fire({ title:'📱 ออเดอร์จาก LINE', html:html, width:500, confirmButtonText:'ปิด' });
