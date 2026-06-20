@@ -31,6 +31,20 @@ function setOrderFulfill(orderId, fulfill) {
     var s = _ordSheet_(); if (!s) return { ok: false, msg: 'ไม่พบ ORDERS' };
     var row = _ordRow_(s, orderId); if (row < 0) return { ok: false, msg: 'ไม่พบออเดอร์ ' + orderId };
     s.getRange(row, 16).setValue(fulfill);   // col 16 = FULFILL
+    // แจ้งเตือนสถานะเข้ากลุ่ม LINE (เฉพาะออเดอร์ LINE)
+    try {
+      var rv = s.getRange(row, 1, 1, 16).getValues()[0];
+      if (/LINE/i.test(String(rv[4]||''))) {
+        var note = String(rv[14]||''), deliv = /จัดส่ง/.test(note) ? 'delivery' : 'pickup';
+        var lbl = (fulfill==='PREPARING') ? '🧺 กำลังจัดสินค้า'
+                : (fulfill==='READY')     ? (deliv==='delivery' ? '✅ จัดเสร็จ พร้อมจัดส่ง' : '✅ จัดเสร็จ พร้อมให้มารับ')
+                : (fulfill==='DONE')      ? (deliv==='delivery' ? '🎉 จัดส่งแล้ว' : '🎉 ลูกค้ารับสินค้าแล้ว')
+                : '';
+        if (lbl && typeof pushLineGroup_ === 'function') {
+          pushLineGroup_('📦 อัปเดตออเดอร์ ' + orderId + '\nลูกค้า: ' + String(rv[8]||'') + '\nสถานะ: ' + lbl);
+        }
+      }
+    } catch(eP) {}
     return { ok: true, orderId: orderId, fulfill: fulfill };
   } catch(e) { return { ok: false, msg: String(e) }; }
 }

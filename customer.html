@@ -384,6 +384,16 @@ function renderAr(rows) {
       +'<td>'+payBtn+'</td>'
       +'</tr>';
   }).join('');
+  // สถิติให้ตรงกับรายการที่แสดง (รวม/เกินกำหนด/จำนวน เฉพาะที่ยังไม่ชำระ)
+  var sTotal=0, sOver=0, sCnt=0, t2=new Date().toISOString().slice(0,10);
+  rows.forEach(function(r){
+    if(String(r.status).toUpperCase()==='PAID') return;
+    var bal=Number(r.balance)||0; sTotal+=bal; sCnt++;
+    if(String(r.dueDate).slice(0,10) < t2) sOver+=bal;
+  });
+  document.getElementById('arTotal').textContent='฿'+sTotal.toLocaleString('th-TH');
+  document.getElementById('arOverdue').textContent='฿'+sOver.toLocaleString('th-TH');
+  document.getElementById('arCount').textContent=sCnt;
   document.getElementById('arBar').textContent = rows.length+' รายการ';
 }
 
@@ -497,7 +507,7 @@ function printBillingNote(n){
    +'<div>ลูกค้า: <b>'+n.custName+'</b> ('+n.custId+')</div>'
    +'<table><thead><tr><th>เลขบิล</th><th>วันที่ออก</th><th>ครบกำหนด</th><th>ยอดคงเหลือ</th></tr></thead><tbody>'+rows+'</tbody></table>'
    +'<div class="tot">รวมทั้งสิ้น ฿'+Number(n.total).toLocaleString('th-TH',{minimumFractionDigits:2})+'</div>'
-   +'<div style="margin-top:8px">กำหนดชำระ (เฉลี่ยถ่วงน้ำหนัก): <b>'+n.dueDate+'</b></div>'
+   +'<div style="margin-top:8px">กำหนดชำระ: <b>'+n.dueDate+'</b></div>'
    +'<div style="margin-top:44px;display:flex;justify-content:space-between"><div>ผู้วางบิล ____________</div><div>ผู้รับวางบิล ____________</div></div>'
    +'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');
   w.document.close();

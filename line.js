@@ -27,6 +27,34 @@ function getLineShopConfig() {
   }
 }
 
+// ── ส่งข้อความเข้ากลุ่ม LINE (ออเดอร์ใหม่ + อัปเดตสถานะ) ──
+function pushLineGroup_(text) {
+  try {
+    var cfg = getConfig();
+    var token = cfg.LINE_CHANNEL_TOKEN;
+    var gid   = cfg.LINE_GROUP_ID || 'C9936ac4af81efc524493fe83a0a7b328';
+    if (!token || !gid) return;
+    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      payload: JSON.stringify({ to: gid, messages: [{ type: 'text', text: text }] }),
+      muteHttpExceptions: true
+    });
+  } catch (e) { Logger.log('pushLineGroup_ ' + e); }
+}
+
+// ตั้งกลุ่ม LINE สำหรับแจ้งเตือน (รันครั้งเดียวใน GAS Editor) — เปลี่ยนทุกการแจ้งเตือนให้เข้าห้องกลุ่ม
+function setLineNotifyGroup() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('CONFIG');
+  if (!s) { s = ss.insertSheet('CONFIG'); s.getRange(1,1,1,2).setValues([['KEY','VALUE']]); }
+  var gid = 'C9936ac4af81efc524493fe83a0a7b328';
+  var rows = s.getDataRange().getValues(); var found = false;
+  for (var i=1;i<rows.length;i++){ if (String(rows[i][0])==='LINE_GROUP_ID'){ s.getRange(i+1,2).setValue(gid); found=true; break; } }
+  if (!found) s.appendRow(['LINE_GROUP_ID', gid]);
+  return 'LINE_GROUP_ID = ' + gid;
+}
+
 // เขียนข้อมูลติดต่อร้านลง CONFIG (รันครั้งเดียวใน GAS Editor เพื่อบันทึกถาวร)
 function setupShopContact() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -129,6 +157,17 @@ function createLineOrder(payload) {
       total:        Number(payload.total) || 0,
       note:         note
     });
+    // แจ้งเตือนเข้ากลุ่ม LINE
+    if (res && res.ok) {
+      try {
+        pushLineGroup_('🛒 ออเดอร์ใหม่จาก LINE\n'
+          + 'เลขที่: ' + res.orderId + '\n'
+          + 'ลูกค้า: ' + (payload.customerName || 'ลูกค้า LINE') + '\n'
+          + 'ยอด: ฿' + (Number(payload.total)||0).toLocaleString('th-TH') + '\n'
+          + deliv
+          + (payload.note ? ('\nชำระ: ' + payload.note) : ''));
+      } catch(e) {}
+    }
     return res;   // { ok, orderId, msg }
   } catch (e) {
     return { ok: false, msg: e.message };

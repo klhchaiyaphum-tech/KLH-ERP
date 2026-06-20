@@ -707,27 +707,38 @@ function renderArList(q){
 function arCollectPay(arId){
   var a=_arOpen.filter(function(x){return x.arId===arId;})[0]; if(!a) return;
   Swal.fire({
-    title:'รับชำระหนี้', html:esc(a.custName||'')+'<br><span style="color:#888">คงเหลือ ฿'+Number(a.balance).toLocaleString('th-TH')+'</span>',
-    input:'number', inputValue:Number(a.balance).toFixed(2), inputAttributes:{min:'0',step:'1'},
-    showCancelButton:true, confirmButtonText:'รับเงิน + พิมพ์', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A'
+    title:'รับชำระหนี้',
+    html:'<div style="margin-bottom:8px">'+esc(a.custName||'')+' · คงเหลือ <b>฿'+Number(a.balance).toLocaleString('th-TH')+'</b></div>'
+      +'<input id="arAmt" type="number" class="swal2-input" value="'+Number(a.balance).toFixed(2)+'" style="width:88%;margin:0 auto 8px">'
+      +'<div style="display:flex;gap:10px;justify-content:center;font-size:15px">'
+      +'<label style="cursor:pointer;padding:6px 14px;border:1px solid #ddd;border-radius:12px"><input type="radio" name="arm" value="CASH" checked> 💵 เงินสด</label>'
+      +'<label style="cursor:pointer;padding:6px 14px;border:1px solid #ddd;border-radius:12px"><input type="radio" name="arm" value="TRANSFER"> 🏦 โอน/QR</label>'
+      +'</div>',
+    showCancelButton:true, confirmButtonText:'รับเงิน + พิมพ์', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A',
+    preConfirm:function(){
+      var amt=Number(document.getElementById('arAmt').value)||0;
+      var mEl=document.querySelector('input[name=arm]:checked'); var m=mEl?mEl.value:'CASH';
+      if(amt<=0){ Swal.showValidationMessage('จำนวนเงินไม่ถูกต้อง'); return false; }
+      return { amt:amt, method:m };
+    }
   }).then(function(r){
     if(!r.isConfirmed) return;
-    var amt=Number(r.value)||0; if(amt<=0){ Swal.fire('แจ้งเตือน','จำนวนเงินไม่ถูกต้อง','warning'); return; }
     showLoad('บันทึกรับชำระ...');
     google.script.run.withSuccessHandler(function(res){
       hideLoad();
       if(res&&res.ok){
-        printArReceipt(a, amt, res.balance);
+        printArReceipt(a, r.value.amt, res.balance, r.value.method);
         try{ openDrawer(); }catch(e){}
-        Swal.fire({icon:'success',title:res.msg||'รับชำระแล้ว',timer:1800,showConfirmButton:false});
+        Swal.fire({icon:'success',title:res.msg||'รับชำระแล้ว',timer:1900,showConfirmButton:false});
       } else Swal.fire('Error',(res&&res.msg)||'ไม่สำเร็จ','error');
-    }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).payArEntry(arId, amt);
+    }).withFailureHandler(function(e){ hideLoad(); Swal.fire('Error',''+e,'error'); }).receiveArPayment(arId, r.value.amt, r.value.method);
   });
 }
-function printArReceipt(a, amt, bal){
+function printArReceipt(a, amt, bal, method){
+  var mLabel = (String(method).toUpperCase().indexOf('TRANSFER')>=0)?'โอน/QR':'เงินสด';
   var txt='***  ใบรับชำระหนี้  ***\n'+(a.custName||'')+'\nAR: '+a.arId+(a.saleId?('\nบิล: '+a.saleId):'')+'\n'
     +'------------------------------\n'
-    +'รับชำระ       ฿'+Number(amt).toLocaleString('th-TH')+'\n'
+    +'รับชำระ ('+mLabel+')  ฿'+Number(amt).toLocaleString('th-TH')+'\n'
     +'คงเหลือ       ฿'+Number(bal||0).toLocaleString('th-TH')+'\n'
     +'------------------------------\n'+new Date().toLocaleString('th-TH')+'\n';
   if(window.AndroidPrint && window.AndroidPrint.printReceipt){ try{window.AndroidPrint.printReceipt(txt,a.arId);}catch(e){} }

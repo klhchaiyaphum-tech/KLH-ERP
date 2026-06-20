@@ -218,7 +218,7 @@
       <span class="label">วิธีชำระเงิน</span>
       <div class="opt">
         <div class="optb on" id="payNowBtn" onclick="setPay('now')">💳 โอน/QR ตอนนี้</div>
-        <div class="optb" id="payStoreBtn" onclick="setPay('store')">🏪 ชำระที่ร้านตอนรับของ</div>
+        <div class="optb" id="payStoreBtn" onclick="setPay('store')">🏪 ชำระเงินที่ร้านเมื่อรับของ</div>
       </div>
       <div id="payStoreHint" class="muted" style="display:none;font-size:12.5px;margin-top:6px">มารับสินค้าและชำระเงินที่ร้านได้เลย ไม่ต้องโอนล่วงหน้า</div>
     </div>
@@ -487,10 +487,10 @@ function cartArr(){ return Object.keys(S.cart).map(function(k){ return S.cart[k]
 function cartTotal(){ return cartArr().reduce(function(s,it){ return s+it.lineTotal; },0); }
 function cartCount(){ return cartArr().reduce(function(s,it){ return s+it.qty*(it.ppu||1); },0); }
 function updateCartBar(){
-  var n=cartCount(), t=cartTotal();
+  var n=cartCount(), t=cartTotal(), items=cartArr().length;
   var bar=document.getElementById('cartBar'), badge=document.getElementById('cartBadge');
-  if (n>0){ bar.style.display='flex'; badge.style.display='grid'; badge.textContent=n;
-    document.getElementById('cbTotal').textContent='฿'+fmt(t); document.getElementById('cbCount').textContent=n+' ชิ้น'; }
+  if (items>0){ bar.style.display='flex'; badge.style.display='grid'; badge.textContent=items;
+    document.getElementById('cbTotal').textContent='฿'+fmt(t); document.getElementById('cbCount').textContent=items+' รายการ · '+n+' ชิ้น'; }
   else { bar.style.display='none'; badge.style.display='none'; }
   saveCart();
 }
@@ -523,7 +523,7 @@ function setDelivery(t){
   document.getElementById('optDelivery').classList.toggle('on', t==='delivery');
   document.getElementById('addrWrap').style.display = t==='delivery'?'block':'none';
   // ปรับป้ายปุ่ม "ชำระที่ร้าน" ตามวิธีรับสินค้า
-  document.getElementById('payStoreBtn').textContent = (t==='delivery') ? '🚚 เก็บเงินปลายทาง (COD)' : '🏪 ชำระที่ร้านตอนรับของ';
+  document.getElementById('payStoreBtn').textContent = (t==='delivery') ? '🚚 ชำระเงินปลายทางเมื่อรับของ' : '🏪 ชำระเงินที่ร้านเมื่อรับของ';
 }
 function setPay(m){
   S.payMethod = m;   // 'now' = โอน/QR · 'store' = ชำระตอนรับ/ปลายทาง

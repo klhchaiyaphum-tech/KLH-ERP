@@ -578,7 +578,7 @@ function doPost(e) {
                    // order lifecycle (POS-PC / Cashier board)
                    'getOrderBoard','setOrderFulfill','getOrderForPick','getShiftSummary',
                    'getAllPromotions','savePromotion','deletePromotion',
-                   'getArByCustomer','payArEntry','getArAlerts'];
+                   'getArByCustomer','payArEntry','getArAlerts','receiveArPayment'];
     var out = { ok:false, msg:'fn ไม่อนุญาต: ' + body.fn };
     try {
       if (allowed.indexOf(body.fn) >= 0 && typeof globalThis[body.fn] === 'function') {
@@ -942,6 +942,30 @@ function payArEntry(arId, payAmount) {
     lock.releaseLock();
     return { ok:false, msg:'ไม่พบ AR_ID '+arId };
   } catch(e) { return { ok:false, msg:e.message }; }
+}
+
+// รับชำระหนี้ที่แคชเชียร์ — ตัด AR + บันทึกลง SALES_HEADER (เงินสด/โอน) ให้เข้ายอดปิดลิ้นชัก/ส่งกะ
+function receiveArPayment(arId, amount, method) {
+  try {
+    var pay = payArEntry(arId, amount);
+    if (!pay || !pay.ok) return pay || { ok:false, msg:'ชำระไม่สำเร็จ' };
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var custCode='', custName='', entity='';
+    var ar = ss.getSheetByName('AR_LEDGER');
+    if (ar) { var rows = ar.getDataRange().getValues();
+      for (var i=1;i<rows.length;i++){ if (String(rows[i][0])===String(arId)){ custCode=String(rows[i][2]||''); custName=String(rows[i][3]||''); entity=String(rows[i][4]||''); break; } } }
+    var mu = String(method||'').toUpperCase();
+    var m = (mu.indexOf('TRANSFER')>=0 || mu.indexOf('QR')>=0 || method==='โอน') ? 'TRANSFER' : 'CASH';
+    var sh = ss.getSheetByName(SH_SALH);
+    if (sh) {
+      var now = new Date();
+      sh.appendRow([ 'ARR-'+Utilities.formatDate(now,'Asia/Bangkok','yyyyMMdd-HHmmss'), arId,
+        Utilities.formatDate(now,'Asia/Bangkok','yyyy-MM-dd'), Utilities.formatDate(now,'Asia/Bangkok','HH:mm:ss'),
+        entity, custCode, custName, Number(amount)||0, 0, Number(amount)||0, m, Number(amount)||0, 0,
+        (Session.getActiveUser().getEmail()||'cashier'), 'รับชำระหนี้ '+arId ]);
+    }
+    return { ok:true, msg:'รับชำระ '+arId+' ฿'+amount+' ('+(m==='CASH'?'เงินสด':'โอน')+')', balance: pay.balance, method:m };
+  } catch(e) { return { ok:false, msg:String(e) }; }
 }
 
 function getArSummary(entity, status) {
