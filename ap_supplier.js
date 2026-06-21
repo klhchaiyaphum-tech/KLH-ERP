@@ -129,13 +129,49 @@ function apSupplierAudit() {
   rows.sort(function(a,b){ return a.norm < b.norm ? -1 : (a.norm > b.norm ? 1 : 0); });   // ซ้ำอยู่ติดกัน
   var aud = ss.getSheetByName('SUPPLIER_AUDIT'); if (aud) ss.deleteSheet(aud);
   aud = ss.insertSheet('SUPPLIER_AUDIT');
-  aud.getRange(1,1,1,8).setValues([['SUPPLIER_ID','ชื่อ','ปัญหา','ซ้ำกับ(code)','ผู้ติดต่อ','โทร','เลขภาษี(F)','บัญชี(H)']])
+  aud.getRange(1,1,1,9).setValues([['SUPPLIER_ID','ชื่อ','ปัญหา','ซ้ำกับ(code)','ผู้ติดต่อ','โทร','เลขภาษี(F)','บัญชี(H)','รวมเข้า(code)']])
      .setFontWeight('bold').setBackground('#B71C1C').setFontColor('#fff');
   aud.setFrozenRows(1);
   if (rows.length) aud.getRange(2,1,rows.length,8).setValues(rows.map(function(x){return x.row;}));
   var dupCount = rows.filter(function(x){return x.row[2].indexOf('ซ้ำ')>=0;}).length;
   Logger.log('SUPPLIER_AUDIT: '+rows.length+' แถวมีปัญหา (ซ้ำ '+dupCount+') จาก '+(sd.length-1)+' ผู้ขาย');
   return 'เสร็จ → ชีต SUPPLIER_AUDIT : '+rows.length+' แถวต้องตรวจ (ซ้ำ '+dupCount+' · น่าสงสัย/ว่าง '+(rows.length-dupCount)+') จากทั้งหมด '+(sd.length-1)+' ผู้ขาย';
+}
+
+// ── รวมผู้ขายซ้ำ ตามคอลัมน์ "รวมเข้า(code)" ใน SUPPLIER_AUDIT (รวมข้อมูล + ย้าย AP_LEDGER + backup) ──
+function apMergeFromAudit() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var aud = ss.getSheetByName('SUPPLIER_AUDIT'); if (!aud) return 'รัน apSupplierAudit ก่อน';
+  var av = aud.getDataRange().getValues(); var hd = av[0].map(function(x){return String(x);});
+  var cId = hd.indexOf('SUPPLIER_ID'), cMerge = hd.indexOf('รวมเข้า(code)');
+  if (cMerge < 0) return 'ไม่พบคอลัมน์ "รวมเข้า(code)" — รัน apSupplierAudit ใหม่';
+  var sm = ss.getSheetByName('SUPPLIER_MASTER'); var sd = sm.getDataRange().getValues();
+  var bak = ss.insertSheet('SUPPLIER_BAK_'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd_HHmmss'));
+  bak.getRange(1,1,sd.length,sd[0].length).setValues(sd);
+  var idx = {}; for (var i=1;i<sd.length;i++){ idx[String(sd[i][0]).trim().toUpperCase()] = i; }
+  var ap = ss.getSheetByName('AP_LEDGER');
+  var now = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm');
+  var merged=0, repoint=0;
+  for (var r=1;r<av.length;r++){
+    var dropC = String(av[r][cId]||'').trim().toUpperCase();
+    var km = String(av[r][cMerge]||'').toUpperCase().match(/VEND-\d+/);
+    if (!km) continue;
+    var keepC = km[0];
+    var dr = idx[dropC], kr = idx[keepC];
+    if (dr==null || kr==null || dr===kr) continue;
+    // เติมข้อมูลที่ keep ยังว่าง จาก drop (คอลัมน์ 2..10 = contact..creditDays)
+    for (var c=2;c<=10;c++){ if (!String(sd[kr][c]||'').trim() && String(sd[dr][c]||'').trim()){ sm.getRange(kr+1,c+1).setValue(sd[dr][c]); sd[kr][c]=sd[dr][c]; } }
+    // ย้าย AP_LEDGER (SUPPLIER_CODE = คอลัมน์ 3) drop → keep
+    if (ap && ap.getLastRow()>1){
+      var apc = ap.getRange(2,3,ap.getLastRow()-1,1).getValues();
+      for (var j=0;j<apc.length;j++){ if (String(apc[j][0]).trim().toUpperCase()===dropC){ ap.getRange(j+2,3).setValue(keepC); repoint++; } }
+    }
+    // ทำเครื่องหมายแถวที่ถูกรวม (ไม่ลบ — เก็บไว้ ลบเองได้)
+    sm.getRange(dr+1,2).setValue('⊘[รวมไป '+keepC+'] '+String(sd[dr][1]||''));
+    sm.getRange(dr+1,11).setValue('รวมไป '+keepC+' เมื่อ '+now);
+    merged++;
+  }
+  return 'รวมผู้ขาย '+merged+' ราย · ย้าย AP_LEDGER '+repoint+' แถว · backup '+bak.getName()+' (แถวที่ถูกรวมขึ้น ⊘ ลบเองได้ภายหลัง)';
 }
 
 // ── (3) เติมเลขบัญชี/ธนาคาร เข้า SUPPLIER_MASTER เฉพาะแถวที่ "ยืนยัน" (H ว่างเท่านั้น) ──
