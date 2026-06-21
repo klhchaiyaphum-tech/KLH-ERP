@@ -127,12 +127,23 @@ function apSupplierAudit() {
                 String(r[2]||''), String(r[4]||''), String(r[5]||''), String(r[7]||'')] });
   }
   rows.sort(function(a,b){ return a.norm < b.norm ? -1 : (a.norm > b.norm ? 1 : 0); });   // ซ้ำอยู่ติดกัน
-  var aud = ss.getSheetByName('SUPPLIER_AUDIT'); if (aud) ss.deleteSheet(aud);
-  aud = ss.insertSheet('SUPPLIER_AUDIT');
+  // เก็บค่า "รวมเข้า(code)" เดิมไว้ (กัน re-run แล้วหาย) keyed by SUPPLIER_ID
+  var prevMerge = {};
+  var oldAud = ss.getSheetByName('SUPPLIER_AUDIT');
+  if (oldAud && oldAud.getLastRow()>1){
+    var ov = oldAud.getDataRange().getValues(); var oh = ov[0].map(function(x){return String(x);});
+    var oM = -1; for (var hh=0;hh<oh.length;hh++){ if (oh[hh].indexOf('รวมเข้า')>=0){ oM=hh; break; } }
+    if (oM>=0) for (var oi=1;oi<ov.length;oi++){ var v=String(ov[oi][oM]||'').trim(); if(v) prevMerge[String(ov[oi][0]).trim().toUpperCase()]=v; }
+    ss.deleteSheet(oldAud);
+  }
+  var aud = ss.insertSheet('SUPPLIER_AUDIT');
   aud.getRange(1,1,1,9).setValues([['SUPPLIER_ID','ชื่อ','ปัญหา','ซ้ำกับ(code)','ผู้ติดต่อ','โทร','เลขภาษี(F)','บัญชี(H)','รวมเข้า(code)']])
      .setFontWeight('bold').setBackground('#B71C1C').setFontColor('#fff');
   aud.setFrozenRows(1);
-  if (rows.length) aud.getRange(2,1,rows.length,8).setValues(rows.map(function(x){return x.row;}));
+  if (rows.length) {
+    var outRows = rows.map(function(x){ var rr=x.row.slice(); rr.push(prevMerge[String(x.row[0]).trim().toUpperCase()]||''); return rr; });
+    aud.getRange(2,1,outRows.length,9).setValues(outRows);
+  }
   var dupCount = rows.filter(function(x){return x.row[2].indexOf('ซ้ำ')>=0;}).length;
   Logger.log('SUPPLIER_AUDIT: '+rows.length+' แถวมีปัญหา (ซ้ำ '+dupCount+') จาก '+(sd.length-1)+' ผู้ขาย');
   return 'เสร็จ → ชีต SUPPLIER_AUDIT : '+rows.length+' แถวต้องตรวจ (ซ้ำ '+dupCount+' · น่าสงสัย/ว่าง '+(rows.length-dupCount)+') จากทั้งหมด '+(sd.length-1)+' ผู้ขาย';
@@ -143,8 +154,13 @@ function apMergeFromAudit() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var aud = ss.getSheetByName('SUPPLIER_AUDIT'); if (!aud) return 'รัน apSupplierAudit ก่อน';
   var av = aud.getDataRange().getValues(); var hd = av[0].map(function(x){return String(x);});
-  var cId = hd.indexOf('SUPPLIER_ID'), cMerge = hd.indexOf('รวมเข้า(code)');
-  if (cMerge < 0) return 'ไม่พบคอลัมน์ "รวมเข้า(code)" — รัน apSupplierAudit ใหม่';
+  var cId = 0;   // SUPPLIER_ID = คอลัมน์แรกเสมอ
+  var cMerge = -1;
+  for (var h=0;h<hd.length;h++){ if (hd[h].indexOf('รวมเข้า')>=0) { cMerge=h; break; } }
+  if (cMerge < 0) cMerge = hd.length;   // ถ้าไม่มีหัว ให้ใช้คอลัมน์สุดท้าย (คอลัมน์ I)
+  var filledCount = 0;
+  for (var rr=1;rr<av.length;rr++){ if (String(av[rr][cMerge]||'').trim()) filledCount++; }
+  Logger.log('apMergeFromAudit: คอลัมน์รวมเข้า=col '+(cMerge+1)+' · แถวที่กรอก '+filledCount+' จาก '+(av.length-1));
   var sm = ss.getSheetByName('SUPPLIER_MASTER'); var sd = sm.getDataRange().getValues();
   var bak = ss.insertSheet('SUPPLIER_BAK_'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd_HHmmss'));
   bak.getRange(1,1,sd.length,sd[0].length).setValues(sd);
@@ -171,7 +187,10 @@ function apMergeFromAudit() {
     sm.getRange(dr+1,11).setValue('รวมไป '+keepC+' เมื่อ '+now);
     merged++;
   }
-  return 'รวมผู้ขาย '+merged+' ราย · ย้าย AP_LEDGER '+repoint+' แถว · backup '+bak.getName()+' (แถวที่ถูกรวมขึ้น ⊘ ลบเองได้ภายหลัง)';
+  var msg = 'รวมผู้ขาย '+merged+' ราย (จากที่กรอก '+filledCount+') · ย้าย AP_LEDGER '+repoint+' แถว · backup '+bak.getName();
+  if (merged===0) msg += '  ⚠️ ไม่รวมเลย — เช็คว่ากรอก code ลงคอลัมน์ "รวมเข้า(code)" ในชีต SUPPLIER_AUDIT หรือยัง (พิมพ์เช่น VEND-043)';
+  Logger.log(msg);
+  return msg;
 }
 
 // ── (3) เติมเลขบัญชี/ธนาคาร เข้า SUPPLIER_MASTER เฉพาะแถวที่ "ยืนยัน" (H ว่างเท่านั้น) ──
