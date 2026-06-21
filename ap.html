@@ -59,6 +59,7 @@ tbody tr:hover{background:#FCE6DC55;}
 </div>
 <div class="tab-nav">
   <button class="tab-btn active" onclick="tab('out',this)"><i class="bi bi-cash-stack"></i> เจ้าหนี้คงค้าง</button>
+  <button class="tab-btn" onclick="tab('recon',this);loadRecon()"><i class="bi bi-arrow-left-right"></i> เทียบจ่าย BAYC</button>
   <button class="tab-btn" onclick="tab('hist',this);loadHist()"><i class="bi bi-clock-history"></i> ประวัติจ่าย</button>
 </div>
 
@@ -68,6 +69,11 @@ tbody tr:hover{background:#FCE6DC55;}
     <thead><tr><th>รหัส</th><th>ชื่อเจ้าหนี้</th><th class="r">คงค้าง</th><th>บิล</th><th>ครบกำหนดใกล้สุด</th><th>จ่าย</th></tr></thead>
     <tbody id="outBody"><tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">กำลังโหลด...</td></tr></tbody>
   </table></div><div class="count-bar" id="outBar"></div></div>
+</div>
+
+<div id="panel-recon" class="panel">
+  <div style="font-size:.8rem;color:#888;margin-bottom:10px"><i class="bi bi-info-circle"></i> รายการจ่ายผ่านบัญชี <b>กรุงศรีกระแส (BAYC)</b> ตั้งแต่ ก.ค. ที่ยังไม่ตัดบิล — จับคู่ผู้ขายแล้วกด "ตัดบิลนี้" ระบบจะบันทึกจ่าย AP ให้อัตโนมัติ</div>
+  <div id="reconList"><div style="text-align:center;color:#aaa;padding:24px">กำลังโหลด...</div></div>
 </div>
 
 <div id="panel-hist" class="panel">
@@ -147,6 +153,76 @@ function payBill(apId, balance, name){
       else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
     }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apPay(apId, res.value.amt, res.value.bank, '', res.value.ref, '');
   });
+}
+var _recon=[], _suppliers=[];
+function loadRecon(){
+  document.getElementById('reconList').innerHTML='<div style="text-align:center;color:#aaa;padding:24px">กำลังโหลด...</div>';
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok){ document.getElementById('reconList').innerHTML='<div style="color:#c00;padding:16px">'+((r&&r.msg)||'ผิดพลาด')+'</div>'; return; }
+    _recon=r.items||[]; _suppliers=r.suppliers||[];
+    renderRecon();
+  }).withFailureHandler(function(e){ document.getElementById('reconList').innerHTML='<div style="color:#c00;padding:16px">'+e+'</div>'; }).apBaycToReconcile();
+}
+function mBadge(t){
+  var c='#888'; if(t.indexOf('เป๊ะ')>=0||t.indexOf('alias')>=0) c='#2E7D46'; else if(t.indexOf('บางส่วน')>=0) c='#E65100'; else if(t.indexOf('ไม่เจอ')>=0) c='#D9512B';
+  return '<span style="background:'+c+'22;color:'+c+';border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:700">'+esc(t)+'</span>';
+}
+function renderRecon(){
+  var box=document.getElementById('reconList');
+  if(!_recon.length){ box.innerHTML='<div style="text-align:center;color:#aaa;padding:30px">ไม่มีรายการจ่าย BAYC ที่ต้องตัดบิล (ตั้งแต่ ก.ค.)</div>'; return; }
+  box.innerHTML=_recon.map(function(it,idx){
+    var head='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+      +'<div><div style="font-weight:700">'+esc(it.payee||'(ไม่ระบุชื่อ)')+' '+mBadge(it.matchType)+'</div>'
+      +'<div style="font-size:.76rem;color:#888">'+esc(it.date)+(it.bank?' · '+esc(it.bank):'')+(it.account?' '+esc(it.account):'')+'</div></div>'
+      +'<div style="font-size:1.1rem;font-weight:800;color:var(--red);white-space:nowrap">฿'+nf(it.amount)+'</div></div>';
+    var body='';
+    if(it.supCode && it.bills && it.bills.length){
+      body='<div style="margin-top:8px">'+it.bills.map(function(b){
+        var exact=Math.abs(b.balance-it.amount)<0.5;
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px dashed #eee;padding:6px 0">'
+          +'<span style="font-size:.8rem">บิล '+esc(b.invoiceNo)+' · ครบ '+esc(b.dueDate)+' '+dueAlert(b.dueDate)+' · คงเหลือ <b style="color:var(--red)">฿'+nf(b.balance)+'</b>'+(exact?' <span style="color:#2E7D46;font-weight:700">✓ ตรงยอด</span>':'')+'</span>'
+          +'<button class="btn-sm btn-pay" onclick="reconApply('+idx+',\''+esc(b.apId)+'\','+b.balance+')">ตัดบิลนี้</button></div>';
+      }).join('')+'</div>';
+    } else if(it.supCode){
+      body='<div style="margin-top:6px;font-size:.8rem;color:#888">จับคู่: '+esc(it.supName)+' ('+esc(it.supCode)+') — ไม่มีบิลค้าง <button class="btn-sm" style="background:#eee;margin-left:6px" onclick="openAlias('+idx+')">ผูกผู้ขายอื่น</button></div>';
+    } else {
+      body='<div style="margin-top:6px"><button class="btn-sm" style="background:var(--blue);color:#fff" onclick="openAlias('+idx+')"><i class="bi bi-link-45deg"></i> ผูกกับผู้ขาย</button></div>';
+    }
+    return '<div class="card" style="padding:12px;margin-bottom:10px">'+head+body+'</div>';
+  }).join('');
+}
+function reconApply(idx, apId, balance){
+  var it=_recon[idx]; if(!it) return;
+  Swal.fire({ title:'ตัดบิลจากรายการ BAYC', html:'จ่าย <b>'+esc(it.payee)+'</b><br>บิล '+esc(apId)+' · คงเหลือ ฿'+nf(balance)
+      +'<input id="rAmt" type="number" class="swal2-input" value="'+Math.min(it.amount,balance).toFixed(2)+'">',
+    showCancelButton:true, confirmButtonText:'ตัดบิล', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A',
+    preConfirm:function(){ var a=Number(document.getElementById('rAmt').value)||0; if(a<=0){Swal.showValidationMessage('จำนวนไม่ถูกต้อง');return false;} return a; }
+  }).then(function(res){ if(!res.isConfirmed) return; showOv();
+    google.script.run.withSuccessHandler(function(r){ hideOv();
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'ตัดบิลแล้ว',timer:1500,showConfirmButton:false}); loadRecon(); loadAll(); }
+      else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apReconcileApply(it.ref, apId, res.value, it.account);
+  });
+}
+function openAlias(idx){
+  var it=_recon[idx]; if(!it) return;
+  var opts=_suppliers.map(function(s){ return '<option value="'+esc(s.code)+'">'+esc(s.name)+' ('+esc(s.code)+')</option>'; }).join('');
+  Swal.fire({ title:'ผูกชื่อในแบงค์กับผู้ขาย', html:'ชื่อในแบงค์: <b>'+esc(it.payee)+'</b><br><span style="font-size:.78rem;color:#888">เลือก VEND ที่ตรง — บันทึกแล้วครั้งหน้าจับคู่อัตโนมัติ</span>'
+      +'<input id="aSearch" class="swal2-input" placeholder="🔍 พิมพ์ค้นชื่อ" oninput="filterAlias()">'
+      +'<select id="aSel" class="swal2-select" style="display:block;width:90%;margin:8px auto">'+opts+'</select>',
+    showCancelButton:true, confirmButtonText:'บันทึก alias', cancelButtonText:'ยกเลิก', confirmButtonColor:'#3A37C9',
+    preConfirm:function(){ var v=document.getElementById('aSel').value; if(!v){Swal.showValidationMessage('เลือกผู้ขาย');return false;} return v; }
+  }).then(function(res){ if(!res.isConfirmed) return; showOv();
+    google.script.run.withSuccessHandler(function(r){ hideOv();
+      if(r&&r.ok){ Swal.fire({icon:'success',title:r.msg,timer:1400,showConfirmButton:false}); loadRecon(); }
+      else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apSaveAlias(it.payee, res.value);
+  });
+}
+function filterAlias(){
+  var q=(document.getElementById('aSearch').value||'').toLowerCase();
+  var sel=document.getElementById('aSel'); if(!sel) return;
+  for(var i=0;i<sel.options.length;i++){ var o=sel.options[i]; o.style.display=(!q||o.text.toLowerCase().indexOf(q)>=0)?'':'none'; }
 }
 function loadHist(){
   document.getElementById('histBody').innerHTML='<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">กำลังโหลด...</td></tr>';

@@ -126,6 +126,88 @@ function apAlerts() {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
+// ════════════════════════════════════════════════════════════
+//  เทียบจ่าย BAYC → ตัดบิล AP + ชื่อแฝด (alias)  [ใช้ apNorm_ / apParseSubject_ จาก ap_supplier.js]
+// ════════════════════════════════════════════════════════════
+var AP_ALIAS = 'SUPPLIER_ALIAS';
+function apAliasSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID); var s = ss.getSheetByName(AP_ALIAS);
+  if (!s) { s = ss.insertSheet(AP_ALIAS);
+    s.getRange(1,1,1,3).setValues([['BANK_PAYEE','VEND_CODE','NORM']]).setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff'); s.setFrozenRows(1); }
+  return s;
+}
+function apLoadAliases_() {
+  var s = apAliasSheet_(); var m = {};
+  if (s.getLastRow()>1) s.getRange(2,1,s.getLastRow()-1,3).getValues().forEach(function(r){ var n=String(r[2]||'')||apNorm_(r[0]); if(n) m[n]=String(r[1]); });
+  return m;
+}
+// บันทึกชื่อในแบงค์ ↔ VEND (เจ้าหนี้ชื่อไม่ตรง — ครั้งหน้าจับคู่อัตโนมัติ)
+function apSaveAlias(payee, vendCode) {
+  try {
+    if (!payee || !vendCode) return { ok:false, msg:'ข้อมูลไม่ครบ' };
+    var s = apAliasSheet_(); var n = apNorm_(payee);
+    var ex = s.getDataRange().getValues();
+    for (var i=1;i<ex.length;i++){ if (String(ex[i][2])===n){ s.getRange(i+1,2).setValue(vendCode); return { ok:true, msg:'อัปเดต alias แล้ว' }; } }
+    s.appendRow([String(payee), String(vendCode), n]);
+    return { ok:true, msg:'บันทึก alias แล้ว' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+function apMatchSup2_(payee, sm, aliasMap) {
+  var n = apNorm_(payee); if (n.length<3) return { type:'ไม่เจอ', code:'', name:'' };
+  if (aliasMap[n]){ var a=sm.filter(function(x){return x.code===aliasMap[n];})[0]; if(a) return { type:'alias ✓', code:a.code, name:a.name }; }
+  var exact=null, partial=null;
+  for (var i=0;i<sm.length;i++){ var sn=sm[i].norm; if(!sn) continue;
+    if (sn===n){ exact=sm[i]; break; }
+    if (!partial && (sn.indexOf(n)>=0 || n.indexOf(sn)>=0)) partial=sm[i]; }
+  if (exact) return { type:'ตรงเป๊ะ', code:exact.code, name:exact.name };
+  if (partial) return { type:'บางส่วน ⚠️', code:partial.code, name:partial.name };
+  return { type:'ไม่เจอ 🔴', code:'', name:'' };
+}
+
+// รายการจ่าย BAYC (หลัง cutover) ที่ยังไม่ตัดบิล + จับคู่ผู้ขาย + บิลค้างของเขา
+function apBaycToReconcile() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var b = ss.getSheetByName('BANK_TRANSACTIONS'); if (!b || b.getLastRow()<=1) return { ok:true, items:[], suppliers:[] };
+    var cutover = apStartDate_();
+    var sm = ss.getSheetByName('SUPPLIER_MASTER').getDataRange().getValues().slice(1)
+      .filter(function(r){ return String(r[0]) && String(r[1]).indexOf('⊘')<0; })
+      .map(function(r){ return { code:String(r[0]), name:String(r[1]), norm:apNorm_(r[1]) }; });
+    var aliasMap = apLoadAliases_();
+    var billsByCode = {};
+    var ap = ss.getSheetByName(AP_SHEET);
+    if (ap && ap.getLastRow()>1) ap.getRange(2,1,ap.getLastRow()-1,12).getValues().forEach(function(r){
+      var bal=Number(r[9])||0; if(bal<=0) return; if(apDs_(r[5])<cutover) return;
+      var code=String(r[2]||''); (billsByCode[code]=billsByCode[code]||[]).push({ apId:String(r[0]), invoiceNo:String(r[11]||r[1]), dueDate:apDs_(r[6]), balance:bal });
+    });
+    var bv = b.getRange(2,1,b.getLastRow()-1,10).getValues();
+    var items = [];
+    for (var i=0;i<bv.length;i++){ var r=bv[i];
+      if (String(r[1])!=='BAYC' || String(r[2])!=='OUT' || String(r[4])!=='PAYMENT') continue;
+      if (String(r[8]||'').indexOf('[AP:')>=0) continue;       // ตัดแล้ว
+      var ds = apDs_(r[0]); if (ds < cutover) continue;         // ก่อน cutover ไม่เอามาตัด
+      var p = apParseSubject_(r[5]);
+      var ms = apMatchSup2_(p.payee, sm, aliasMap);
+      items.push({ ref:String(r[7]||('ROW'+(i+2))), date:ds, amount:Number(r[3])||0, payee:p.payee, bank:p.bank, account:p.account,
+        matchType:ms.type, supCode:ms.code, supName:ms.name, bills:(billsByCode[ms.code]||[]) });
+    }
+    return { ok:true, items:items.reverse(), suppliers:sm };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ตัดบิลจากรายการ BAYC: จ่าย AP + mark รายการธนาคารว่าตัดแล้ว
+function apReconcileApply(ref, apId, amount, account) {
+  try {
+    var pay = apPay(apId, amount, 'กรุงศรีกระแส', account||'', ref||'', 'ตัดจาก BAYC');
+    if (!pay || !pay.ok) return pay || { ok:false, msg:'จ่ายไม่สำเร็จ' };
+    var b = SpreadsheetApp.openById(SHEET_ID).getSheetByName('BANK_TRANSACTIONS');
+    var bv = b.getRange(2,1,b.getLastRow()-1,10).getValues();
+    for (var i=0;i<bv.length;i++){ var rid=String(bv[i][7]||('ROW'+(i+2)));
+      if (rid===String(ref)){ var note=String(bv[i][8]||''); b.getRange(i+2,9).setValue((note?note+' ':'')+'[AP:'+apId+']'); break; } }
+    return { ok:true, msg:pay.msg };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // ── เตือนเจ้าหนี้ใกล้ครบ (≤7วัน) / ครบวันนี้ / เกินกำหนด เข้า LINE (ส่งเฉพาะมีรายการ) ──
 function apDueReminder() {
   try {
