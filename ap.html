@@ -182,9 +182,13 @@ function renderRecon(){
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px dashed #eee;padding:6px 0">'
           +'<span style="font-size:.8rem">บิล '+esc(b.invoiceNo)+' · ครบ '+esc(b.dueDate)+' '+dueAlert(b.dueDate)+' · คงเหลือ <b style="color:var(--red)">฿'+nf(b.balance)+'</b>'+(exact?' <span style="color:#2E7D46;font-weight:700">✓ ตรงยอด</span>':'')+'</span>'
           +'<button class="btn-sm btn-pay" onclick="reconApply('+idx+',\''+esc(b.apId)+'\','+b.balance+')">ตัดบิลนี้</button></div>';
-      }).join('')+'</div>';
+      }).join('')
+      +'<div style="border-top:1px dashed #eee;padding-top:6px;margin-top:2px"><button class="btn-sm" style="background:#eee" onclick="reconHistory('+idx+')">ลงประวัติจ่ายเฉยๆ (ไม่ตัดบิล)</button></div></div>';
     } else if(it.supCode){
-      body='<div style="margin-top:6px;font-size:.8rem;color:#888">จับคู่: '+esc(it.supName)+' ('+esc(it.supCode)+') — ไม่มีบิลค้าง <button class="btn-sm" style="background:#eee;margin-left:6px" onclick="openAlias('+idx+')">ผูกผู้ขายอื่น</button></div>';
+      body='<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<span style="font-size:.8rem;color:#888">จับคู่: '+esc(it.supName)+' ('+esc(it.supCode)+') — ไม่มีบิลค้าง</span>'
+        +'<span><button class="btn-sm btn-pay" onclick="reconHistory('+idx+')">บันทึกประวัติจ่าย</button> '
+        +'<button class="btn-sm" style="background:#eee" onclick="openAlias('+idx+')">ผูกผู้ขายอื่น</button></span></div>';
     } else {
       body='<div style="margin-top:6px"><button class="btn-sm" style="background:var(--blue);color:#fff" onclick="openAlias('+idx+')"><i class="bi bi-link-45deg"></i> ผูกกับผู้ขาย</button></div>';
     }
@@ -201,7 +205,20 @@ function reconApply(idx, apId, balance){
     google.script.run.withSuccessHandler(function(r){ hideOv();
       if(r&&r.ok){ Swal.fire({icon:'success',title:'ตัดบิลแล้ว',timer:1500,showConfirmButton:false}); loadRecon(); loadAll(); }
       else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
-    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apReconcileApply(it.ref, apId, res.value, it.account);
+    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apReconcileApply(it.ref, apId, res.value, it.account, it.date);
+  });
+}
+function reconHistory(idx){
+  var it=_recon[idx]; if(!it) return;
+  Swal.fire({ title:'ลงประวัติจ่าย (ไม่ตัดบิล)', html:'<b>'+esc(it.supName||it.payee)+'</b><br><span style="font-size:.8rem;color:#888">'+esc(it.date)+' · จ่ายผ่านกรุงศรีกระแส</span>'
+      +'<input id="hAmt" type="number" class="swal2-input" value="'+Number(it.amount).toFixed(2)+'">',
+    showCancelButton:true, confirmButtonText:'ลงประวัติ', cancelButtonText:'ยกเลิก', confirmButtonColor:'#1E7A3A',
+    preConfirm:function(){ var a=Number(document.getElementById('hAmt').value)||0; if(a<=0){Swal.showValidationMessage('จำนวนไม่ถูกต้อง');return false;} return a; }
+  }).then(function(res){ if(!res.isConfirmed) return; showOv();
+    google.script.run.withSuccessHandler(function(r){ hideOv();
+      if(r&&r.ok){ Swal.fire({icon:'success',title:r.msg,timer:1500,showConfirmButton:false}); loadRecon(); }
+      else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
+    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).apReconcileHistory(it.ref, it.supCode, it.supName, res.value, it.account, it.date);
   });
 }
 function openAlias(idx){

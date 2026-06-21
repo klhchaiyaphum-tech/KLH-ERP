@@ -63,12 +63,13 @@ function apSupplierBills(code) {
 }
 
 // บันทึกจ่ายเจ้าหนี้ → ตัด AP_LEDGER + ลง AP_PAYMENT
-function apPay(apId, amount, bank, account, ref, note) {
+function apPay(apId, amount, bank, account, ref, note, payDate) {
   try {
     var amt = Number(amount)||0; if (amt<=0) return { ok:false, msg:'จำนวนเงินไม่ถูกต้อง' };
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var s = ss.getSheetByName(AP_SHEET); if (!s) return { ok:false, msg:'ไม่พบ AP_LEDGER' };
     var rows = s.getDataRange().getValues();
+    var dt = payDate ? String(payDate) : Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm');
     for (var i=1;i<rows.length;i++){
       if (String(rows[i][0])===String(apId)){
         var paid = (Number(rows[i][8])||0) + amt;
@@ -79,7 +80,7 @@ function apPay(apId, amount, bank, account, ref, note) {
         s.getRange(i+1,11).setValue(st);
         var pay = apPaySheet_();
         pay.appendRow(['APP-'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd-HHmmss'),
-          Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm'),
+          dt,
           String(rows[i][2]||''), String(rows[i][3]||''), apId, amt,
           String(bank||''), String(account||''), String(ref||''), String(note||'')]);
         return { ok:true, msg:'จ่าย '+apId+' ฿'+amt+' | คงเหลือ ฿'+Math.max(0,bal), balance:Math.max(0,bal) };
@@ -130,6 +131,8 @@ function apAlerts() {
 //  เทียบจ่าย BAYC → ตัดบิล AP + ชื่อแฝด (alias)  [ใช้ apNorm_ / apParseSubject_ จาก ap_supplier.js]
 // ════════════════════════════════════════════════════════════
 var AP_ALIAS = 'SUPPLIER_ALIAS';
+// วันเริ่มดึงรายการ BAYC มาเทียบ (ค่าเริ่ม ม.ค. — บิลค้างยังตัดที่ AP_START_DATE = ก.ค.)
+function apBaycFrom_(){ try { var c=getConfig(); return c.AP_BAYC_FROM || '2026-01-01'; } catch(e){ return '2026-01-01'; } }
 function apAliasSheet_() {
   var ss = SpreadsheetApp.openById(SHEET_ID); var s = ss.getSheetByName(AP_ALIAS);
   if (!s) { s = ss.insertSheet(AP_ALIAS);
@@ -184,8 +187,8 @@ function apBaycToReconcile() {
     var items = [];
     for (var i=0;i<bv.length;i++){ var r=bv[i];
       if (String(r[1])!=='BAYC' || String(r[2])!=='OUT' || String(r[4])!=='PAYMENT') continue;
-      if (String(r[8]||'').indexOf('[AP:')>=0) continue;       // ตัดแล้ว
-      var ds = apDs_(r[0]); if (ds < cutover) continue;         // ก่อน cutover ไม่เอามาตัด
+      if (String(r[8]||'').indexOf('[AP:')>=0) continue;       // ตัด/ลงประวัติแล้ว
+      var ds = apDs_(r[0]); if (ds < apBaycFrom_()) continue;   // ดึงตั้งแต่ ม.ค. (บิลค้างยังตัดที่ ก.ค.)
       var p = apParseSubject_(r[5]);
       var ms = apMatchSup2_(p.payee, sm, aliasMap);
       items.push({ ref:String(r[7]||('ROW'+(i+2))), date:ds, amount:Number(r[3])||0, payee:p.payee, bank:p.bank, account:p.account,
@@ -195,16 +198,33 @@ function apBaycToReconcile() {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
-// ตัดบิลจากรายการ BAYC: จ่าย AP + mark รายการธนาคารว่าตัดแล้ว
-function apReconcileApply(ref, apId, amount, account) {
+// mark รายการธนาคารว่าตัด/ลงประวัติแล้ว
+function apMarkBaycDone_(ref, tag) {
+  var b = SpreadsheetApp.openById(SHEET_ID).getSheetByName('BANK_TRANSACTIONS');
+  var bv = b.getRange(2,1,b.getLastRow()-1,10).getValues();
+  for (var i=0;i<bv.length;i++){ var rid=String(bv[i][7]||('ROW'+(i+2)));
+    if (rid===String(ref)){ var note=String(bv[i][8]||''); b.getRange(i+2,9).setValue((note?note+' ':'')+'[AP:'+tag+']'); return true; } }
+  return false;
+}
+// ตัดบิลจากรายการ BAYC: จ่าย AP (ใช้วันที่จริงของ BAYC) + mark รายการธนาคารว่าตัดแล้ว
+function apReconcileApply(ref, apId, amount, account, payDate) {
   try {
-    var pay = apPay(apId, amount, 'กรุงศรีกระแส', account||'', ref||'', 'ตัดจาก BAYC');
+    var pay = apPay(apId, amount, 'กรุงศรีกระแส', account||'', ref||'', 'ตัดจาก BAYC', payDate);
     if (!pay || !pay.ok) return pay || { ok:false, msg:'จ่ายไม่สำเร็จ' };
-    var b = SpreadsheetApp.openById(SHEET_ID).getSheetByName('BANK_TRANSACTIONS');
-    var bv = b.getRange(2,1,b.getLastRow()-1,10).getValues();
-    for (var i=0;i<bv.length;i++){ var rid=String(bv[i][7]||('ROW'+(i+2)));
-      if (rid===String(ref)){ var note=String(bv[i][8]||''); b.getRange(i+2,9).setValue((note?note+' ':'')+'[AP:'+apId+']'); break; } }
+    apMarkBaycDone_(ref, apId);
     return { ok:true, msg:pay.msg };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// ลงประวัติจ่ายอย่างเดียว (ไม่ตัดบิล — สำหรับการจ่าย ก่อน ก.ค. ที่ไม่มีบิลค้าง) ใช้วันที่จริงของ BAYC
+function apReconcileHistory(ref, supCode, supName, amount, account, payDate) {
+  try {
+    var amt = Number(amount)||0; if (amt<=0) return { ok:false, msg:'จำนวนเงินไม่ถูกต้อง' };
+    var dt = payDate ? String(payDate) : Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm');
+    apPaySheet_().appendRow(['APP-'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd-HHmmss'),
+      dt, String(supCode||''), String(supName||''), '-', amt,
+      'กรุงศรีกระแส', String(account||''), String(ref||''), 'จ่ายก่อน cutover (BAYC)']);
+    apMarkBaycDone_(ref, 'HIST');
+    return { ok:true, msg:'ลงประวัติจ่าย ฿'+amt+' แล้ว' };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
