@@ -777,18 +777,19 @@ function seedTestData() {
 }
 
 // ── LINE Notification ─────────────────────────────────────────
+// ใช้ getConfig() (trim+uppercase key) ให้เหมือน testLinePush/pushLineGroup_ ที่ส่งได้จริง
 function sendWmsLine_(text) {
   try {
-    const cfg = {};
-    const cs = ss_().getSheetByName('CONFIG');
-    if (!cs) return;
-    cs.getDataRange().getValues().forEach(r => { if (r[0]) cfg[r[0]] = r[1]; });
-    if (!cfg.LINE_CHANNEL_TOKEN || !cfg.LINE_GROUP_ID) return;
-    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.LINE_CHANNEL_TOKEN },
-      payload: JSON.stringify({ to: cfg.LINE_GROUP_ID, messages: [{ type: 'text', text }] }),
+    var cfg = getConfig();
+    var token = cfg.LINE_CHANNEL_TOKEN;
+    var gid   = cfg.LINE_GROUP_ID || 'C9936ac4af81efc524493fe83a0a7b328';
+    if (!token) { Logger.log('sendWmsLine_: ไม่พบ LINE_CHANNEL_TOKEN'); return; }
+    var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      payload: JSON.stringify({ to: gid, messages: [{ type: 'text', text: text }] }),
       muteHttpExceptions: true
     });
+    Logger.log('sendWmsLine_ HTTP ' + resp.getResponseCode() + ' → ' + resp.getContentText().slice(0,120));
   } catch(e) { Logger.log('LINE error: ' + e.message); }
 }
