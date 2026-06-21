@@ -26,6 +26,7 @@ function doGet(e) {
     bank:        'bank_ledger',    // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
     bank_m:      'bank_m',         // สมุดเงินธนาคาร — จอมือถือ (สรุปเร็ว)
     pricebook:   'pricebook_match',// เทียบราคา สมุดราคา → KLH DATA (staging)
+    ap:          'ap',             // เจ้าหนี้การค้า (AP) — คงค้าง/ครบกำหนด/จ่าย/ประวัติ
     promo:       'promo'           // จัดการโปรโมชั่น LINE OA (staff)
   };
   const tpl = pageMap[page] || 'main';
@@ -48,6 +49,7 @@ function doGet(e) {
     bank: 'KLH สมุดเงินธนาคาร',
     bank_m: 'KLH สรุปธนาคาร (มือถือ)',
     pricebook: 'KLH เทียบราคา',
+    ap: 'KLH เจ้าหนี้การค้า',
     promo: 'KLH จัดการโปรโมชั่น'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);
