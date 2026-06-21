@@ -18,6 +18,8 @@ function apPaySheet_() {
   return s;
 }
 function apDs_(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+// วันเริ่มระบบเจ้าหนี้ (cutover) — บิลก่อนวันนี้ไม่นับคงค้าง · ตั้งใน CONFIG.AP_START_DATE ได้
+function apStartDate_(){ try { var c=getConfig(); return c.AP_START_DATE || '2026-07-01'; } catch(e){ return '2026-07-01'; } }
 
 // เจ้าหนี้คงค้าง รวมตามผู้ขาย (+ ใกล้ครบ/เกินกำหนด)
 function apGetPayables() {
@@ -25,10 +27,12 @@ function apGetPayables() {
     var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(AP_SHEET);
     if (!s || s.getLastRow() <= 1) return { ok:true, items:[], total:0, overdue:0 };
     var today = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd');
+    var cutover = apStartDate_();
     var rows = s.getRange(2,1,s.getLastRow()-1,12).getValues();
     var map = {};
     rows.forEach(function(r){
       var bal = Number(r[9])||0; if (bal<=0) return;
+      if (apDs_(r[5]) < cutover) return;   // บิลก่อน cutover ไม่นับคงค้าง
       var code = String(r[2]||'') || ('?'+String(r[3]||''));
       var m = map[code] || (map[code]={ code:String(r[2]||''), name:String(r[3]||''), balance:0, bills:0, nearestDue:'', overdue:0 });
       m.balance += bal; m.bills++;
@@ -48,8 +52,9 @@ function apSupplierBills(code) {
   try {
     var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(AP_SHEET);
     if (!s || s.getLastRow() <= 1) return { ok:true, items:[] };
+    var cutover = apStartDate_();
     var rows = s.getRange(2,1,s.getLastRow()-1,12).getValues();
-    var items = rows.filter(function(r){ return String(r[2])===String(code) && (Number(r[9])||0)>0; })
+    var items = rows.filter(function(r){ return String(r[2])===String(code) && (Number(r[9])||0)>0 && apDs_(r[5])>=cutover; })
       .map(function(r){ return { apId:String(r[0]||''), recvNo:String(r[1]||''), invoiceDate:apDs_(r[5]),
         dueDate:apDs_(r[6]), total:Number(r[7])||0, paid:Number(r[8])||0, balance:Number(r[9])||0,
         status:String(r[10]||''), invoiceNo:String(r[11]||'') }; });
@@ -104,9 +109,11 @@ function apAlerts() {
     var empty = { ok:true, overdue:[], dueToday:[], dueSoon:[], overdueAmt:0, dueTodayAmt:0, dueSoonAmt:0 };
     if (!s || s.getLastRow()<=1) return empty;
     var tz='Asia/Bangkok', today=Utilities.formatDate(new Date(),tz,'yyyy-MM-dd');
+    var cutover=apStartDate_();
     var overdue=[], dueToday=[], dueSoon=[];
     s.getRange(2,1,s.getLastRow()-1,12).getValues().forEach(function(r){
       var bal=Number(r[9])||0; if(bal<=0) return;
+      if(apDs_(r[5]) < cutover) return;
       var due=apDs_(r[6]); if(!due) return;
       var diff=Math.round((new Date(due+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);
       if(isNaN(diff)) return;
@@ -117,4 +124,33 @@ function apAlerts() {
     return { ok:true, overdue:overdue, dueToday:dueToday, dueSoon:dueSoon,
              overdueAmt:sum(overdue), dueTodayAmt:sum(dueToday), dueSoonAmt:sum(dueSoon) };
   } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ── เตือนเจ้าหนี้ใกล้ครบ (≤7วัน) / ครบวันนี้ / เกินกำหนด เข้า LINE (ส่งเฉพาะมีรายการ) ──
+function apDueReminder() {
+  try {
+    var a = apAlerts(); if (!a || !a.ok) return 'apAlerts error';
+    var total = a.overdue.length + a.dueToday.length + a.dueSoon.length;
+    if (total === 0) return 'ไม่มีเจ้าหนี้ใกล้ครบ/เกินกำหนด — ไม่ส่ง';
+    var rnd = function(n){ return Math.round(Number(n)||0).toLocaleString(); };
+    var msg = '🔔 เตือนชำระเจ้าหนี้ ('+Utilities.formatDate(new Date(),'Asia/Bangkok','dd/MM/yyyy')+')\n――――――――\n';
+    function block(title, arr, amt, fmt){
+      if (!arr.length) return '';
+      var s = title+' '+arr.length+' บิล · ฿'+rnd(amt)+'\n';
+      arr.slice(0,8).forEach(function(x){ s += '  • '+x.supplier+' ฿'+rnd(x.balance)+fmt(x)+'\n'; });
+      if (arr.length>8) s += '  … และอีก '+(arr.length-8)+' บิล\n';
+      return s;
+    }
+    msg += block('🔴 เกินกำหนด', a.overdue, a.overdueAmt, function(x){ return ' (เกิน '+(-x.daysLeft)+'ว.)'; });
+    msg += block('🟠 ครบวันนี้', a.dueToday, a.dueTodayAmt, function(){ return ''; });
+    msg += block('🟡 ใกล้ครบ (≤7วัน)', a.dueSoon, a.dueSoonAmt, function(x){ return ' (อีก '+x.daysLeft+'ว.)'; });
+    sendWmsLine_(msg);
+    return 'ส่งเตือนแล้ว: เกิน '+a.overdue.length+' · วันนี้ '+a.dueToday.length+' · ใกล้ครบ '+a.dueSoon.length;
+  } catch(e){ return 'error: '+e; }
+}
+// ตั้ง trigger เตือนเจ้าหนี้ทุกวัน 09:00 (รันครั้งเดียวใน editor)
+function setupApDueTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){ if (t.getHandlerFunction()==='apDueReminder') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('apDueReminder').timeBased().everyDays(1).atHour(9).create();
+  return 'ตั้งเตือนเจ้าหนี้ครบกำหนดทุกวัน 09:00 แล้ว (ส่งเฉพาะวันที่มีบิลใกล้ครบ/เกิน)';
 }
