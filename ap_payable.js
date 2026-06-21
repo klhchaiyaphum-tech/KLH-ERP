@@ -173,6 +173,7 @@ function apBaycToReconcile() {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var b = ss.getSheetByName('BANK_TRANSACTIONS'); if (!b || b.getLastRow()<=1) return { ok:true, items:[], suppliers:[] };
     var cutover = apStartDate_();
+    var baycFrom = apBaycFrom_();   // ดึงครั้งเดียว (อย่าเรียกในลูป! getConfig ต่อแถว = ช้ามาก)
     var sm = ss.getSheetByName('SUPPLIER_MASTER').getDataRange().getValues().slice(1)
       .filter(function(r){ return String(r[0]) && String(r[1]).indexOf('⊘')<0; })
       .map(function(r){ return { code:String(r[0]), name:String(r[1]), norm:apNorm_(r[1]) }; });
@@ -188,7 +189,7 @@ function apBaycToReconcile() {
     for (var i=0;i<bv.length;i++){ var r=bv[i];
       if (String(r[1])!=='BAYC' || String(r[2])!=='OUT' || String(r[4])!=='PAYMENT') continue;
       if (String(r[8]||'').indexOf('[AP:')>=0) continue;       // ตัด/ลงประวัติแล้ว
-      var ds = apDs_(r[0]); if (ds < apBaycFrom_()) continue;   // ดึงตั้งแต่ ม.ค. (บิลค้างยังตัดที่ ก.ค.)
+      var ds = apDs_(r[0]); if (ds < baycFrom) continue;       // ดึงตั้งแต่ ม.ค. (บิลค้างยังตัดที่ ก.ค.)
       var p = apParseSubject_(r[5]);
       var ms = apMatchSup2_(p.payee, sm, aliasMap);
       items.push({ ref:String(r[7]||('ROW'+(i+2))), date:ds, amount:Number(r[3])||0, payee:p.payee, bank:p.bank, account:p.account,
@@ -196,6 +197,30 @@ function apBaycToReconcile() {
     }
     return { ok:true, items:items.reverse(), suppliers:sm };
   } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ── DIAG: เช็คสาเหตุ (รันใน editor → ดู Execution log) ──
+function apDiag() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  // 1) KLH DATA มีของใช้ไหม
+  var klh = klhDataSheet_(); var d = klh ? klh.getDataRange().getValues() : [];
+  var kws = ['โอโม','แฟ้บ','แฟ็บ','บรีส','ผงซักฟอก','น้ำยาล้างจาน','ไฮเตอร์','คอมฟอร์ท','ซันไลต์','ดาวน์นี่'];
+  var cnt = {}; kws.forEach(function(k){ cnt[k]=0; });
+  for (var i=1;i<d.length;i++){ var nm=String(d[i][1]||''); kws.forEach(function(k){ if(nm.indexOf(k)>=0) cnt[k]++; }); }
+  Logger.log('=== KLH DATA: rows='+(d.length-1));
+  Logger.log('household keyword counts = '+JSON.stringify(cnt));
+  // 2) AP tabs โหลดได้ไหม + ช้าแค่ไหน
+  var bt = ss.getSheetByName('BANK_TRANSACTIONS');
+  Logger.log('BANK_TRANSACTIONS rows = '+(bt?bt.getLastRow()-1:'ไม่พบชีต'));
+  var sm = ss.getSheetByName('SUPPLIER_MASTER');
+  Logger.log('SUPPLIER_MASTER rows = '+(sm?sm.getLastRow()-1:'ไม่พบชีต'));
+  var ap = ss.getSheetByName(AP_SHEET);
+  Logger.log('AP_LEDGER rows = '+(ap?ap.getLastRow()-1:'ไม่พบชีต'));
+  var t1=new Date(); var rec=apBaycToReconcile(); var t2=new Date();
+  Logger.log('apBaycToReconcile: ok='+(rec&&rec.ok)+' items='+((rec&&rec.items)?rec.items.length:'-')+' msg='+((rec&&rec.msg)||'')+' ('+(t2-t1)+'ms)');
+  var h=apPayHistory('');
+  Logger.log('apPayHistory: ok='+(h&&h.ok)+' items='+((h&&h.items)?h.items.length:'-')+' msg='+((h&&h.msg)||''));
+  return 'เสร็จ — เปิด Execution log ดูผล';
 }
 
 // mark รายการธนาคารว่าตัด/ลงประวัติแล้ว
