@@ -193,6 +193,23 @@ function apMergeFromAudit() {
   return msg;
 }
 
+// ── auto-ติ๊ก ✓ ให้ทุกแถวที่ "ตรงเป๊ะ" (ที่ยังไม่ได้ยืนยัน) ──
+function apConfirmExact() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var rep = ss.getSheetByName('AP_BAYC_REPORT'); if (!rep) return 'ยังไม่มี AP_BAYC_REPORT';
+  var rv = rep.getDataRange().getValues(); var hd = rv[0].map(function(x){return String(x);});
+  var cStatus = hd.indexOf('สถานะจับคู่'), cCfm = -1;
+  for (var h=0;h<hd.length;h++){ if (hd[h].indexOf('ยืนยัน')>=0){ cCfm=h; break; } }
+  if (cCfm<0) return 'ไม่พบคอลัมน์ยืนยัน';
+  var n=0;
+  for (var r=1;r<rv.length;r++){
+    if (String(rv[r][cStatus]).trim()==='ตรงเป๊ะ' && !String(rv[r][cCfm]||'').trim()){
+      rep.getRange(r+1, cCfm+1).setValue('✓'); n++;
+    }
+  }
+  return 'ติ๊ก ✓ ให้แถว "ตรงเป๊ะ" '+n+' แถว (เหลือ ⚠️/🔴 ให้รีวิวเอง) → ตรวจแล้วรัน apApplyAccounts';
+}
+
 // ── (3) เติมเลขบัญชี/ธนาคาร เข้า SUPPLIER_MASTER เฉพาะแถวที่ "ยืนยัน" (H ว่างเท่านั้น) ──
 function apApplyAccounts() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
