@@ -25,6 +25,7 @@ function doGet(e) {
     pl:          'pl',             // งบกำไรขาดทุน (Phase 6.3)
     bank:        'bank_ledger',    // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
     bank_m:      'bank_m',         // สมุดเงินธนาคาร — จอมือถือ (สรุปเร็ว)
+    pricebook:   'pricebook_match',// เทียบราคา สมุดราคา → KLH DATA (staging)
     promo:       'promo'           // จัดการโปรโมชั่น LINE OA (staff)
   };
   const tpl = pageMap[page] || 'main';
@@ -46,6 +47,7 @@ function doGet(e) {
     pl: 'KLH งบกำไรขาดทุน',
     bank: 'KLH สมุดเงินธนาคาร',
     bank_m: 'KLH สรุปธนาคาร (มือถือ)',
+    pricebook: 'KLH เทียบราคา',
     promo: 'KLH จัดการโปรโมชั่น'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);

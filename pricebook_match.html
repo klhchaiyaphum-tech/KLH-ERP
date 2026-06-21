@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KLH เทียบราคา (สมุดราคา)</title>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style id="klh-swal">
+.swal2-popup{border-radius:28px!important;background:rgba(255,255,255,.97)!important;backdrop-filter:blur(8px);box-shadow:0 18px 55px rgba(60,40,25,.22)!important;}
+.swal2-styled{border-radius:999px!important;font-weight:700!important;box-shadow:none!important;}
+</style>
+<style>
+:root{--coral:#F6704C;--coral2:#E2502B;--ink:#2B2620;--ink2:#7A7065;--ink3:#A89E90;--line:#ECE6DA;--blue:#3A37C9;--green:#2E7D46;--red:#D9512B;--paper:#F4EEE2;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","IBM Plex Sans",'Segoe UI',sans-serif;font-size:14px;}
+.num{font-variant-numeric:tabular-nums;}
+.top{position:sticky;top:0;z-index:20;background:linear-gradient(120deg,#FF7A2E,#F4701E 55%,#E2502B);color:#fff;padding:11px 16px;box-shadow:0 2px 10px rgba(0,0,0,.18);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.top h1{font-size:16px;font-weight:800;}
+.top .sp{flex:1;}
+.top button,.top select,.top input{border:none;border-radius:9px;padding:7px 11px;font-size:13px;font-family:inherit;}
+.top .btn{background:#fff;color:var(--coral2);font-weight:700;cursor:pointer;}
+.top .gbtn{background:#1E7A3A;color:#fff;font-weight:800;cursor:pointer;}
+.stats{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px;font-size:12.5px;}
+.stats .s{background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px 11px;}
+.wrap{padding:0 14px 60px;max-width:1100px;margin:0 auto;}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 15px;margin-bottom:11px;display:grid;grid-template-columns:1fr 1.2fr;gap:14px;box-shadow:0 1px 3px rgba(60,40,25,.05);}
+@media(max-width:640px){.card{grid-template-columns:1fr;}}
+.exn{font-weight:800;font-size:15px;}
+.exm{font-size:12px;color:var(--ink3);margin:2px 0 7px;}
+.prc{display:flex;gap:14px;font-size:13px;}
+.prc b{font-family:inherit;}
+.right{border-left:1px solid var(--line);padding-left:14px;}
+@media(max-width:640px){.right{border-left:none;padding-left:0;border-top:1px dashed var(--line);padding-top:10px;}}
+.srch{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:8px 11px;font-size:14px;font-family:inherit;}
+.cand{max-height:190px;overflow:auto;margin-top:7px;}
+.crow{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;margin-bottom:5px;cursor:pointer;}
+.crow:hover{background:#FCE6DC;border-color:var(--coral);}
+.crow .cn{flex:1;font-size:12.5px;}
+.crow .cb{font-size:10.5px;color:var(--ink3);font-family:var(--num);}
+.matched{background:#F4FBF5;border:1px solid #CBE6D1;border-radius:12px;padding:10px 12px;}
+.matched .mn{font-weight:700;font-size:13.5px;}
+.diff{display:flex;gap:12px;font-size:12.5px;margin:6px 0;flex-wrap:wrap;}
+.diff .up{color:var(--red);font-weight:700;} .diff .dn{color:var(--green);font-weight:700;}
+.mbtns{display:flex;gap:7px;margin-top:6px;}
+.bt{border:none;border-radius:9px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;}
+.bt.ok{background:#1E7A3A;color:#fff;} .bt.confd{background:#0B7A43;color:#fff;} .bt.un{background:#fff;color:var(--ink2);border:1px solid var(--line);}
+.badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;}
+.b-pend{background:#FFF3E0;color:#C2410C;} .b-mat{background:#E8F0FF;color:#3A37C9;} .b-conf{background:#E6F7EC;color:#1E7A3A;} .b-push{background:#EEE;color:#777;}
+.pager{display:flex;justify-content:center;align-items:center;gap:12px;padding:14px;}
+.pager button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 16px;cursor:pointer;font-weight:700;}
+.empty,.loading{text-align:center;color:var(--ink3);padding:40px 0;}
+#ov{display:none;position:fixed;inset:0;background:rgba(255,255,255,.8);z-index:9999;align-items:center;justify-content:center;}
+.spin{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--coral);border-radius:50%;animation:sp .8s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>📖 เทียบราคา (สมุดราคา → KLH DATA)</h1>
+  <div class="sp"></div>
+  <select id="fStatus" onchange="resetLoad()">
+    <option value="all">ทั้งหมด</option>
+    <option value="รอจับคู่">รอจับคู่</option>
+    <option value="จับคู่แล้ว">จับคู่แล้ว</option>
+    <option value="ยืนยันแล้ว">✅ ยืนยันแล้ว</option>
+    <option value="ส่งแล้ว">ส่งแล้ว</option>
+  </select>
+  <input id="fQ" placeholder="ค้นชื่อสินค้า" style="width:160px" onkeydown="if(event.key==='Enter')resetLoad()">
+  <button class="btn" onclick="resetLoad()">ค้นหา</button>
+  <button class="gbtn" onclick="pushKlh()">⬆️ ส่งกลับ KLH DATA</button>
+  <button class="btn" onclick="goHome()">หลัก</button>
+</div>
+<div class="stats" id="stats"></div>
+<div class="wrap"><div id="list"><div class="loading">กำลังโหลด...</div></div>
+  <div class="pager" id="pager"></div>
+</div>
+<div id="ov"><div class="spin"></div></div>
+
+<script>
+var _klh=[], _klhLoaded=false, _off=0, _lim=60, _total=0, _execUrl='';
+function showOv(){document.getElementById('ov').style.display='flex';}
+function hideOv(){document.getElementById('ov').style.display='none';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function nf(n){return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});}
+function goHome(){ if(_execUrl) window.top.location.href=_execUrl+'?page=index'; else window.location.href='?page=index'; }
+
+window.onload=function(){
+  google.script.run.withSuccessHandler(function(u){_execUrl=u||'';}).withFailureHandler(function(){}).getExecUrl();
+  google.script.run.withSuccessHandler(function(r){ _klh=(r&&r.items)||[]; _klhLoaded=true; }).withFailureHandler(function(){}).pbGetKlhProducts();
+  loadStats(); load();
+};
+function loadStats(){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok)return; var s=r.stats;
+    document.getElementById('stats').innerHTML=
+      '<span class="s">รวม '+s.total+'</span><span class="s b-pend">รอจับคู่ '+s.pending+'</span>'
+      +'<span class="s b-mat">จับคู่แล้ว '+s.matched+'</span><span class="s b-conf">✅ ยืนยัน '+s.confirmed+'</span>'
+      +'<span class="s b-push">ส่งแล้ว '+s.pushed+'</span>';
+  }).pbStats();
+}
+function resetLoad(){ _off=0; load(); }
+function load(){
+  document.getElementById('list').innerHTML='<div class="loading">กำลังโหลด...</div>';
+  var st=document.getElementById('fStatus').value, q=document.getElementById('fQ').value.trim();
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok){ document.getElementById('list').innerHTML='<div class="empty">โหลดไม่ได้</div>'; return; }
+    _total=r.total; render(r.items);
+  }).withFailureHandler(function(e){ document.getElementById('list').innerHTML='<div class="empty">'+e.message+'</div>'; })
+    .pbList(st, q, _off, _lim);
+}
+function render(items){
+  if(!items.length){ document.getElementById('list').innerHTML='<div class="empty">ไม่มีรายการ</div>'; document.getElementById('pager').innerHTML=''; return; }
+  document.getElementById('list').innerHTML=items.map(function(it){
+    return '<div class="card" id="c_'+it.rowKey+'">'+leftHtml(it)+'<div class="right" id="r_'+it.rowKey+'">'+rightHtml(it)+'</div></div>';
+  }).join('');
+  // pager
+  var pg=Math.floor(_off/_lim)+1, pages=Math.ceil(_total/_lim);
+  document.getElementById('pager').innerHTML=
+    '<button '+(_off<=0?'disabled':'')+' onclick="_off-=_lim;load()">‹ ก่อนหน้า</button>'
+    +'<span>หน้า '+pg+' / '+pages+' ('+_total+' รายการ)</span>'
+    +'<button '+(_off+_lim>=_total?'disabled':'')+' onclick="_off+=_lim;load()">ถัดไป ›</button>';
+}
+function leftHtml(it){
+  var bd={'รอจับคู่':'b-pend','จับคู่แล้ว':'b-mat','ยืนยันแล้ว':'b-conf','ส่งแล้ว':'b-push'}[it.status]||'b-pend';
+  return '<div><div class="exn">'+esc(it.name)+' <span class="badge '+bd+'">'+esc(it.status)+'</span></div>'
+    +'<div class="exm">'+esc(it.size)+' · '+esc(it.pack)+' · <span style="font-size:10px">'+esc(it.source)+'</span></div>'
+    +'<div class="prc"><span>ทุน <b>'+nf(it.costNew)+'</b></span><span>ปลีก <b>'+nf(it.retailNew)+'</b></span><span>ส่ง <b>'+nf(it.wholeNew)+'</b></span></div></div>';
+}
+function rightHtml(it){
+  if(it.barcode){  // จับคู่แล้ว
+    var d=function(nw,od){ var a=Number(nw)||0,b=Number(od)||0; if(!a||a===b)return ''; return a>b?'<span class="up">↑'+nf(a-b)+'</span>':'<span class="dn">↓'+nf(b-a)+'</span>'; };
+    var confd=it.status==='ยืนยันแล้ว'||it.status==='ส่งแล้ว';
+    return '<div class="matched"><div class="mn">✔ '+esc(it.klhName)+'</div>'
+      +'<div class="cb">บาร์โค้ด '+esc(it.barcode)+'</div>'
+      +'<div class="diff"><span>ทุน '+nf(it.costOld)+'→<b>'+nf(it.costNew)+'</b> '+d(it.costNew,it.costOld)+'</span>'
+      +'<span>ปลีก '+nf(it.retailOld)+'→<b>'+nf(it.retailNew)+'</b> '+d(it.retailNew,it.retailOld)+'</span>'
+      +'<span>ส่ง '+nf(it.wholeOld)+'→<b>'+nf(it.wholeNew)+'</b> '+d(it.wholeNew,it.wholeOld)+'</span></div>'
+      +'<div class="mbtns">'
+      + (confd
+          ? '<button class="bt confd" disabled>✅ '+(it.status==='ส่งแล้ว'?'ส่งแล้ว':'ยืนยันแล้ว')+'</button>'+(it.status==='ส่งแล้ว'?'':'<button class="bt un" onclick="conf(\''+it.rowKey+'\',false)">ยกเลิกยืนยัน</button>')
+          : '<button class="bt ok" onclick="conf(\''+it.rowKey+'\',true)">✅ ยืนยันราคา</button><button class="bt un" onclick="unmatch(\''+it.rowKey+'\')">เปลี่ยนการจับคู่</button>')
+      +'</div></div>';
+  }
+  // ยังไม่จับคู่ → ช่องค้น
+  return '<input class="srch" id="s_'+it.rowKey+'" placeholder="ค้นใน KLH DATA (ชื่อ/บาร์โค้ด)" value="'+esc(it.name)+'" oninput="findKlh(\''+it.rowKey+'\')">'
+    +'<div class="cand" id="cand_'+it.rowKey+'"></div>';
+}
+function findKlh(rk){
+  var q=(document.getElementById('s_'+rk).value||'').trim().toLowerCase();
+  var el=document.getElementById('cand_'+rk);
+  if(!_klhLoaded){ el.innerHTML='<div class="cb">กำลังโหลด KLH DATA...</div>'; return; }
+  if(q.length<2){ el.innerHTML=''; return; }
+  var hits=_klh.filter(function(p){ return (p.name+p.barcode).toLowerCase().indexOf(q)>=0; }).slice(0,12);
+  if(!hits.length){ el.innerHTML='<div class="cb" style="padding:6px">ไม่พบ — ลองคำสั้นลง</div>'; return; }
+  el.innerHTML=hits.map(function(p){
+    return '<div class="crow" onclick="doMatch(\''+rk+'\',\''+esc(p.barcode)+'\')">'
+      +'<div class="cn">'+esc(p.name)+' <span class="cb">'+esc(p.size)+'</span><div class="cb">บ.'+esc(p.barcode)+' · ทุน '+nf(p.cost)+' ปลีก '+nf(p.retail)+' ส่ง '+nf(p.whole)+'</div></div></div>';
+  }).join('');
+}
+function doMatch(rk, bc){
+  showOv();
+  google.script.run.withSuccessHandler(function(r){ hideOv();
+    if(r&&r.ok){ refreshRow(rk); loadStats(); } else Swal.fire('Error',(r&&r.msg)||'ไม่สำเร็จ','error');
+  }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',''+e,'error'); }).pbMatch(rk, bc);
+}
+function unmatch(rk){
+  showOv();
+  google.script.run.withSuccessHandler(function(r){ hideOv(); refreshRow(rk); loadStats(); }).withFailureHandler(function(e){hideOv();Swal.fire('Error',''+e,'error');}).pbUnmatch(rk);
+}
+function conf(rk,on){
+  showOv();
+  google.script.run.withSuccessHandler(function(r){ hideOv();
+    if(r&&r.ok){ refreshRow(rk); loadStats(); } else Swal.fire('แจ้งเตือน',(r&&r.msg)||'ไม่สำเร็จ','warning');
+  }).withFailureHandler(function(e){hideOv();Swal.fire('Error',''+e,'error');}).pbConfirm(rk,on);
+}
+// reload just one row by re-querying its current state from server-side list (simple: reload page data)
+function refreshRow(rk){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok||!r.item)return; var it=r.item;
+    var card=document.getElementById('c_'+rk);
+    if(card) card.innerHTML=leftHtml(it)+'<div class="right" id="r_'+rk+'">'+rightHtml(it)+'</div>';
+  }).pbGetRow(rk);
+}
+function pushKlh(){
+  Swal.fire({title:'ส่งกลับ KLH DATA?',html:'อัปเดตเฉพาะแถวที่ <b>✅ ยืนยันแล้ว</b><br>ระบบจะ backup KLH DATA ก่อนทุกครั้ง',icon:'warning',
+    showCancelButton:true,confirmButtonText:'ส่งกลับเลย',cancelButtonText:'ยกเลิก',confirmButtonColor:'#1E7A3A'})
+  .then(function(a){ if(!a.isConfirmed)return; showOv();
+    google.script.run.withSuccessHandler(function(r){ hideOv();
+      if(r&&r.ok){ Swal.fire('สำเร็จ','อัปเดต '+r.updated+' รายการ\nสำรองไว้ที่ชีต: '+r.backup,'success'); resetLoad(); loadStats(); }
+      else Swal.fire('แจ้งเตือน',(r&&r.msg)||'ไม่สำเร็จ','warning');
+    }).withFailureHandler(function(e){hideOv();Swal.fire('Error',''+e,'error');}).pbPushToKlh();
+  });
+}
+</script>
+</body>
+</html>
