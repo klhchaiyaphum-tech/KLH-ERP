@@ -107,6 +107,37 @@ function apFindDupSuppliers() {
   return 'พบชื่อซ้ำ '+dups.length+' กลุ่ม (ดูรายละเอียดใน execution log)';
 }
 
+// ── ตรวจ SUPPLIER_MASTER: ชื่อซ้ำ + ชื่อน่าสงสัย → ชีต SUPPLIER_AUDIT (รีวิวก่อนจับคู่บัญชี) ──
+function apSupplierAudit() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sm = ss.getSheetByName('SUPPLIER_MASTER'); if (!sm) return 'ไม่พบ SUPPLIER_MASTER';
+  var sd = sm.getDataRange().getValues();
+  var normMap = {};
+  for (var i=1;i<sd.length;i++){ var n=apNorm_(sd[i][1]); if(n) (normMap[n]=normMap[n]||[]).push(i); }
+  var rows = [];
+  for (var i=1;i<sd.length;i++){
+    var r=sd[i], name=String(r[1]||'').trim(), n=apNorm_(name);
+    var dup = (normMap[n]||[]).filter(function(x){return x!==i;}).map(function(x){return String(sd[x][0]);});
+    var flags = [];
+    if (!name) flags.push('ไม่มีชื่อ');
+    if (n.length>0 && n.length<4) flags.push('ชื่อสั้น/น่าสงสัย');
+    if (n && dup.length>0) flags.push('ซ้ำ');
+    if (!flags.length) continue;
+    rows.push({ norm:n, row:[String(r[0]), name, flags.join(', '), dup.join(', '),
+                String(r[2]||''), String(r[4]||''), String(r[5]||''), String(r[7]||'')] });
+  }
+  rows.sort(function(a,b){ return a.norm < b.norm ? -1 : (a.norm > b.norm ? 1 : 0); });   // ซ้ำอยู่ติดกัน
+  var aud = ss.getSheetByName('SUPPLIER_AUDIT'); if (aud) ss.deleteSheet(aud);
+  aud = ss.insertSheet('SUPPLIER_AUDIT');
+  aud.getRange(1,1,1,8).setValues([['SUPPLIER_ID','ชื่อ','ปัญหา','ซ้ำกับ(code)','ผู้ติดต่อ','โทร','เลขภาษี(F)','บัญชี(H)']])
+     .setFontWeight('bold').setBackground('#B71C1C').setFontColor('#fff');
+  aud.setFrozenRows(1);
+  if (rows.length) aud.getRange(2,1,rows.length,8).setValues(rows.map(function(x){return x.row;}));
+  var dupCount = rows.filter(function(x){return x.row[2].indexOf('ซ้ำ')>=0;}).length;
+  Logger.log('SUPPLIER_AUDIT: '+rows.length+' แถวมีปัญหา (ซ้ำ '+dupCount+') จาก '+(sd.length-1)+' ผู้ขาย');
+  return 'เสร็จ → ชีต SUPPLIER_AUDIT : '+rows.length+' แถวต้องตรวจ (ซ้ำ '+dupCount+' · น่าสงสัย/ว่าง '+(rows.length-dupCount)+') จากทั้งหมด '+(sd.length-1)+' ผู้ขาย';
+}
+
 // ── (3) เติมเลขบัญชี/ธนาคาร เข้า SUPPLIER_MASTER เฉพาะแถวที่ "ยืนยัน" (H ว่างเท่านั้น) ──
 function apApplyAccounts() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
