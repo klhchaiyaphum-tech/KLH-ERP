@@ -45,7 +45,7 @@ body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","
 .bt{border:none;border-radius:9px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;}
 .bt.ok{background:#1E7A3A;color:#fff;} .bt.confd{background:#0B7A43;color:#fff;} .bt.un{background:#fff;color:var(--ink2);border:1px solid var(--line);}
 .badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;}
-.b-pend{background:#FFF3E0;color:#C2410C;} .b-mat{background:#E8F0FF;color:#3A37C9;} .b-conf{background:#E6F7EC;color:#1E7A3A;} .b-push{background:#EEE;color:#777;}
+.b-pend{background:#FFF3E0;color:#C2410C;} .b-mat{background:#E8F0FF;color:#3A37C9;} .b-conf{background:#E6F7EC;color:#1E7A3A;} .b-push{background:#EEE;color:#777;} .b-new{background:#FCE6DC;color:#E2502B;}
 .pager{display:flex;justify-content:center;align-items:center;gap:12px;padding:14px;}
 .pager button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 16px;cursor:pointer;font-weight:700;}
 .empty,.loading{text-align:center;color:var(--ink3);padding:40px 0;}
@@ -62,6 +62,7 @@ body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","
     <option value="all">ทั้งหมด</option>
     <option value="รอจับคู่">รอจับคู่</option>
     <option value="จับคู่แล้ว">จับคู่แล้ว</option>
+    <option value="เพิ่มใหม่">➕ เพิ่มใหม่</option>
     <option value="ยืนยันแล้ว">✅ ยืนยันแล้ว</option>
     <option value="ส่งแล้ว">ส่งแล้ว</option>
   </select>
@@ -94,7 +95,8 @@ function loadStats(){
     if(!r||!r.ok)return; var s=r.stats;
     document.getElementById('stats').innerHTML=
       '<span class="s">รวม '+s.total+'</span><span class="s b-pend">รอจับคู่ '+s.pending+'</span>'
-      +'<span class="s b-mat">จับคู่แล้ว '+s.matched+'</span><span class="s b-conf">✅ ยืนยัน '+s.confirmed+'</span>'
+      +'<span class="s b-mat">จับคู่แล้ว '+s.matched+'</span><span class="s b-new">➕ เพิ่มใหม่ '+(s.newc||0)+'</span>'
+      +'<span class="s b-conf">✅ ยืนยัน '+s.confirmed+'</span>'
       +'<span class="s b-push">ส่งแล้ว '+s.pushed+'</span>';
   }).pbStats();
 }
@@ -121,7 +123,7 @@ function render(items){
     +'<button '+(_off+_lim>=_total?'disabled':'')+' onclick="_off+=_lim;load()">ถัดไป ›</button>';
 }
 function leftHtml(it){
-  var bd={'รอจับคู่':'b-pend','จับคู่แล้ว':'b-mat','ยืนยันแล้ว':'b-conf','ส่งแล้ว':'b-push'}[it.status]||'b-pend';
+  var bd={'รอจับคู่':'b-pend','จับคู่แล้ว':'b-mat','เพิ่มใหม่':'b-new','ยืนยันแล้ว':'b-conf','ส่งแล้ว':'b-push'}[it.status]||'b-pend';
   return '<div><div class="exn">'+esc(it.name)+' <span class="badge '+bd+'">'+esc(it.status)+'</span></div>'
     +'<div class="exm">'+esc(it.size)+' · '+esc(it.pack)+' · <span style="font-size:10px">'+esc(it.source)+'</span></div>'
     +'<div class="prc"><span>ทุน <b>'+nf(it.costNew)+'</b></span><span>ปลีก <b>'+nf(it.retailNew)+'</b></span><span>ส่ง <b>'+nf(it.wholeNew)+'</b></span></div></div>';
@@ -132,7 +134,7 @@ function rightHtml(it){
     var confd=it.status==='ยืนยันแล้ว'||it.status==='ส่งแล้ว';
     return '<div class="matched"><div class="mn">✔ '+esc(it.klhName)+'</div>'
       +'<div class="cb">บาร์โค้ด '+esc(it.barcode)+'</div>'
-      +'<div class="diff"><span>ทุน '+nf(it.costOld)+'→<b>'+nf(it.costNew)+'</b> '+d(it.costNew,it.costOld)+'</span>'
+      +'<div class="diff"><span>ทุน <b>'+nf(it.costOld)+'</b> <span style="color:#aaa;font-size:11px">(คงเดิม · FIFO คุม)</span></span>'
       +'<span>ปลีก '+nf(it.retailOld)+'→<b>'+nf(it.retailNew)+'</b> '+d(it.retailNew,it.retailOld)+'</span>'
       +'<span>ส่ง '+nf(it.wholeOld)+'→<b>'+nf(it.wholeNew)+'</b> '+d(it.wholeNew,it.wholeOld)+'</span></div>'
       +'<div class="mbtns">'
@@ -141,9 +143,18 @@ function rightHtml(it){
           : '<button class="bt ok" onclick="conf(\''+it.rowKey+'\',true)">✅ ยืนยันราคา</button><button class="bt un" onclick="unmatch(\''+it.rowKey+'\')">เปลี่ยนการจับคู่</button>')
       +'</div></div>';
   }
-  // ยังไม่จับคู่ → ช่องค้น
+  // ไม่มีบาร์โค้ด + ยืนยันแล้ว = ยืนยันเพิ่มเป็นสินค้าใหม่ (รอส่ง)
+  if(it.status==='ยืนยันแล้ว'){
+    return '<div class="matched" style="background:#FFF7F2;border-color:#F6C9B5">'
+      +'<div class="mn">➕ สินค้าใหม่ (ออกบาร์โค้ดตอนส่ง)</div>'
+      +'<div class="cb">'+esc(it.name)+'</div>'
+      +'<div class="diff"><span>ทุนตั้งต้น <b>'+nf(it.costNew)+'</b></span><span>ปลีก <b>'+nf(it.retailNew)+'</b></span><span>ส่ง <b>'+nf(it.wholeNew)+'</b></span></div>'
+      +'<div class="mbtns"><button class="bt confd" disabled>✅ ยืนยันเพิ่มใหม่</button><button class="bt un" onclick="conf(\''+it.rowKey+'\',false)">ยกเลิก</button></div></div>';
+  }
+  // รอจับคู่/เพิ่มใหม่ → ช่องค้น (จับคู่ของเดิม) + ปุ่มเพิ่มเป็นสินค้าใหม่
   return '<input class="srch" id="s_'+it.rowKey+'" placeholder="ค้นใน KLH DATA (ชื่อ/บาร์โค้ด)" value="'+esc(it.name)+'" oninput="findKlh(\''+it.rowKey+'\')">'
-    +'<div class="cand" id="cand_'+it.rowKey+'"></div>';
+    +'<div class="cand" id="cand_'+it.rowKey+'"></div>'
+    +'<div class="mbtns" style="margin-top:7px"><button class="bt ok" style="background:var(--coral2)" onclick="conf(\''+it.rowKey+'\',true)">➕ เพิ่มเป็นสินค้าใหม่ (ไม่มีใน KLH DATA)</button></div>';
 }
 function findKlh(rk){
   var q=(document.getElementById('s_'+rk).value||'').trim().toLowerCase();
@@ -182,11 +193,11 @@ function refreshRow(rk){
   }).pbGetRow(rk);
 }
 function pushKlh(){
-  Swal.fire({title:'ส่งกลับ KLH DATA?',html:'อัปเดตเฉพาะแถวที่ <b>✅ ยืนยันแล้ว</b><br>ระบบจะ backup KLH DATA ก่อนทุกครั้ง',icon:'warning',
+  Swal.fire({title:'ส่งกลับ KLH DATA?',html:'เฉพาะแถวที่ <b>✅ ยืนยันแล้ว</b>:<br>• มีบาร์โค้ด → อัปเดต <b>ปลีก/ส่ง</b> (ไม่แตะทุน)<br>• ไม่มีบาร์โค้ด → <b>สร้างสินค้าใหม่</b> + ออกรหัสภายใน<br><span style="color:#999;font-size:12px">backup KLH DATA ก่อนทุกครั้ง</span>',icon:'warning',
     showCancelButton:true,confirmButtonText:'ส่งกลับเลย',cancelButtonText:'ยกเลิก',confirmButtonColor:'#1E7A3A'})
   .then(function(a){ if(!a.isConfirmed)return; showOv();
     google.script.run.withSuccessHandler(function(r){ hideOv();
-      if(r&&r.ok){ Swal.fire('สำเร็จ','อัปเดต '+r.updated+' รายการ\nสำรองไว้ที่ชีต: '+r.backup,'success'); resetLoad(); loadStats(); }
+      if(r&&r.ok){ Swal.fire('สำเร็จ','อัปเดตราคา '+r.updated+' · สร้างใหม่ '+(r.created||0)+' รายการ\nสำรองไว้ที่ชีต: '+r.backup,'success'); resetLoad(); loadStats(); }
       else Swal.fire('แจ้งเตือน',(r&&r.msg)||'ไม่สำเร็จ','warning');
     }).withFailureHandler(function(e){hideOv();Swal.fire('Error',''+e,'error');}).pbPushToKlh();
   });
