@@ -1024,6 +1024,115 @@ function getBankTxns(yyyymm) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
+// ════════════════════════════════════════════════════════════
+//  ยอดเคลื่อนไหว (Statement) — running balance + ตรวจยอดต้น/ปลายงวด ต่อบัญชี
+// ════════════════════════════════════════════════════════════
+var SH_ACCTBAL = 'ACCOUNT_BALANCES';
+var H_ACCTBAL  = ['DATE','BANK','BALANCE','NOTE'];
+function acctBalSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName(SH_ACCTBAL);
+  if (!s) { s = ss.insertSheet(SH_ACCTBAL);
+    s.getRange(1,1,1,H_ACCTBAL.length).setValues([H_ACCTBAL]).setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    s.setFrozenRows(1);
+  }
+  return s;
+}
+function abDate_(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+
+// บัญชีทั้งหมด (ให้ UI ทำ dropdown + โชว์เลขบัญชี)
+function getBankAccountsList() {
+  var out = [];
+  for (var k in BANK_ACCOUNTS) out.push({ code:k, full:BANK_ACCOUNTS[k].full, name:BANK_ACCOUNTS[k].name, type:BANK_ACCOUNTS[k].type });
+  return { ok:true, accounts:out };
+}
+
+// ยอดอ้างอิงต้น/ปลายงวดที่บันทึกไว้ (anchor) — ผู้ใช้กรอกจากยอดจริงในธนาคาร
+function getAccountBalances() {
+  try {
+    var s = acctBalSheet_(); if (s.getLastRow()<2) return { ok:true, items:[] };
+    var rows = s.getRange(2,1,s.getLastRow()-1,H_ACCTBAL.length).getValues();
+    var items = rows.map(function(r,i){ return { row:i+2, date:abDate_(r[0]), bank:String(r[1]||''), balance:Number(r[2])||0, note:String(r[3]||'') }; })
+      .filter(function(x){ return x.date && x.bank; });
+    return { ok:true, items:items };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// บันทึก/แก้ยอดอ้างอิง (upsert ตาม วันที่+บัญชี)
+function saveAccountBalance(date, bank, balance, note) {
+  try {
+    date = abDate_(date); bank = String(bank||'').toUpperCase();
+    if (!date || !bank) return { ok:false, msg:'ต้องระบุวันที่ + บัญชี' };
+    var s = acctBalSheet_();
+    var rows = s.getLastRow()>1 ? s.getRange(2,1,s.getLastRow()-1,H_ACCTBAL.length).getValues() : [];
+    for (var i=0;i<rows.length;i++){
+      if (abDate_(rows[i][0])===date && String(rows[i][1]).toUpperCase()===bank){
+        s.getRange(i+2,3).setValue(Number(balance)||0); s.getRange(i+2,4).setValue(String(note||''));
+        return { ok:true, msg:'อัปเดตยอด '+bank+' '+date };
+      }
+    }
+    s.appendRow([date, bank, Number(balance)||0, String(note||'')]);
+    return { ok:true, msg:'บันทึกยอด '+bank+' '+date };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+function deleteAccountBalance(row) {
+  try { var s = acctBalSheet_(); if (row<2||row>s.getLastRow()) return { ok:false }; s.deleteRow(row); return { ok:true }; }
+  catch(e){ return { ok:false, msg:String(e) }; }
+}
+// seed ยอดอ้างอิงที่ผู้ใช้แจ้ง 20/6 + 22/6 (รันใน editor ครั้งเดียว)
+function seedBalances() {
+  var data = [
+    ['2026-06-20','KTB',384354.62], ['2026-06-20','BAY',669.43], ['2026-06-20','BAYC',-66980.49], ['2026-06-20','BAYF',723167.29],
+    ['2026-06-22','KTB',453266.62], ['2026-06-22','BAY',6779.43], ['2026-06-22','BAYC',-118793.49], ['2026-06-22','BAYF',723167.29]
+  ];
+  data.forEach(function(d){ saveAccountBalance(d[0], d[1], d[2], 'แจ้งยอดจริง'); });
+  return 'seed ยอดอ้างอิง 8 รายการ (20/6 + 22/6) เรียบร้อย';
+}
+
+// Statement: รายการเรียงวัน + ยอดคงเหลือวิ่ง (running) + จุดตรวจยอด (checkpoint) เทียบ anchor
+// openDate = วันยอดต้นงวด (ใช้ anchor วันนั้น/ก่อนหน้าล่าสุดเป็นยอดเปิด) · toDate ไม่บังคับ
+function bankStatement(bank, openDate, toDate) {
+  try {
+    bank = String(bank||'').toUpperCase();
+    openDate = abDate_(openDate);
+    toDate = toDate ? abDate_(toDate) : Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd');
+    var anchors = (getAccountBalances().items||[]).filter(function(a){ return a.bank===bank; });
+    // ยอดเปิด = anchor วันที่ <= openDate ที่ใหม่สุด
+    var open = null;
+    anchors.forEach(function(a){ if (a.date<=openDate && (!open || a.date>open.date)) open = a; });
+    var openBal = open ? open.balance : 0;
+    var openDt  = open ? open.date : openDate;
+
+    var s = bankSheet_(); var rows = s.getLastRow()>1 ? s.getDataRange().getValues() : [];
+    var txns = [];
+    for (var i=1;i<rows.length;i++){
+      if (String(rows[i][1]).toUpperCase()!==bank) continue;
+      var d = abDate_(rows[i][0]);
+      if (d<=openDt || d>toDate) continue;
+      txns.push({ row:i+1, date:d, dir:String(rows[i][2]||''), amount:Number(rows[i][3])||0,
+        cat:String(rows[i][4]||''), subject:String(rows[i][5]||''), note:String(rows[i][8]||'') });
+    }
+    txns.sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:a.row-b.row); });
+
+    var running = openBal, endOfDay = {};
+    txns.forEach(function(t){ running += (t.dir==='IN'? t.amount : -t.amount); t.running = running; endOfDay[t.date] = running; });
+
+    // checkpoint: anchor ใด ๆ ในช่วง (openDt, toDate] → เทียบยอดคำนวณสิ้นวันนั้น
+    var checks = [];
+    anchors.forEach(function(a){
+      if (a.date>openDt && a.date<=toDate){
+        var comp = openBal, bd = openDt;
+        for (var dk in endOfDay){ if (dk<=a.date && dk>=bd){ if (dk>bd || comp===openBal){ bd=dk; comp=endOfDay[dk]; } } }
+        // หา end-of-day ล่าสุด <= a.date
+        comp = openBal; var best='';
+        for (var dk2 in endOfDay){ if (dk2<=a.date && dk2>best){ best=dk2; comp=endOfDay[dk2]; } }
+        checks.push({ date:a.date, computed:comp, actual:a.balance, diff:Math.round((comp-a.balance)*100)/100 });
+      }
+    });
+    return { ok:true, bank:bank, account:(BANK_ACCOUNTS[bank]||{}), open:{date:openDt,balance:openBal,hasAnchor:!!open},
+             toDate:toDate, rows:txns, checks:checks, close:Math.round(running*100)/100, count:txns.length };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // แก้หมวด + หมายเหตุ + ผังบัญชี (ชำระหนี้ใคร / ค่าใช้จ่ายอะไร)
 function updateBankTxn(row, cat, note, account) {
   try {

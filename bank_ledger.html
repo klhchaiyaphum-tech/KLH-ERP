@@ -128,6 +128,38 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       </div>
     </div>
 
+    <!-- 📜 ยอดเคลื่อนไหว (Statement) + ตรวจยอด -->
+    <div class="sec" id="sec-stmt" style="margin-bottom:15px">
+      <div class="sec-h" onclick="toggleSec('stmt')" style="background:#E6F5EC">
+        <span class="dot" style="background:var(--green)"></span>
+        <b>📜 ยอดเคลื่อนไหว (Statement) + ตรวจยอดบัญชี</b>
+        <span class="muted" style="font-size:11.5px">ใส่ยอดต้นงวด → ดูยอดวิ่ง + เช็คตรงกับธนาคาร</span><span class="cv">▼</span>
+      </div>
+      <div class="sec-b" style="padding:14px 16px">
+        <div class="addrow" style="margin-bottom:10px">
+          <select id="stBank" onchange="renderAnchorPick()"></select>
+          <span class="muted" id="stAcctNo" style="font-size:12px"></span>
+        </div>
+        <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-weight:700;font-size:12.5px;margin-bottom:7px">📌 ยอดอ้างอิงจากธนาคาร (anchor) — กรอกยอดคงเหลือจริง ณ สิ้นวัน</div>
+          <div class="addrow">
+            <input type="date" id="stAnchorDate">
+            <input type="number" id="stAnchorBal" placeholder="ยอดคงเหลือ (ติดลบได้)" style="width:170px" step="0.01">
+            <button class="btn green sm" onclick="saveAnchor()">บันทึกยอดอ้างอิง</button>
+          </div>
+          <div id="stAnchorList" class="hint" style="margin-top:8px"></div>
+        </div>
+        <div class="addrow" style="margin-bottom:10px">
+          <span style="font-size:12.5px">ยอดต้นงวด:</span>
+          <select id="stOpenDate" style="min-width:150px"></select>
+          <span style="font-size:12.5px">ถึง:</span>
+          <input type="date" id="stToDate">
+          <button class="btn primary sm" onclick="showStatement()">📜 แสดง Statement</button>
+        </div>
+        <div id="stResult"></div>
+      </div>
+    </div>
+
     <div id="kpis"></div>
 
     <!-- เพิ่มรายการมือ (คีย์จาก statement) -->
@@ -174,7 +206,84 @@ function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'
   document.getElementById('month').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
   document.getElementById('aDate').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
   loadChart();
+  initStmt();
 })();
+
+// ── 📜 Statement / ตรวจยอด ──
+var _accts=[], _anchors=[];
+function initStmt(){
+  document.getElementById('stToDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('stAnchorDate').value=new Date().toISOString().slice(0,10);
+  google.script.run.withSuccessHandler(function(r){
+    _accts=(r&&r.accounts)||[];
+    document.getElementById('stBank').innerHTML=_accts.map(function(a){ return '<option value="'+a.code+'">'+esc(a.name)+'</option>'; }).join('');
+    loadAnchors();
+  }).getBankAccountsList();
+}
+function loadAnchors(){
+  google.script.run.withSuccessHandler(function(r){ _anchors=(r&&r.items)||[]; renderAnchorPick(); }).getAccountBalances();
+}
+function renderAnchorPick(){
+  var bank=document.getElementById('stBank').value;
+  var acct=_accts.filter(function(a){return a.code===bank;})[0]||{};
+  document.getElementById('stAcctNo').textContent=(acct.full||'')+' · '+(acct.type||'');
+  var mine=_anchors.filter(function(a){return a.bank===bank;}).sort(function(a,b){return a.date<b.date?1:-1;});
+  document.getElementById('stAnchorList').innerHTML = mine.length
+    ? 'ยอดที่บันทึก: '+mine.map(function(a){ return '<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px 8px;margin:2px">'+a.date+' = <b>'+nf(a.balance)+'</b> <a href="#" onclick="delAnchor('+a.row+');return false" style="color:var(--red)">✕</a></span>'; }).join('')
+    : '<span class="muted">ยังไม่มียอดอ้างอิงของบัญชีนี้ — กรอกด้านบน</span>';
+  var asc=mine.slice().sort(function(a,b){return a.date<b.date?-1:1;});
+  document.getElementById('stOpenDate').innerHTML=asc.map(function(a){ return '<option value="'+a.date+'">'+a.date+' (฿'+nf(a.balance)+')</option>'; }).join('') || '<option value="">— ยังไม่มี —</option>';
+}
+function saveAnchor(){
+  var bank=document.getElementById('stBank').value, date=document.getElementById('stAnchorDate').value, bal=document.getElementById('stAnchorBal').value;
+  if(!date||bal===''){ document.getElementById('msg').innerHTML='<div class="err">ใส่วันที่ + ยอด</div>'; return; }
+  google.script.run.withSuccessHandler(function(r){
+    document.getElementById('msg').innerHTML = r.ok?'<div class="okmsg">✅ '+r.msg+'</div>':'<div class="err">'+r.msg+'</div>';
+    document.getElementById('stAnchorBal').value=''; loadAnchors();
+  }).saveAccountBalance(date, bank, Number(bal), '');
+}
+function delAnchor(row){
+  google.script.run.withSuccessHandler(function(){ loadAnchors(); }).deleteAccountBalance(row);
+}
+function showStatement(){
+  var bank=document.getElementById('stBank').value, openDate=document.getElementById('stOpenDate').value, to=document.getElementById('stToDate').value;
+  if(!openDate){ document.getElementById('stResult').innerHTML='<div class="err">ยังไม่มียอดต้นงวด — บันทึกยอดอ้างอิงก่อน</div>'; return; }
+  document.getElementById('stResult').innerHTML='<div class="loading">กำลังคำนวณ...</div>';
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok){ document.getElementById('stResult').innerHTML='<div class="err">'+((r&&r.msg)||'ผิดพลาด')+'</div>'; return; }
+    renderStatement(r);
+  }).withFailureHandler(function(e){ document.getElementById('stResult').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .bankStatement(bank, openDate, to);
+}
+function renderStatement(r){
+  var chkByDate={}; (r.checks||[]).forEach(function(c){ chkByDate[c.date]=c; });
+  var h='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดต้นงวด '+r.open.date+'</div><div class="kv num">฿'+nf(r.open.balance)+'</div></div>'
+    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดคำนวณปลายงวด '+r.toDate+'</div><div class="kv num" style="color:'+(r.close<0?'var(--red)':'var(--green)')+'">฿'+nf(r.close)+'</div></div>'
+    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">จำนวนรายการ</div><div class="kv num">'+r.count+'</div></div></div>';
+  // checkpoint สรุป
+  if((r.checks||[]).length){
+    h+='<div style="margin-bottom:8px">'+r.checks.map(function(c){
+      var ok=Math.abs(c.diff)<0.01;
+      return '<span style="display:inline-block;border-radius:9px;padding:4px 10px;margin:2px;font-size:12px;font-weight:700;background:'+(ok?'var(--green-soft)':'var(--red-soft)')+';color:'+(ok?'var(--green)':'var(--red)')+'">'
+        +(ok?'✅':'⚠️')+' '+c.date+' ธนาคาร ฿'+nf(c.actual)+(ok?' ตรง':' · คำนวณ ฿'+nf(c.computed)+' ต่าง ฿'+nf(c.diff))+'</span>';
+    }).join('')+'</div>';
+  }
+  h+='<div style="overflow-x:auto"><table><tr><th>วันที่</th><th>หมวด</th><th style="width:30%">รายละเอียด</th><th class="r">ถอน</th><th class="r">ฝาก</th><th class="r">คงเหลือ</th></tr>';
+  r.rows.forEach(function(t){
+    var chk=chkByDate[t.date];
+    h+='<tr'+(chk?' style="border-bottom:2px solid '+(Math.abs(chk.diff)<0.01?'var(--green)':'var(--red)')+'"':'')+'>'
+      +'<td class="num">'+t.date+'</td>'
+      +'<td><span class="pill '+(t.cat||'')+'">'+(CATS[t.cat]||t.cat||'—')+'</span></td>'
+      +'<td class="muted" style="font-size:11.5px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+(t.note?' | '+esc(t.note):'')+'">'+esc(t.subject)+(t.note?' <b>['+esc(t.note)+']</b>':'')+'</td>'
+      +'<td class="r num" style="color:var(--red)">'+(t.dir==='OUT'?nf(t.amount):'')+'</td>'
+      +'<td class="r num" style="color:var(--green)">'+(t.dir==='IN'?nf(t.amount):'')+'</td>'
+      +'<td class="r num" style="font-weight:700;color:'+(t.running<0?'var(--red)':'var(--ink)')+'">'+nf(t.running)+'</td></tr>';
+  });
+  h+='</table></div>';
+  if(!r.rows.length) h+='<div class="loading">ไม่มีรายการในช่วงนี้</div>';
+  document.getElementById('stResult').innerHTML=h;
+}
 
 function load(){
   document.getElementById('secs').innerHTML='<div class="loading">กำลังโหลด...</div>';
