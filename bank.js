@@ -681,6 +681,11 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts, forceBank) {
     else if (/โอนเงิน BAY K L H บัญชีปลายทาง/.test(joined)) bank = 'BAY';
     else bank = 'BAY';
   }
+  // ข้อเท็จจริงธนาคาร: ออมทรัพย์/ฝากประจำ ติดลบไม่ได้ — ยอดคงเหลือ(col3)ติดลบ = บัญชีกระแสรายวัน(OD) แน่นอน
+  for (var bi = 0; bi < grid.length; bi++) {
+    var bal = parseFloat(String((grid[bi] || [])[3] || '').replace(/[, ]/g, ''));
+    if (!isNaN(bal) && bal < 0) { bank = 'BAYC'; break; }
+  }
 
   var count = 0;
   var fileKeys = {};            // กุญแจทุกแถวในไฟล์นี้ (ไว้เทียบหาเช็คคืน/แก้ไข)
