@@ -221,6 +221,7 @@ function fetchBankEmails(daysBack, opts) {
 
     if (added > 0) {
       var alerts = categorizeBankTxns_();
+      backfillAccountNumbers();
       if (alerts.length) sendWmsLine_('🔔 ตรวจอีเมลธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n'));
     }
     return { ok: true, added: added, skipped: skipped, msg: 'บันทึกใหม่ ' + added + ' รายการ (ซ้ำ ' + skipped + ')' };
@@ -523,7 +524,7 @@ function importBayStatements() {
     }
 
     var imported = ctx.imported, fileCount = ctx.fileCount, errs = ctx.errs, alerts = ctx.alerts;
-    if (imported > 0) alerts = alerts.concat(categorizeBankTxns_());
+    if (imported > 0) { alerts = alerts.concat(categorizeBankTxns_()); backfillAccountNumbers(); }
     if (alerts.length) sendWmsLine_('🏦 ตรวจ statement ธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n')
       + (alerts.length > 10 ? '\n…และอีก ' + (alerts.length - 10) + ' รายการ (ดูในสมุดเงินธนาคาร)' : ''));
     return { ok: errs.length === 0, files: fileCount, imported: imported,
@@ -1015,7 +1016,7 @@ function getBankTxns(yyyymm) {
           bank: String(rows[i][1] || ''), dir: String(rows[i][2] || ''),
           amount: Number(rows[i][3]) || 0, cat: String(rows[i][4] || ''),
           subject: String(rows[i][5] || ''), note: String(rows[i][8] || ''),
-          account: String(rows[i][9] || '')
+          account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || '')
         });
       }
     }
@@ -1039,6 +1040,21 @@ function acctBalSheet_() {
   return s;
 }
 function abDate_(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+
+// เติมเลขบัญชีจริงลงคอลัมน์ K (ACCT_NO) ทุกแถว — ดึงจาก BANK code (B) อัตโนมัติ · idempotent
+function backfillAccountNumbers() {
+  try {
+    var s = bankSheet_();
+    if (String(s.getRange(1,11).getValue()) !== 'ACCT_NO')
+      s.getRange(1,11).setValue('ACCT_NO').setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    var last = s.getLastRow();
+    if (last < 2) return { ok:true, filled:0 };
+    var banks = s.getRange(2,2,last-1,1).getValues();   // คอลัมน์ B
+    var out = banks.map(function(r){ var a = BANK_ACCOUNTS[String(r[0]).toUpperCase()]; return [ a ? a.full : '' ]; });
+    s.getRange(2,11,out.length,1).setValues(out);
+    return { ok:true, filled:out.length };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
 
 // บัญชีทั้งหมด (ให้ UI ทำ dropdown + โชว์เลขบัญชี)
 function getBankAccountsList() {
@@ -1151,8 +1167,9 @@ function reclassifyBankTxn(row, newBank) {
     var s = bankSheet_();
     if (row < 2 || row > s.getLastRow()) return { ok: false, msg: 'แถวไม่ถูกต้อง' };
     var nb = String(newBank || '').trim().toUpperCase();
-    if (['KTB','BAY','BAYC'].indexOf(nb) < 0) return { ok: false, msg: 'บัญชีไม่ถูกต้อง' };
+    if (['KTB','BAY','BAYC','BAYF'].indexOf(nb) < 0) return { ok: false, msg: 'บัญชีไม่ถูกต้อง' };
     s.getRange(row, 2).setValue(nb);
+    s.getRange(row, 11).setValue((BANK_ACCOUNTS[nb] || {}).full || '');   // อัปเดตเลขบัญชี K ตามไปด้วย
     return { ok: true, msg: 'ย้ายไป ' + nb + ' แล้ว' };
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
