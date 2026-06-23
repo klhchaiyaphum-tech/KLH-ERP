@@ -673,7 +673,13 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts, forceBank) {
   alerts = alerts || [];
   var joined = grid.map(function(r){ return r.join('|'); }).join('\n');
   // จับบัญชี (ลำดับความแน่นอน): บังคับจากโฟลเดอร์ → เลขบัญชีในไฟล์ → ชื่อไฟล์ → ข้อความโอนภายใน → default ออม
+  // ลำดับความแน่นอน: โฟลเดอร์ → เลขบัญชีในหัวไฟล์(.xls) → ประเภทบัญชีในหัวไฟล์(.xls) → ชื่อไฟล์ → ข้อความโอน → default
   var bank = forceBank || bankFromAccountDigits_(joined + '|' + fileName) || '';
+  if (!bank && /ประเภทบัญชี/.test(joined)) {
+    if (/ประเภทบัญชี.{0,4}กระแส/.test(joined)) bank = 'BAYC';
+    else if (/ประเภทบัญชี.{0,6}(ฝากประจำ|ประจำ)/.test(joined)) bank = 'BAYF';
+    else if (/ประเภทบัญชี.{0,4}ออม/.test(joined)) bank = 'BAY';
+  }
   if (!bank) {
     if (/กระแส|current|BAYC/i.test(fileName)) bank = 'BAYC';
     else if (/ฝากประจำ|ประจำ|BAYF/i.test(fileName)) bank = 'BAYF';
