@@ -677,19 +677,22 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts) {
     else if (amtIn > 0 && /รับโอนเงิน|จ่ายคิวอาร์|พร้อมเพย์/.test(desc)) { cat = 'SALE'; isCustomerIn = true; }
     else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
 
+    // เช็ค (CL) สั่งจ่ายได้เฉพาะบัญชีกระแสรายวัน → บังคับเป็น BAYC เสมอ (กันจัดผิดไปออมทรัพย์)
+    var rowBank = (code === 'CL') ? 'BAYC' : bank;
+
     var pair = [];
     if (amtIn > 0)  pair.push(['IN', amtIn]);
     if (amtOut > 0) pair.push(['OUT', amtOut]);
     pair.forEach(function(p) {
-      var key = 'STMT-' + bank + '-' + dt + '-' + p[0] + '-' + p[1];
+      var key = 'STMT-' + rowBank + '-' + dt + '-' + p[0] + '-' + p[1];
       fileKeys[key] = 1;
       if (seen[key]) return;
-      s.appendRow([d, bank, p[0], p[1], cat, desc || ('statement: ' + fileName),
+      s.appendRow([d, rowBank, p[0], p[1], cat, desc || ('statement: ' + fileName),
                    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', acct]);
       seen[key] = 1; count++;
       // ลูกค้าโอนเข้า → เตือนเช็คตัดลูกหนี้ (AR)
       if (isCustomerIn) {
-        alerts.push('🟧 ลูกค้าโอนเข้า ' + (bank === 'BAY' ? 'กรุงศรีออมฯ' : 'กรุงศรีกระแสฯ')
+        alerts.push('🟧 ลูกค้าโอนเข้า ' + (rowBank === 'BAY' ? 'กรุงศรีออมฯ' : 'กรุงศรีกระแสฯ')
           + ' ฿' + p[1].toLocaleString() + ' (' + d + ')\n' + desc.slice(0, 70)
           + '\n→ เช็คว่าเป็นลูกหนี้ชำระหนี้ไหม → ตัด AR ใน Customer & AR แล้วเปลี่ยนหมวดเป็น "ตัดลูกหนี้"');
       }
@@ -989,6 +992,18 @@ function updateBankTxn(row, cat, note, account) {
     s.getRange(row, 9).setValue(String(note || ''));
     s.getRange(row, 10).setValue(String(account || ''));
     return { ok: true };
+  } catch(e) { return { ok: false, msg: e.toString() }; }
+}
+
+// ย้ายรายการไปบัญชีที่ถูก (เช่น เช็คจ่ายจากกระแส แต่ถูกจัดเป็นออมทรัพย์)
+function reclassifyBankTxn(row, newBank) {
+  try {
+    var s = bankSheet_();
+    if (row < 2 || row > s.getLastRow()) return { ok: false, msg: 'แถวไม่ถูกต้อง' };
+    var nb = String(newBank || '').trim().toUpperCase();
+    if (['KTB','BAY','BAYC'].indexOf(nb) < 0) return { ok: false, msg: 'บัญชีไม่ถูกต้อง' };
+    s.getRange(row, 2).setValue(nb);
+    return { ok: true, msg: 'ย้ายไป ' + nb + ' แล้ว' };
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 

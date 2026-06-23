@@ -298,6 +298,7 @@ function render(txns){
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
           +'<td class="muted" style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
+          + ((t.bank==='BAY'||t.bank==='BAYC') ? '<button class="btn sm" style="color:#1565C0" title="ย้ายไป'+(t.bank==='BAY'?'กระแสรายวัน':'ออมทรัพย์')+'" onclick="moveBank('+t.row+',\''+(t.bank==='BAY'?'BAYC':'BAY')+'\')">⇄ '+(t.bank==='BAY'?'กระแส':'ออม')+'</button> ' : '')
           +'<button class="btn sm" style="color:var(--red)" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
       });
@@ -320,6 +321,16 @@ function saveTxn(row){
     if (r.ok) load();
   }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
   .updateBankTxn(row, document.getElementById('cat-'+row).value, document.getElementById('note-'+row).value, document.getElementById('acc-'+row).value);
+}
+
+function moveBank(row, target){
+  var nm = target==='BAYC' ? 'กรุงศรีกระแสรายวัน' : 'กรุงศรีออมทรัพย์';
+  if (!confirm('ย้ายรายการนี้ไปบัญชี '+nm+' ?')) return;
+  google.script.run.withSuccessHandler(function(r){
+    document.getElementById('msg').innerHTML = r.ok ? '<div class="okmsg">✅ '+r.msg+'</div>' : '<div class="err">'+r.msg+'</div>';
+    if (r.ok) load();
+  }).withFailureHandler(function(e){ document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>'; })
+  .reclassifyBankTxn(row, target);
 }
 
 function delTxn(row){
