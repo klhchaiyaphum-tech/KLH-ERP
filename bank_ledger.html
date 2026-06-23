@@ -135,7 +135,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
       <h2>➕ เพิ่มรายการมือ (คีย์จาก statement ได้เลย)</h2>
       <div class="addrow">
         <input type="date" id="aDate">
-        <select id="aBank"><option value="KTB">กรุงไทย ออมทรัพย์</option><option value="BAY">กรุงศรี ออมทรัพย์</option><option value="BAYC">กรุงศรี กระแสรายวัน</option></select>
+        <select id="aBank"><option value="KTB">กรุงไทย ออมทรัพย์</option><option value="BAY">กรุงศรี ออมทรัพย์</option><option value="BAYC">กรุงศรี กระแสรายวัน</option><option value="BAYF">กรุงศรี ฝากประจำ</option></select>
         <select id="aDir"><option value="IN">เงินเข้า</option><option value="OUT">เงินออก</option></select>
         <input type="number" id="aAmt" placeholder="ยอดเงิน" style="width:120px">
         <select id="aCat">
@@ -192,23 +192,25 @@ function groupOf(t){
     if (t.dir==='IN') return t.cat==='TRANSFER' ? 'b_tf' : 'b_pp';
     return 'b_out';
   }
+  if (t.bank==='BAYF') return 'bf';            // ฝากประจำ (ดอกเบี้ย/ภาษี/ฝาก-ถอน)
   return t.dir==='IN' ? 'bc_in' : 'bc_out';   // BAYC กระแสรายวัน
 }
 var GROUPS = [
-  { id:'k_in',  name:'KTB เงินเข้า (ยอดขาย KLH ทั้งหมด)',                    color:'#3A37C9' },
+  { id:'k_in',  name:'KTB เงินเข้า (ยอดขาย KLH ทั้งหมด) · 307-0-40478-2',      color:'#3A37C9' },
   { id:'k_out', name:'KTB เงินออก (โยกไป BAY · ไม่ตรง = ค่าธรรมเนียม/ค่าบัญชี)', color:'#D98A0B' },
-  { id:'b_pp',  name:'BAY PromptPay เข้า = ลูกค้าโอน (⚠️ เสีย 0.5% — แจ้งย้ายไป KTB)', color:'#2E9E55' },
+  { id:'b_pp',  name:'BAY PromptPay เข้า = ลูกค้าโอน (⚠️ เสีย 0.5%) · 023-1-64428-0', color:'#2E9E55' },
   { id:'b_tf',  name:'BAY เงินเข้า = โยกเงินจาก KTB (ไม่นับขาย)',              color:'#6A1B9A' },
   { id:'b_out', name:'BAY ออมทรัพย์ ออก (โยกไปกระแสฯ · ไม่ตรง = ค่าน้ำ/อื่นๆ)',  color:'#EBA13C' },
-  { id:'bc_in', name:'กรุงศรีกระแสฯ เข้า (โยกจากออมทรัพย์)',                   color:'#1565C0' },
-  { id:'bc_out',name:'กรุงศรีกระแสฯ จ่ายออก (ชำระหนี้/ค่าใช้จ่าย — ระบุผังบัญชี)', color:'#D9512B' }
+  { id:'bc_in', name:'กรุงศรีกระแสฯ เข้า (โยกจากออมทรัพย์) · 023-0-02116-7',     color:'#1565C0' },
+  { id:'bc_out',name:'กรุงศรีกระแสฯ จ่ายออก (ชำระหนี้/ค่าใช้จ่าย — ระบุผังบัญชี)', color:'#D9512B' },
+  { id:'bf',    name:'กรุงศรีฝากประจำ (ดอกเบี้ย/ภาษี · 9 เม.ย.) · 023-2-08835-4', color:'#00897B' }
 ];
 
 function render(txns){
   _lastTxns = txns || [];
   // KPI
-  var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0 };
-  var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[] };
+  var sums = { k_in:0, k_out:0, b_pp:0, b_tf:0, b_out:0, bc_in:0, bc_out:0, bf:0 };
+  var grp  = { k_in:[], k_out:[], b_pp:[], b_tf:[], b_out:[], bc_in:[], bc_out:[], bf:[] };
   // หมวดบัญชีที่เป็น "หนี้สิน" (จากผังบัญชี) — ไม่นับเป็นค่าใช้จ่ายในงบ
   var liab = {}; ACCTS.forEach(function(a){ if(a && a.type==='หนี้สิน' && a.name) liab[a.name]=1; });
   // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT) · โยก ออม→กระแส (b2c)
@@ -255,7 +257,8 @@ function render(txns){
     var d = days[t.date] || (days[t.date] = { kIn:0,kOut:0,bIn:0,bOut:0,cIn:0,cOut:0,sale:0 });
     if (t.bank==='KTB'){ if(t.dir==='IN')d.kIn+=t.amount; else d.kOut+=t.amount; }
     else if (t.bank==='BAY'){ if(t.dir==='IN')d.bIn+=t.amount; else d.bOut+=t.amount; }
-    else { if(t.dir==='IN')d.cIn+=t.amount; else d.cOut+=t.amount; }
+    else if (t.bank==='BAYC'){ if(t.dir==='IN')d.cIn+=t.amount; else d.cOut+=t.amount; }
+    // BAYF ฝากประจำ (ดอกเบี้ยปีละครั้ง) ไม่รวมในสรุปรายวันกระแส
     if (t.cat==='SALE'||t.cat==='AR') d.sale+=t.amount;
   });
   var dayKeys = Object.keys(days).sort().reverse();

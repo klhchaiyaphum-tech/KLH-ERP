@@ -8,9 +8,33 @@
 
 var SH_BANK  = 'BANK_TRANSACTIONS';
 var H_BANK   = ['DATE','BANK','DIRECTION','AMOUNT','CATEGORY','SUBJECT','EMAIL_DATE','MSG_ID','NOTE','ACCOUNT'];
-// BANK: KTB=กรุงไทยออมทรัพย์ · BAY=กรุงศรีออมทรัพย์ · BAYC=กรุงศรีกระแสรายวัน
+// BANK: KTB=กรุงไทยออมทรัพย์ · BAY=กรุงศรีออมทรัพย์ · BAYC=กรุงศรีกระแสรายวัน · BAYF=กรุงศรีฝากประจำ
 // CATEGORY: SALE/TRANSFER/PAYMENT/EXPENSE/UNKNOWN(รอผู้ใช้ระบุ)
 // ACCOUNT: ผังบัญชีค่าใช้จ่าย → ดึงเข้างบกำไรขาดทุน
+
+// ── ทะเบียนบัญชีจริง (source of truth) — เลขหลักที่ 2: 0=กระแส 1=ออม 2=ประจำ ──
+var BANK_ACCOUNTS = {
+  KTB:  { full:'307-0-40478-2', digits:'3070404782', short:'40478', name:'กรุงไทย ออมทรัพย์',   type:'ออมทรัพย์' },
+  BAY:  { full:'023-1-64428-0', digits:'0231644280', short:'64428', name:'กรุงศรี ออมทรัพย์',   type:'ออมทรัพย์' },
+  BAYC: { full:'023-0-02116-7', digits:'0230021167', short:'02116', name:'กรุงศรี กระแสรายวัน', type:'กระแสรายวัน' },
+  BAYF: { full:'023-2-08835-4', digits:'0232088354', short:'08835', name:'กรุงศรี ฝากประจำ',    type:'ฝากประจำ' }
+};
+// ชื่อโฟลเดอร์ย่อยใน BANK_STATEMENTS → รหัสบัญชี (ระบุบัญชีตอนนำเข้า ไม่ต้องเดา)
+function bankFromFolderName_(nm) {
+  nm = String(nm || '');
+  if (/กระแส|current|BAYC/i.test(nm)) return 'BAYC';
+  if (/ฝากประจำ|ประจำ|fixed|BAYF/i.test(nm)) return 'BAYF';
+  if (/ออม|saving|BAY(?!C|F)/i.test(nm)) return 'BAY';
+  if (/กรุงไทย|KTB/i.test(nm)) return 'KTB';
+  return '';
+}
+// เลขบัญชี (จากหัวไฟล์/ข้อความ) → รหัสบัญชี
+function bankFromAccountDigits_(txt) {
+  var d = String(txt || '').replace(/[^0-9]/g, '');
+  // จับเฉพาะเลขบัญชีเต็ม 10 หลัก (แม่นยำ ไม่ false positive จากเลขอ้างอิงในรายการ)
+  for (var k in BANK_ACCOUNTS) { if (d.indexOf(BANK_ACCOUNTS[k].digits) >= 0) return k; }
+  return '';
+}
 
 function bankSheet_() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -425,6 +449,49 @@ function stmtFolder_() {
   return DriveApp.createFolder('BANK_STATEMENTS');
 }
 
+// ประมวลผลไฟล์ statement หนึ่งไฟล์ — forceBank (ถ้ามี) = บัญชีที่ระบุจากโฟลเดอร์/ผู้ใช้ (ไม่เดา)
+function processStmtFile_(f, forceBank, s, seen, ctx) {
+  var name = f.getName();
+  var grid = null, tempId = null;
+  try {
+    var mime = f.getMimeType();
+    if (/\.zip$/i.test(name)) {
+      var n0 = 0;
+      Utilities.unzip(f.getBlob().setContentType('application/zip')).forEach(function(b) {
+        n0 += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
+      });
+      ctx.imported += n0; ctx.fileCount++; f.moveTo(ctx.done); return;
+    }
+    if (/\.txt$/i.test(name)) {
+      ctx.imported += parseMt940_(f.getBlob().getDataAsString('UTF-8'), s, seen);
+      ctx.fileCount++; f.moveTo(ctx.done); return;
+    }
+    if (mime === MimeType.CSV || /\.csv$/i.test(name)) {
+      grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8').replace(/^﻿/, ''));  // ตัด BOM
+    } else if (mime === MimeType.GOOGLE_SHEETS) {
+      grid = SpreadsheetApp.openById(f.getId()).getSheets()[0].getDataRange().getValues();
+    } else if (/\.xlsx?$/i.test(name) || mime === MimeType.MICROSOFT_EXCEL) {
+      var conv = Drive.Files.create({ name: 'tmp_stmt', mimeType: 'application/vnd.google-apps.spreadsheet' }, f.getBlob());
+      tempId = conv.id;
+      grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
+    } else { return; }
+
+    var head = grid.slice(0, 12).map(function(r){ return (r||[]).join('|'); }).join('\n');
+    // จับบัญชีแบบไม่เดา: 1) โฟลเดอร์ที่ผู้ใช้วาง 2) เลขบัญชีในหัวไฟล์ 3) ชื่อไฟล์
+    var detected = forceBank || bankFromAccountDigits_(head + '|' + name) || bankFromFolderName_(name);
+
+    var isKtb = (detected === 'KTB') || /Historical_SSKB|กรุงไทย/i.test(name) || /ถอนเงิน\/ฝากเงิน|ยอดคงเหลือยกมา/.test(head);
+    var isKrungsri = /statement\s*inquiry|inquiry/i.test(name) || /B\/F/.test(head) || /\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/.test(head);
+
+    var n;
+    if (isKtb) n = parseKtbStatementGrid_(grid, name, s, seen);
+    else if (isKrungsri) n = parseKrungsriCsv_(grid, name, s, seen, ctx.alerts, detected || '');
+    else n = parseStatementGrid_(grid, detected || 'BAY', name, s, seen);
+    ctx.imported += n; ctx.fileCount++; f.moveTo(ctx.done);
+  } catch(e) { ctx.errs.push(name + ': ' + e.message); }
+  finally { if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch(e2) {} } }
+}
+
 function importBayStatements() {
   try {
     var folder = stmtFolder_();
@@ -434,69 +501,28 @@ function importBayStatements() {
     var seen = {};
     if (s.getLastRow() > 1) s.getRange(2, 8, s.getLastRow()-1, 1).getValues().forEach(function(r){ if (r[0]) seen[String(r[0])] = 1; });
 
-    var files = folder.getFiles();
-    var imported = 0, fileCount = 0, errs = [], alerts = [];
-    while (files.hasNext()) {
-      var f = files.next();
-      var name = f.getName();
-      var bankCode = /กระแส|current|BAYC/i.test(name) ? 'BAYC' : 'BAY';
-      var grid = null, tempId = null;
-      try {
-        var mime = f.getMimeType();
-        // ZIP (statement กรุงไทย MT940) หรือ .txt MT940 → อ่านตรง
-        if (/\.zip$/i.test(name)) {
-          var n0 = 0;
-          Utilities.unzip(f.getBlob().setContentType('application/zip')).forEach(function(b) {
-            n0 += parseMt940_(b.getDataAsString('UTF-8'), s, seen);
-          });
-          imported += n0; fileCount++;
-          f.moveTo(done);
-          continue;
-        }
-        if (/\.txt$/i.test(name)) {
-          var n1 = parseMt940_(f.getBlob().getDataAsString('UTF-8'), s, seen);
-          imported += n1; fileCount++;
-          f.moveTo(done);
-          continue;
-        }
-        if (mime === MimeType.CSV || /\.csv$/i.test(name)) {
-          // ตัด BOM (กรุงศรี export มี U+FEFF นำหน้า ทำให้ parse เพี้ยน)
-          grid = Utilities.parseCsv(f.getBlob().getDataAsString('UTF-8').replace(/^﻿/, ''));
-        } else if (mime === MimeType.GOOGLE_SHEETS) {
-          grid = SpreadsheetApp.openById(f.getId()).getSheets()[0].getDataRange().getValues();
-        } else if (/\.xlsx?$/i.test(name) || mime === MimeType.MICROSOFT_EXCEL) {
-          var conv = Drive.Files.create({ name: 'tmp_stmt', mimeType: 'application/vnd.google-apps.spreadsheet' }, f.getBlob());
-          tempId = conv.id;
-          grid = SpreadsheetApp.openById(tempId).getSheets()[0].getDataRange().getValues();
-        } else { continue; }   // ข้ามไฟล์ชนิดอื่น
+    var ctx = { imported:0, fileCount:0, errs:[], alerts:[], done:done };
 
-        // KTB statement (ถอดรหัสแล้ว) — ชื่อ Historical_SSKB หรือเจอ "ถอนเงิน/ฝากเงิน" + ยอดคงเหลือยกมา
-        var isKtb = /Historical_SSKB|กรุงไทย/i.test(name);
-        if (!isKtb) {
-          for (var gk = 0; gk < Math.min(grid.length, 20); gk++) {
-            var rk = (grid[gk] || []).join('|');
-            if (/ถอนเงิน\/ฝากเงิน|ยอดคงเหลือยกมา/.test(rk)) { isKtb = true; break; }
-          }
-        }
-        // กรุงศรี: ชื่อ StatementInquiry · หรือเจอ B/F / วันเวลา
-        var isKrungsri = /statement\s*inquiry|inquiry/i.test(name);
-        if (!isKtb && !isKrungsri) {
-          for (var gi = 0; gi < Math.min(grid.length, 6); gi++) {
-            var rowStr = (grid[gi] || []).join('|');
-            if (/B\/F/.test(rowStr) || /\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/.test(rowStr)) { isKrungsri = true; break; }
-          }
-        }
-        var n = isKtb
-          ? parseKtbStatementGrid_(grid, name, s, seen)
-          : (isKrungsri
-              ? parseKrungsriCsv_(grid, name, s, seen, alerts)
-              : parseStatementGrid_(grid, bankCode, name, s, seen));
-        imported += n; fileCount++;
-        f.moveTo(done);
-      } catch(e) { errs.push(name + ': ' + e.message); }
-      finally { if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch(e2) {} } }
+    // 1) ไฟล์ที่ราก BANK_STATEMENTS — จับบัญชีจากหัวไฟล์/ชื่อ
+    var files = folder.getFiles();
+    while (files.hasNext()) { processStmtFile_(files.next(), '', s, seen, ctx); }
+
+    // 2) โฟลเดอร์ย่อยต่อบัญชี (กระแส/ออม/ฝากประจำ/กรุงไทย) — บังคับบัญชีตามโฟลเดอร์ (ไม่เดา)
+    var subs = folder.getFolders();
+    while (subs.hasNext()) {
+      var sub = subs.next();
+      if (sub.getName() === 'นำเข้าแล้ว') continue;
+      var fb = bankFromFolderName_(sub.getName());
+      if (!fb) continue;
+      var subDoneIt = sub.getFoldersByName('นำเข้าแล้ว');
+      var subDone = subDoneIt.hasNext() ? subDoneIt.next() : sub.createFolder('นำเข้าแล้ว');
+      var subCtx = { imported:ctx.imported, fileCount:ctx.fileCount, errs:ctx.errs, alerts:ctx.alerts, done:subDone };
+      var sf = sub.getFiles();
+      while (sf.hasNext()) { processStmtFile_(sf.next(), fb, s, seen, subCtx); }
+      ctx.imported = subCtx.imported; ctx.fileCount = subCtx.fileCount;
     }
 
+    var imported = ctx.imported, fileCount = ctx.fileCount, errs = ctx.errs, alerts = ctx.alerts;
     if (imported > 0) alerts = alerts.concat(categorizeBankTxns_());
     if (alerts.length) sendWmsLine_('🏦 ตรวจ statement ธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n')
       + (alerts.length > 10 ? '\n…และอีก ' + (alerts.length - 10) + ' รายการ (ดูในสมุดเงินธนาคาร)' : ''));
@@ -643,13 +669,18 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
 // ── Krungsri StatementInquiry CSV (ไม่มี header, แถวแรก B/F ยอดยกมา) ──
 // คอลัมน์: 0 วันเวลา dd/mm/yyyy hh:mm:ss · 1 ถอน · 2 ฝาก · 3 คงเหลือ · 4 รหัส(TN/TW/TD/FE/DN/CL) · 5 รายละเอียด
 // แยกบัญชี: เจอ "รับโอนเงิน BAY K L H บัญชีต้นทาง" = กระแสรายวัน(BAYC) · เจอ "โอนเงิน BAY K L H บัญชีปลายทาง" = ออมทรัพย์(BAY)
-function parseKrungsriCsv_(grid, fileName, s, seen, alerts) {
+function parseKrungsriCsv_(grid, fileName, s, seen, alerts, forceBank) {
   alerts = alerts || [];
   var joined = grid.map(function(r){ return r.join('|'); }).join('\n');
-  var bank = 'BAY';
-  if (/กระแส|current|BAYC/i.test(fileName)) bank = 'BAYC';
-  else if (/รับโอนเงิน BAY K L H บัญชีต้นทาง/.test(joined)) bank = 'BAYC';
-  else if (/โอนเงิน BAY K L H บัญชีปลายทาง/.test(joined)) bank = 'BAY';
+  // จับบัญชี (ลำดับความแน่นอน): บังคับจากโฟลเดอร์ → เลขบัญชีในไฟล์ → ชื่อไฟล์ → ข้อความโอนภายใน → default ออม
+  var bank = forceBank || bankFromAccountDigits_(joined + '|' + fileName) || '';
+  if (!bank) {
+    if (/กระแส|current|BAYC/i.test(fileName)) bank = 'BAYC';
+    else if (/ฝากประจำ|ประจำ|BAYF/i.test(fileName)) bank = 'BAYF';
+    else if (/รับโอนเงิน BAY K L H บัญชีต้นทาง/.test(joined)) bank = 'BAYC';
+    else if (/โอนเงิน BAY K L H บัญชีปลายทาง/.test(joined)) bank = 'BAY';
+    else bank = 'BAY';
+  }
 
   var count = 0;
   var fileKeys = {};            // กุญแจทุกแถวในไฟล์นี้ (ไว้เทียบหาเช็คคืน/แก้ไข)
@@ -673,26 +704,25 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts) {
     var cat = '', acct = '';
     var isCustomerIn = false;
     if (code === 'FE') { cat = 'EXPENSE'; acct = 'ค่าธรรมเนียมธนาคาร'; }
+    else if (code === 'IN') { cat = 'OTHER'; acct = 'ดอกเบี้ยรับ'; }    // ดอกเบี้ยเงินฝาก (ฝากประจำ ฯลฯ)
     else if (/K L H/.test(desc)) cat = 'TRANSFER';              // โยกเงินภายในชื่อตัวเอง
     else if (amtIn > 0 && /รับโอนเงิน|จ่ายคิวอาร์|พร้อมเพย์/.test(desc)) { cat = 'SALE'; isCustomerIn = true; }
     else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
-
-    // เช็ค (CL) สั่งจ่ายได้เฉพาะบัญชีกระแสรายวัน → บังคับเป็น BAYC เสมอ (กันจัดผิดไปออมทรัพย์)
-    var rowBank = (code === 'CL') ? 'BAYC' : bank;
+    // code 'TX' (ภาษีหัก ณ ที่จ่ายดอกเบี้ย) ปล่อยรอระบุ — จัดบัญชีจริงตอนทำรายการดอกเบี้ยฝากประจำ
 
     var pair = [];
     if (amtIn > 0)  pair.push(['IN', amtIn]);
     if (amtOut > 0) pair.push(['OUT', amtOut]);
     pair.forEach(function(p) {
-      var key = 'STMT-' + rowBank + '-' + dt + '-' + p[0] + '-' + p[1];
+      var key = 'STMT-' + bank + '-' + dt + '-' + p[0] + '-' + p[1];
       fileKeys[key] = 1;
       if (seen[key]) return;
-      s.appendRow([d, rowBank, p[0], p[1], cat, desc || ('statement: ' + fileName),
+      s.appendRow([d, bank, p[0], p[1], cat, desc || ('statement: ' + fileName),
                    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm'), key, '', acct]);
       seen[key] = 1; count++;
       // ลูกค้าโอนเข้า → เตือนเช็คตัดลูกหนี้ (AR)
       if (isCustomerIn) {
-        alerts.push('🟧 ลูกค้าโอนเข้า ' + (rowBank === 'BAY' ? 'กรุงศรีออมฯ' : 'กรุงศรีกระแสฯ')
+        alerts.push('🟧 ลูกค้าโอนเข้า ' + (bank === 'BAY' ? 'กรุงศรีออมฯ' : 'กรุงศรีกระแสฯ')
           + ' ฿' + p[1].toLocaleString() + ' (' + d + ')\n' + desc.slice(0, 70)
           + '\n→ เช็คว่าเป็นลูกหนี้ชำระหนี้ไหม → ตัด AR ใน Customer & AR แล้วเปลี่ยนหมวดเป็น "ตัดลูกหนี้"');
       }
