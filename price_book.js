@@ -66,6 +66,58 @@ function pbAutoMatch(){
   } catch(e){ return 'ERROR: '+e; }
 }
 
+// ── จับคู่รอบ 2 (เฉพาะที่ยัง "เพิ่มใหม่") — ขึ้นต้นตรงกัน + กันกำกวม/กันทับซ้ำ ──
+//  เคสที่จับ: ชื่อสมุดราคา = ชื่อ KLH + ส่วนต่อท้าย (ราคา/ขนาด) เช่น "มาม่าต้มยำ7บาท" ↔ "มาม่าต้มยำ"
+//  กฎปลอดภัย: (1) ฝั่งสั้นเป็นคำขึ้นต้นของฝั่งยาว (2) ต่างกัน ≤8 ตัว (3) KLH ที่เข้าได้ต้องบาร์โค้ดเดียว
+//             (4) บาร์โค้ดนั้นต้องถูกอ้างโดยสมุดราคาแถวเดียว (กันหลายขนาดไปทับบาร์โค้ดเดียวกัน)
+function pbAutoMatch2() {
+  try {
+    var s = pbSheet_(); if (!s || s.getLastRow()<2) return 'ไม่มีข้อมูลใน PRICE_BOOK';
+    var klh = klhDataSheet_(); var d = klh.getDataRange().getValues();
+    var sn = function(v){ var n=parseFloat(v); return isNaN(n)?0:n; };
+    var bucket = {};   // จัดกลุ่ม KLH ตาม 3 ตัวอักษรแรก (เร่งความเร็ว)
+    for (var i=1;i<d.length;i++){
+      var bc=String(d[i][0]||'').trim(); if(!bc) continue;
+      var norm=pbNorm_(d[i][1]); if(norm.length<6) continue;
+      var info={ barcode:bc, name:String(d[i][1]||''), norm:norm, cost:sn(d[i][17]), retail:sn(d[i][23]), whole:sn(d[i][21]) };
+      var k3=norm.slice(0,3); (bucket[k3]=bucket[k3]||[]).push(info);
+    }
+    var n = s.getLastRow()-1; var vals = s.getRange(2,1,n,PB_HEAD.length).getValues();
+    // pass A: หา candidate ต่อแถว + นับการอ้างบาร์โค้ด
+    var cand = [], claims = {};
+    for (var j=0;j<vals.length;j++){
+      cand[j]=null;
+      if (String(vals[j][0])!=='เพิ่มใหม่') continue;
+      var key=pbNorm_(vals[j][2]); if(key.length<6) continue;
+      var list=bucket[key.slice(0,3)]||[];
+      var hitBc=null, ok=true;
+      for (var m=0;m<list.length;m++){
+        var x=list[m];
+        var short=x.norm.length<=key.length?x.norm:key;
+        var lng  =x.norm.length<=key.length?key:x.norm;
+        if (lng.indexOf(short)===0 && (lng.length-short.length)<=8){
+          if (hitBc===null) hitBc=x.barcode;
+          else if (hitBc!==x.barcode){ ok=false; break; }   // หลาย KLH → กำกวม ทิ้ง
+        }
+      }
+      if (ok && hitBc){ for(var q=0;q<list.length;q++){ if(list[q].barcode===hitBc){ cand[j]=list[q]; break; } } claims[hitBc]=(claims[hitBc]||0)+1; }
+    }
+    // pass B: รับเฉพาะบาร์โค้ดที่ถูกอ้างโดยแถวเดียว
+    var matched=0, rem=0;
+    for (var j2=0;j2<vals.length;j2++){
+      if (String(vals[j2][0])!=='เพิ่มใหม่') continue;
+      var c=cand[j2];
+      if (c && claims[c.barcode]===1){
+        vals[j2][0]='จับคู่แล้ว'; vals[j2][1]=c.barcode; vals[j2][8]=c.name;
+        vals[j2][9]=c.cost; vals[j2][10]=c.retail; vals[j2][11]=c.whole; matched++;
+      } else rem++;
+    }
+    s.getRange(2,1,n,PB_HEAD.length).setValues(vals);
+    Logger.log('pbAutoMatch2: matched='+matched+' remain-new='+rem);
+    return 'จับคู่รอบ 2 ได้เพิ่ม '+matched+' รายการ · เหลือ "เพิ่มใหม่" '+rem;
+  } catch(e){ return 'ERROR: '+e; }
+}
+
 // ── นำเข้า (ขับจาก API เป็น chunk) ──
 function pbClear() {
   var s = pbSheet_(true);
