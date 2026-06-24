@@ -24,6 +24,7 @@ function doGet(e) {
     wms_analytics: 'wms_analytics',// วิเคราะห์คลัง ABC/EOQ/ROP/Dead stock
     pl:          'pl',             // งบกำไรขาดทุน (Phase 6.3)
     bank:        'bank_ledger',    // สมุดเงินธนาคาร — ตรวจ/แก้ BANK_TRANSACTIONS
+    bank_adjust: 'bank_adjust',    // ตรวจสอบ/ปรับปรุงบัญชี (ยอดยกมา + เพิ่มรายการมือ) — ผู้มีอำนาจ
     bank_m:      'bank_m',         // สมุดเงินธนาคาร — จอมือถือ (สรุปเร็ว)
     pricebook:   'pricebook_match',// เทียบราคา สมุดราคา → KLH DATA (staging)
     ap:          'ap',             // เจ้าหนี้การค้า (AP) — คงค้าง/ครบกำหนด/จ่าย/ประวัติ
@@ -47,6 +48,7 @@ function doGet(e) {
     wms_analytics: 'KLH วิเคราะห์คลัง',
     pl: 'KLH งบกำไรขาดทุน',
     bank: 'KLH สมุดเงินธนาคาร',
+    bank_adjust: 'KLH ตรวจสอบ/ปรับปรุงบัญชี',
     bank_m: 'KLH สรุปธนาคาร (มือถือ)',
     pricebook: 'KLH เทียบราคา',
     ap: 'KLH เจ้าหนี้การค้า',
