@@ -132,8 +132,8 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
     <div class="sec" id="sec-stmt" style="margin-bottom:15px">
       <div class="sec-h" onclick="toggleSec('stmt')" style="background:#E6F5EC">
         <span class="dot" style="background:var(--green)"></span>
-        <b>📜 ยอดเคลื่อนไหว (Statement) + ตรวจยอดบัญชี</b>
-        <span class="muted" style="font-size:11.5px">ใส่ยอดต้นงวด → ดูยอดวิ่ง + เช็คตรงกับธนาคาร</span><span class="cv">▼</span>
+        <b>📜 ยอดเคลื่อนไหว (Statement)</b>
+        <span class="muted" style="font-size:11.5px">ดูรายการ + ยอดคงเหลือวิ่ง · เทียบยอดจริงตอนสิ้นเดือน</span><span class="cv">▼</span>
       </div>
       <div class="sec-b" style="padding:14px 16px">
         <div class="addrow" style="margin-bottom:10px">
@@ -141,7 +141,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
           <span class="muted" id="stAcctNo" style="font-size:12px"></span>
         </div>
         <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px">
-          <div style="font-weight:700;font-size:12.5px;margin-bottom:7px">📌 ยอดอ้างอิงจากธนาคาร (anchor) — กรอกยอดคงเหลือจริง ณ สิ้นวัน</div>
+          <div style="font-weight:700;font-size:12.5px;margin-bottom:7px">📌 ยอดยกมา (ต้นงวด) — ใส่ครั้งเดียวจากยอดจริงในธนาคาร เพื่อเริ่มยอดวิ่ง</div>
           <div class="addrow">
             <input type="date" id="stAnchorDate">
             <input type="number" id="stAnchorBal" placeholder="ยอดคงเหลือ (ติดลบได้)" style="width:170px" step="0.01">
@@ -255,24 +255,19 @@ function showStatement(){
   }).withFailureHandler(function(e){ document.getElementById('stResult').innerHTML='<div class="err">'+e.message+'</div>'; })
   .bankStatement(bank, openDate, to);
 }
+var _stClose=0;
 function renderStatement(r){
-  var chkByDate={}; (r.checks||[]).forEach(function(c){ chkByDate[c.date]=c; });
+  _stClose=r.close;
   var h='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
-    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดต้นงวด '+r.open.date+'</div><div class="kv num">฿'+nf(r.open.balance)+'</div></div>'
-    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดคำนวณปลายงวด '+r.toDate+'</div><div class="kv num" style="color:'+(r.close<0?'var(--red)':'var(--green)')+'">฿'+nf(r.close)+'</div></div>'
+    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดยกมา '+r.open.date+'</div><div class="kv num">฿'+nf(r.open.balance)+'</div></div>'
+    +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดคงเหลือ '+r.toDate+'</div><div class="kv num" style="color:'+(r.close<0?'var(--red)':'var(--green)')+'">฿'+nf(r.close)+'</div></div>'
     +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">จำนวนรายการ</div><div class="kv num">'+r.count+'</div></div></div>';
-  // checkpoint สรุป
-  if((r.checks||[]).length){
-    h+='<div style="margin-bottom:8px">'+r.checks.map(function(c){
-      var ok=Math.abs(c.diff)<0.01;
-      return '<span style="display:inline-block;border-radius:9px;padding:4px 10px;margin:2px;font-size:12px;font-weight:700;background:'+(ok?'var(--green-soft)':'var(--red-soft)')+';color:'+(ok?'var(--green)':'var(--red)')+'">'
-        +(ok?'✅':'⚠️')+' '+c.date+' ธนาคาร ฿'+nf(c.actual)+(ok?' ตรง':' · คำนวณ ฿'+nf(c.computed)+' ต่าง ฿'+nf(c.diff))+'</span>';
-    }).join('')+'</div>';
-  }
   h+='<div style="overflow-x:auto"><table><tr><th>วันที่</th><th>หมวด</th><th style="width:30%">รายละเอียด</th><th class="r">ถอน</th><th class="r">ฝาก</th><th class="r">คงเหลือ</th></tr>';
+  // แถวยอดยกมา
+  h+='<tr style="background:var(--paper-2)"><td class="num">'+r.open.date+'</td><td colspan="4" class="muted">ยอดยกมา (B/F)</td>'
+    +'<td class="r num" style="font-weight:700;color:'+(r.open.balance<0?'var(--red)':'var(--ink)')+'">'+nf(r.open.balance)+'</td></tr>';
   r.rows.forEach(function(t){
-    var chk=chkByDate[t.date];
-    h+='<tr'+(chk?' style="border-bottom:2px solid '+(Math.abs(chk.diff)<0.01?'var(--green)':'var(--red)')+'"':'')+'>'
+    h+='<tr>'
       +'<td class="num">'+t.date+'</td>'
       +'<td><span class="pill '+(t.cat||'')+'">'+(CATS[t.cat]||t.cat||'—')+'</span></td>'
       +'<td class="muted" style="font-size:11.5px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+(t.note?' | '+esc(t.note):'')+'">'+esc(t.subject)+(t.note?' <b>['+esc(t.note)+']</b>':'')+'</td>'
@@ -281,8 +276,24 @@ function renderStatement(r){
       +'<td class="r num" style="font-weight:700;color:'+(t.running<0?'var(--red)':'var(--ink)')+'">'+nf(t.running)+'</td></tr>';
   });
   h+='</table></div>';
-  if(!r.rows.length) h+='<div class="loading">ไม่มีรายการในช่วงนี้</div>';
+  if(!r.rows.length) h+='<div class="loading" style="padding:18px">ไม่มีรายการเคลื่อนไหวในช่วงนี้ (ยอดคงเหลือ = ยอดยกมา)</div>';
+  // เทียบกับ statement จริง — ทำตอนสิ้นเดือนเมื่อได้ยอดปิดจริงจากธนาคาร
+  h+='<div style="background:var(--paper-2);border:1px dashed var(--line-2);border-radius:12px;padding:10px 12px;margin-top:12px">'
+    +'<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🔍 เทียบกับ statement ธนาคารจริง (สิ้นเดือน)</div>'
+    +'<div class="addrow"><span style="font-size:12.5px">ยอดปิดจริงจากธนาคาร ณ '+r.toDate+':</span>'
+    +'<input type="number" id="stRealClose" placeholder="ใส่ยอดจาก statement" style="width:170px" step="0.01">'
+    +'<button class="btn sm" onclick="compareReal()">เทียบ</button>'
+    +'<span id="stDiff" style="font-size:13px;font-weight:700"></span></div></div>';
   document.getElementById('stResult').innerHTML=h;
+}
+function compareReal(){
+  var v=document.getElementById('stRealClose').value;
+  if(v===''){ document.getElementById('stDiff').textContent=''; return; }
+  var diff=Math.round((_stClose-Number(v))*100)/100;
+  var ok=Math.abs(diff)<0.01;
+  document.getElementById('stDiff').innerHTML = ok
+    ? '<span style="color:var(--green)">✅ ตรงกัน</span>'
+    : '<span style="color:var(--red)">⚠️ ต่าง ฿'+nf(diff)+' (คำนวณ ฿'+nf(_stClose)+' · ธนาคาร ฿'+nf(Number(v))+')</span>';
 }
 
 function load(){

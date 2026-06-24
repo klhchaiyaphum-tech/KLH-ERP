@@ -1045,8 +1045,10 @@ function abDate_(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Ban
 function backfillAccountNumbers() {
   try {
     var s = bankSheet_();
-    if (String(s.getRange(1,11).getValue()) !== 'ACCT_NO')
-      s.getRange(1,11).setValue('ACCT_NO').setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    // แก้หัวคอลัมน์ให้ตรงเนื้อหา: J = ผังบัญชีค่าใช้จ่าย (ไม่ใช่เลขบัญชี) · K = เลขบัญชีธนาคาร
+    s.getRange(1,10).setValue('ผังบัญชี(ค่าใช้จ่าย)').setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    if (String(s.getRange(1,11).getValue()) !== 'เลขบัญชี')
+      s.getRange(1,11).setValue('เลขบัญชี').setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
     var last = s.getLastRow();
     if (last < 2) return { ok:true, filled:0 };
     var banks = s.getRange(2,2,last-1,1).getValues();   // คอลัมน์ B
