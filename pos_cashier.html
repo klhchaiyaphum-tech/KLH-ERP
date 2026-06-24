@@ -838,7 +838,7 @@ function _bcard(o, btnsHtml) {
   var isLine = /LINE/i.test(o.source || '');
   return '<div class="bcard'+(isLine?' line':'')+'">'
     +'<div class="bc-name">'+esc(o.customerName||'ลูกค้าทั่วไป')+(isLine?' <span style="color:#06C755;font-size:11px">📱</span>':'')+'</div>'
-    +'<div class="bc-sub">'+esc(o.orderId)+' · '+esc(o.time||o.date)+(o.delivery==='delivery'?' · 🚚':'')+'</div>'
+    +'<div class="bc-sub">'+esc(o.orderId)+' · '+esc(o.date)+(o.time?' '+esc(o.time):'')+(o.delivery==='delivery'?' · 🚚':'')+'</div>'
     +'<div class="bc-total">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
     +'<div class="bc-btns">'+btnsHtml+'</div>'
     +'</div>';

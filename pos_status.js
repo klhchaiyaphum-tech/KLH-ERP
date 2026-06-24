@@ -139,13 +139,14 @@ function getOrderBoard() {
     var s = _ordSheet_(); if (!s || s.getLastRow() <= 1) return { ok: true, orders: [] };
     var rows = s.getRange(2, 1, s.getLastRow() - 1, 16).getValues();
     function sd(v){ return v instanceof Date ? Utilities.formatDate(v, 'Asia/Bangkok', 'yyyy-MM-dd') : String(v || ''); }
+    function st(v){ return v instanceof Date ? Utilities.formatDate(v, 'Asia/Bangkok', 'HH:mm') : String(v || '').slice(0,5); }
     var out = rows.map(function(r) {
       var note = String(r[14] || '');
       var mSlip = note.match(/SLIP:(\S+)/);
       var mAmt  = note.match(/สลิปยอด:([\d.]+)/);
       return {
         orderId:      sd(r[0]),
-        date:         sd(r[2]), time: sd(r[3]),
+        date:         sd(r[2]), time: st(r[3]),
         source:       sd(r[4]),                       // POS / LINE OA
         customerName: sd(r[8]),
         total:        Number(r[11]) || 0,

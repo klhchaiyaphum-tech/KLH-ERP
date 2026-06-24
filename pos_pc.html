@@ -543,7 +543,7 @@ function openLineBoard(){
           var fl = o.fulfill==='PREPARING'?' · กำลังจัด':(o.fulfill==='READY'?' · จัดเสร็จ':'');
           return '<div style="border:1px solid #ECE6DA;border-radius:16px;padding:12px;background:rgba(255,255,255,.75)">'
             +'<div style="font-weight:800">'+escPc(o.customerName||'ลูกค้า')+' <span style="color:#06C755">📱</span></div>'
-            +'<div style="font-size:12px;color:#888">'+escPc(o.orderId)+' · '+escPc(o.time||o.date)+' · '+st+fl+'</div>'
+            +'<div style="font-size:12px;color:#888">'+escPc(o.orderId)+' · '+escPc(o.date)+(o.time?' '+escPc(o.time):'')+' · '+st+fl+'</div>'
             +'<div style="font-weight:800;color:#E2502B;margin:5px 0">฿'+Number(o.total).toLocaleString('th-TH')+'</div>'
             +'<div style="display:flex;gap:8px">'
             +'<button class="swal2-styled" style="background:#fff;color:#3A332C;border:1px solid #ECE6DA;margin:0;padding:8px 16px" onclick="pcPrintPick(\''+o.orderId+'\')">🖨️ พิมพ์ใบจัด</button>'
