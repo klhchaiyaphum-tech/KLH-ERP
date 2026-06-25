@@ -1266,7 +1266,30 @@ function updateBankTxn(row, cat, note, account) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// ย้ายรายการไปบัญชีที่ถูก (เช่น เช็คจ่ายจากกระแส แต่ถูกจัดเป็นออมทรัพย์)
+// ── แก้รายการเช็ค/ACH ที่ถูกจัดเป็นออมทรัพย์(BAY) ผิด → กระแส(BAYC) ──
+//  บัญชีออมทรัพย์สั่งจ่ายเช็คไม่ได้ → desc "เงินออก หมายเลขอ้างอิง" = บัญชีกระแสเสมอ
+//  (รายการโอนระหว่างบัญชีตัวเอง desc ขึ้นต้น "โอนเงิน/รับโอนเงิน BAY K L H" จะไม่โดนแตะ)
+//  รันใน editor ครั้งเดียว · idempotent · คืนรายการที่ย้ายให้ตรวจสอบได้
+function fixCurrentAccountRows() {
+  try {
+    var s = bankSheet_(); if (s.getLastRow() < 2) return 'ไม่มีข้อมูล';
+    var rows = s.getDataRange().getValues();
+    var moved = [];
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][1]).toUpperCase() !== 'BAY' || String(rows[i][2]) !== 'OUT') continue;
+      if (!/เงินออก\s+หมายเลขอ้างอิง/.test(String(rows[i][5] || ''))) continue;
+      s.getRange(i+1, 2).setValue('BAYC');
+      s.getRange(i+1, 11).setValue((BANK_ACCOUNTS['BAYC'] || {}).full || '');
+      var d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM-dd') : String(rows[i][0]).slice(0,10);
+      moved.push(d + ' ฿' + Number(rows[i][3]).toLocaleString());
+    }
+    if (!moved.length) return 'ไม่พบรายการเช็ค/ACH ที่จัดเป็นออมทรัพย์ผิด (อาจย้ายไปแล้ว)';
+    Logger.log('ย้ายไปกระแสรายวัน: ' + moved.join(' · '));
+    return 'ย้ายไปกระแสรายวัน ' + moved.length + ' รายการ: ' + moved.join(' · ');
+  } catch(e){ return 'ERROR: ' + e; }
+}
+
+// ย้ายรายการไปบัญชีที่ถูก (backend — ใช้จากหน้าผู้มีอำนาจ ภายหลัง)
 function reclassifyBankTxn(row, newBank) {
   try {
     var s = bankSheet_();
