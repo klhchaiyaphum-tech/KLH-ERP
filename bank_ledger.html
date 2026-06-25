@@ -69,6 +69,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 .pill.TRANSFER{ background:var(--blue-soft); color:var(--blue); }
 .pill.PAYMENT{ background:var(--amber-soft); color:var(--amber); }
 .pill.EXPENSE{ background:var(--purple-soft); color:var(--purple); }
+.pill.WHT{ background:#E0F2F1; color:#00695C; }
 .addbox{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 15px; margin-bottom:15px; }
 .addbox h2{ font-size:14px; margin-bottom:10px; }
 .addrow{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
@@ -160,7 +161,7 @@ td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 </div>
 
 <script>
-var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/เงินคืน', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', LIABILITY:'นำส่งหนี้สิน(เช่น ปกส.พนักงาน)', UNKNOWN:'รอระบุ' };
+var CATS = { SALE:'ยอดขาย', AR:'ตัดลูกหนี้(รับชำระ)', OTHER:'รายได้อื่น/ดอกเบี้ยรับ', TRANSFER:'โยกเงิน', PAYMENT:'ชำระหนี้', EXPENSE:'ค่าใช้จ่าย', WHT:'ภาษีหัก ณ ที่จ่าย(เครดิตภาษี)', LIABILITY:'นำส่งหนี้สิน(เช่น ปกส.พนักงาน)', UNKNOWN:'รอระบุ' };
 // ผังบัญชีโหลดจาก Sheet CHART_OF_ACCOUNTS — [{code,name,type}] · value=name (เก็บใน ACCOUNT)
 var ACCTS = [{code:'',name:'',type:''}];
 function loadChart(){

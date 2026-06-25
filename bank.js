@@ -68,6 +68,8 @@ function chartSheet_() {
     var seed = [
       ['4100', 'รายได้จากการขาย',                'รายได้',     true],
       ['4200', 'รายได้อื่น/เงินคืน',              'รายได้',     true],
+      ['4210', 'ดอกเบี้ยรับ',                     'รายได้',     true],
+      ['1180', 'ภาษีถูกหัก ณ ที่จ่าย',           'สินทรัพย์',  true],
       ['5100', 'ต้นทุนขาย',                       'ค่าใช้จ่าย',  true],
       ['5310', 'เงินเดือน/ค่าแรง',                'ค่าใช้จ่าย',  true],
       ['5311', 'ประกันสังคม (นายจ้าง)',           'ค่าใช้จ่าย',  true],
@@ -86,6 +88,53 @@ function chartSheet_() {
     s.getRange(2, 1, seed.length, 4).setValues(seed);
   }
   return s;
+}
+// เพิ่มผังบัญชีถ้ายังไม่มี (idempotent)
+function coaEnsure_(code, name, type) {
+  var s = chartSheet_(); var last = s.getLastRow();
+  var codes = last > 1 ? s.getRange(2,1,last-1,1).getValues() : [];
+  for (var i=0;i<codes.length;i++) if (String(codes[i][0])===String(code)) return;
+  s.appendRow([code, name, type, true]);
+}
+
+// ── ลงบัญชีดอกเบี้ยฝากประจำ (BAYF) + ภาษีหัก ณ ที่จ่าย 1% ──
+//  ดอกเบี้ยรับ (code IN) → OTHER/ดอกเบี้ยรับ = รายได้อื่น เข้า P&L
+//  ภาษีหัก 1% (code TX, OUT ≈1% ของดอกเบี้ยใกล้วัน) → WHT/ภาษีถูกหัก ณ ที่จ่าย = สินทรัพย์ ไม่เข้า P&L
+//  รันใน editor หลังนำเข้า statement ฝากประจำ — idempotent
+function bookFdInterest() {
+  try {
+    coaEnsure_('4210','ดอกเบี้ยรับ','รายได้');
+    coaEnsure_('1180','ภาษีถูกหัก ณ ที่จ่าย','สินทรัพย์');
+    var s = bankSheet_(); var last = s.getLastRow();
+    if (last < 2) return 'ยังไม่มีรายการในสมุดธนาคาร';
+    var rows = s.getRange(2,1,last-1,16).getValues();
+    function dstr(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var ins = [];   // ดอกเบี้ยที่เข้า BAYF (ไว้เทียบหา WHT)
+    for (var i=0;i<rows.length;i++){
+      if (String(rows[i][1]).toUpperCase()==='BAYF' && String(rows[i][2])==='IN')
+        ins.push({ date:dstr(rows[i][0]), amt:Number(rows[i][3])||0 });
+    }
+    var nInt=0, nWht=0;
+    for (var j=0;j<rows.length;j++){
+      if (String(rows[j][1]).toUpperCase()!=='BAYF') continue;
+      var row = j+2;
+      if (String(rows[j][2])==='IN'){
+        if (String(rows[j][4])!=='OTHER') s.getRange(row,5).setValue('OTHER');
+        if (!String(rows[j][9]||'')) s.getRange(row,10).setValue('ดอกเบี้ยรับ');
+        nInt++;
+      } else if (String(rows[j][2])==='OUT'){
+        var amt=Number(rows[j][3])||0, d=dstr(rows[j][0]), isWht=false;
+        for (var k=0;k<ins.length;k++){
+          var dd=Math.abs((new Date(d)-new Date(ins[k].date))/86400000);
+          if (dd<=3 && Math.abs(amt - ins[k].amt*0.01) < 0.5){ isWht=true; break; }
+        }
+        if (isWht){ s.getRange(row,5).setValue('WHT'); s.getRange(row,10).setValue('ภาษีถูกหัก ณ ที่จ่าย'); nWht++; }
+      }
+    }
+    backfillAccountNumbers();
+    if (nInt===0) return 'ยังไม่พบรายการบัญชีฝากประจำ (BAYF) — นำเข้า statement ฝากประจำ (.xls) ก่อน แล้วรันใหม่';
+    return 'ลงบัญชีฝากประจำเรียบร้อย: ดอกเบี้ยรับ '+nInt+' รายการ · ภาษีหัก ณ ที่จ่าย 1% '+nWht+' รายการ';
+  } catch(e){ return 'ERROR: '+e; }
 }
 
 // ดึงผังบัญชี (เฉพาะที่ ACTIVE) → ใช้ในหน้า bank dropdown
@@ -717,10 +766,10 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts, forceBank) {
     var isCustomerIn = false;
     if (code === 'FE') { cat = 'EXPENSE'; acct = 'ค่าธรรมเนียมธนาคาร'; }
     else if (code === 'IN') { cat = 'OTHER'; acct = 'ดอกเบี้ยรับ'; }    // ดอกเบี้ยเงินฝาก (ฝากประจำ ฯลฯ)
+    else if (code === 'TX') { cat = 'WHT'; acct = 'ภาษีถูกหัก ณ ที่จ่าย'; }  // ภาษีหัก ณ ที่จ่ายดอกเบี้ย 1% = สินทรัพย์/เครดิตภาษี (ไม่เข้า P&L)
     else if (/K L H/.test(desc)) cat = 'TRANSFER';              // โยกเงินภายในชื่อตัวเอง
     else if (amtIn > 0 && /รับโอนเงิน|จ่ายคิวอาร์|พร้อมเพย์/.test(desc)) { cat = 'SALE'; isCustomerIn = true; }
     else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
-    // code 'TX' (ภาษีหัก ณ ที่จ่ายดอกเบี้ย) ปล่อยรอระบุ — จัดบัญชีจริงตอนทำรายการดอกเบี้ยฝากประจำ
 
     var pair = [];
     if (amtIn > 0)  pair.push(['IN', amtIn]);
