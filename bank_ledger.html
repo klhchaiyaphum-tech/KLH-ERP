@@ -181,7 +181,6 @@ function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDig
 function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 (function(){ var d=new Date();
   document.getElementById('month').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
-  document.getElementById('aDate').value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
   loadChart();
   initStmt();
 })();
