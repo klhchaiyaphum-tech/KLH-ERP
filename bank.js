@@ -1413,30 +1413,62 @@ function updateBankTxn(row, cat, note, account) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// ── แก้กลับ: คืน auto-debit ประจำที่ย้ายผิดกลับ ออมทรัพย์(BAY) ──
-//  เกณฑ์ "เงินออก หมายเลขอ้างอิง" จับเกิน (เช็ค + auto-debit ใช้ desc เดียวกัน)
-//  คืนทุกแถวที่ย้ายผิด ยกเว้นเช็คจริง (อ้างอิง 0057282577) ที่ต้องอยู่กระแส
-//  รันใน editor ครั้งเดียว · idempotent · คืนรายการให้ตรวจสอบ
-var CHEQUE_REFS_ = ['0057282577'];   // เลขอ้างอิงเช็คจริงที่อยู่บัญชีกระแส (เพิ่มได้ภายหลัง)
-function restoreSavingsRows() {
+// ── จัดบัญชีรายการ ACH "เงินออก หมายเลขอ้างอิง" ให้ถูกแบบฟันธง ──
+//  ข้อเท็จจริง: desc นี้ใช้ทั้งกระแสและออมทรัพย์ — แต่ของออมทรัพย์มี "ref เดียว" คือ 0018902360 (auto-debit ประจำ)
+//  → ref 0018902360 = ออมทรัพย์(BAY) · ที่เหลือทั้งหมด = กระแส(BAYC)
+//  + ตรวจรายการซ้ำ (วัน+ยอด+ref เดียวกัน) มารายงาน (ไม่ลบเอง — ให้ยืนยันก่อน)
+//  idempotent · รันซ้ำได้
+var BAY_ACH_REFS_ = ['0018902360'];   // ref ของ auto-debit ที่เป็นออมทรัพย์จริง (โทรถามธนาคารแล้วเติมได้)
+function fixAchAccounts() {
   try {
     var s = bankSheet_(); if (s.getLastRow() < 2) return 'ไม่มีข้อมูล';
     var rows = s.getDataRange().getValues();
-    var back = [], keep = [];
+    function dstr(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var seen = {}, dups = [], toBayc = 0, keepBay = 0;
     for (var i = 1; i < rows.length; i++) {
-      if (String(rows[i][1]).toUpperCase() !== 'BAYC' || String(rows[i][2]) !== 'OUT') continue;
+      if (String(rows[i][2]) !== 'OUT') continue;
       var subj = String(rows[i][5] || '');
       if (!/เงินออก\s+หมายเลขอ้างอิง/.test(subj)) continue;
-      var isCheque = false;
-      for (var c = 0; c < CHEQUE_REFS_.length; c++) if (subj.indexOf(CHEQUE_REFS_[c]) >= 0) isCheque = true;
-      var d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM-dd') : String(rows[i][0]).slice(0,10);
-      if (isCheque) { keep.push(d + ' ฿' + Number(rows[i][3]).toLocaleString()); continue; }
-      s.getRange(i+1, 2).setValue('BAY');                                  // คืนเป็นออมทรัพย์
-      s.getRange(i+1, 11).setValue((BANK_ACCOUNTS['BAY'] || {}).full || '');
-      back.push(d + ' ฿' + Number(rows[i][3]).toLocaleString());
+      var d = dstr(rows[i][0]), amt = Number(rows[i][3]) || 0;
+      var rm = subj.match(/หมายเลขอ้างอิง\s*:?\s*(\d+)/); var ref = rm ? rm[1] : '';
+      var isBay = false;
+      for (var b = 0; b < BAY_ACH_REFS_.length; b++) if (ref === BAY_ACH_REFS_[b]) isBay = true;
+      var target = isBay ? 'BAY' : 'BAYC';
+      if (String(rows[i][1]).toUpperCase() !== target) {
+        s.getRange(i+1, 2).setValue(target);
+        s.getRange(i+1, 11).setValue((BANK_ACCOUNTS[target] || {}).full || '');
+      }
+      if (target === 'BAYC') toBayc++; else keepBay++;
+      var key = d + '|' + amt + '|' + ref;
+      if (seen[key]) dups.push(d + ' ฿' + amt.toLocaleString() + ' (ref ' + ref + ')');
+      else seen[key] = (i+1);
     }
-    Logger.log('คืนออมทรัพย์: ' + back.join(' · ') + '\nคงไว้ที่กระแส(เช็ค): ' + keep.join(' · '));
-    return 'คืนกลับออมทรัพย์ ' + back.length + ' รายการ · คงเช็คไว้ที่กระแส ' + keep.length + ' (' + keep.join(', ') + ')';
+    var msg = 'จัดบัญชี ACH: กระแส ' + toBayc + ' · ออมทรัพย์(auto-debit) ' + keepBay;
+    if (dups.length) msg += ' · ⚠️ พบรายการซ้ำ ' + dups.length + ': ' + dups.join(', ') + ' (ยืนยันแล้วผมลบให้)';
+    else msg += ' · ไม่มีซ้ำ';
+    Logger.log(msg);
+    return msg;
+  } catch(e){ return 'ERROR: ' + e; }
+}
+// ลบรายการ ACH ที่ซ้ำ (วัน+ยอด+ref ซ้ำ) — รันหลังยืนยันจาก fixAchAccounts
+function removeDupAchRows() {
+  try {
+    var s = bankSheet_(); if (s.getLastRow() < 2) return 'ไม่มีข้อมูล';
+    var rows = s.getDataRange().getValues();
+    function dstr(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+    var seen = {}, del = [], removed = [];
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][2]) !== 'OUT') continue;
+      var subj = String(rows[i][5] || '');
+      if (!/เงินออก\s+หมายเลขอ้างอิง/.test(subj)) continue;
+      var d = dstr(rows[i][0]), amt = Number(rows[i][3]) || 0;
+      var rm = subj.match(/หมายเลขอ้างอิง\s*:?\s*(\d+)/); var ref = rm ? rm[1] : '';
+      var key = d + '|' + amt + '|' + ref;
+      if (seen[key]) { del.push(i+1); removed.push(d + ' ฿' + amt.toLocaleString()); }
+      else seen[key] = true;
+    }
+    del.sort(function(a,b){ return b - a; }).forEach(function(r){ s.deleteRow(r); });
+    return del.length ? ('ลบรายการซ้ำ ' + del.length + ': ' + removed.join(', ')) : 'ไม่พบรายการซ้ำ';
   } catch(e){ return 'ERROR: ' + e; }
 }
 
