@@ -446,18 +446,43 @@ function ktbInCat_(desc) {
   return /\bADJ\b|BPGS|\bBSD\d|ดอกเบี้ย|interest|คืนค่าธรรมเนียม|fee\s*refund/i.test(String(desc || '')) ? 'OTHER' : 'SALE';
 }
 
+// โอนเงินระหว่างบัญชีตัวเอง? ดูจากรายละเอียด (ไม่ต้องจับคู่ยอด/วัน)
+//  • IORSWT = กรุงไทยโอนออก ORFT ไปบัญชีตัวเอง
+//  • "K L H"/"KLH" = ชื่อบัญชีตัวเอง (รับโอน/โอน ... K L H)
+//  • เลขบัญชีตัวเอง (กรุงไทย/กรุงศรี) ปรากฏใน desc
+function isOwnTransferDesc_(desc) {
+  var t = String(desc || '');
+  if (/IORSWT/i.test(t)) return true;
+  if (/K\s*L\s*H/i.test(t)) return true;
+  if (/รับโอนเงิน BAY K L H|โอนเงิน BAY K L H/.test(t)) return true;
+  var dg = t.replace(/[^0-9]/g, '');
+  for (var k in BANK_ACCOUNTS) { if (BANK_ACCOUNTS[k].digits && dg.indexOf(BANK_ACCOUNTS[k].digits) >= 0) return true; }
+  return false;
+}
+
 function categorizeBankTxns_() {
   var s = bankSheet_();
   if (s.getLastRow() <= 1) return [];
   var rows = s.getDataRange().getValues();
   var alerts = [];
 
+  function nd_(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
   function matched(date, bank, dir, amt) {
     for (var j = 1; j < rows.length; j++) {
-      if (String(rows[j][0]) === date && rows[j][1] === bank && rows[j][2] === dir
+      if (nd_(rows[j][0]) === date && rows[j][1] === bank && rows[j][2] === dir
           && Math.abs(Number(rows[j][3]) - amt) < 1) return true;
     }
     return false;
+  }
+
+  // ── อัปเกรดรายการ "โอนระหว่างบัญชีตัวเอง" → TRANSFER จาก desc (แม้จัดหมวดผิดไปแล้ว) ──
+  //    กันเฉพาะที่ยังเป็นค่าเริ่มต้นอัตโนมัติ (ว่าง/EXPENSE/UNKNOWN) — ไม่ทับที่ user ตั้งใจระบุ
+  for (var u = 1; u < rows.length; u++) {
+    var cu = String(rows[u][4] || '');
+    if (cu !== 'TRANSFER' && (cu === '' || cu === 'EXPENSE' || cu === 'UNKNOWN') && isOwnTransferDesc_(rows[u][5])) {
+      rows[u][4] = 'TRANSFER';
+      s.getRange(u + 1, 5).setValue('TRANSFER');
+    }
   }
 
   // จัดหมวด KTB เงินเข้าใหม่ตามรหัสธุรกรรม: ลูกค้าโอน/PromptPay = ขาย · ค่าธรรมเนียมคืน/ปรับปรุง/ดอกเบี้ย = รายได้อื่น
@@ -475,17 +500,17 @@ function categorizeBankTxns_() {
 
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][4]) continue;   // จัดประเภทแล้ว
-    var date = String(rows[i][0]), bank = rows[i][1], dir = rows[i][2], amt = Number(rows[i][3]);
+    var date = nd_(rows[i][0]), bank = rows[i][1], dir = rows[i][2], amt = Number(rows[i][3]);
     var subj = String(rows[i][5] || ''), src = String(rows[i][7] || '');
     var fromEmail = src.indexOf('MANUAL') < 0 && src.indexOf('STMT') < 0;
     var cat = '';
 
     if (bank === 'KTB') {
       if (dir === 'IN') cat = 'SALE';                                   // ข้อ 1
-      else {                                                            // ข้อ 2
-        if (matched(date, 'BAY', 'IN', amt)) cat = 'TRANSFER';
+      else {                                                            // ข้อ 2 — โอนระหว่างบัญชีตัวเอง: เดาจาก desc ก่อน (IORSWT/KLH/เลขบัญชี) ไม่งั้นจับคู่ยอด
+        if (isOwnTransferDesc_(subj) || matched(date, 'BAY', 'IN', amt)) cat = 'TRANSFER';
         else { cat = 'EXPENSE';
-          alerts.push('🟦 KTB เงินออก ฿' + amt.toLocaleString() + ' (' + date + ') ไม่ตรงยอดเข้า กรุงศรี → น่าจะค่าธรรมเนียม/ค่าบัญชีพิเศษ — เช็คในสมุดเงินธนาคาร'); }
+          alerts.push('🟦 KTB เงินออก ฿' + amt.toLocaleString() + ' (' + date + ') ไม่ใช่โอนเข้ากรุงศรี → น่าจะค่าธรรมเนียม/ค่าบัญชี — เช็คในสมุดเงินธนาคาร'); }
       }
     } else if (bank === 'BAY') {
       if (dir === 'IN') {
