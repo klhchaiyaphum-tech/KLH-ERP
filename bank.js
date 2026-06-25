@@ -97,6 +97,35 @@ function coaEnsure_(code, name, type) {
   s.appendRow([code, name, type, true]);
 }
 
+// ── แจ้งเตือนหน้า Dashboard (รวมศูนย์ — เพิ่มรายการอื่นได้ภายหลัง) ──
+function getDashboardReminders() {
+  try {
+    var out = [];
+    var now = new Date();
+    var y  = Number(Utilities.formatDate(now,'Asia/Bangkok','yyyy'));
+    var mo = Number(Utilities.formatDate(now,'Asia/Bangkok','MM'));
+    // 1) ดอกเบี้ยฝากประจำ — เข้า 9 เม.ย. ทุกปี · เตือน เม.ย.–มิ.ย. ถ้ายังไม่ลงบัญชีปีนี้
+    if (mo >= 4 && mo <= 6) {
+      var booked = false;
+      var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName('BANK_TRANSACTIONS');
+      if (s && s.getLastRow() > 1) {
+        var rows = s.getRange(2,1,s.getLastRow()-1,3).getValues();
+        for (var i=0;i<rows.length;i++){
+          var d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM') : String(rows[i][0]||'').slice(0,7);
+          if (String(rows[i][1]).toUpperCase()==='BAYF' && String(rows[i][2])==='IN' && d===(y+'-04')){ booked = true; break; }
+        }
+      }
+      if (!booked) out.push({
+        level:'warn', icon:'🏦',
+        title:'ดอกเบี้ยฝากประจำ ' + y + ' ยังไม่ลงบัญชี',
+        text:'ดอกเบี้ยเข้า 9 เม.ย. — นำเข้า statement ฝากประจำ (.xls) ลงโฟลเดอร์ "ฝากประจำ" แล้วรัน bookFdInterest() เพื่อลงดอกเบี้ยรับ + ภาษีหัก ณ ที่จ่าย 1%',
+        page:'bank'
+      });
+    }
+    return { ok:true, items:out };
+  } catch(e){ return { ok:false, msg:String(e), items:[] }; }
+}
+
 // ── ลงบัญชีดอกเบี้ยฝากประจำ (BAYF) + ภาษีหัก ณ ที่จ่าย 1% ──
 //  ดอกเบี้ยรับ (code IN) → OTHER/ดอกเบี้ยรับ = รายได้อื่น เข้า P&L
 //  ภาษีหัก 1% (code TX, OUT ≈1% ของดอกเบี้ยใกล้วัน) → WHT/ภาษีถูกหัก ณ ที่จ่าย = สินทรัพย์ ไม่เข้า P&L

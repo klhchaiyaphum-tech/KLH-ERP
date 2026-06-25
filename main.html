@@ -97,6 +97,8 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
     </div>
   </div>
 
+  <div id="dashAlerts"></div>
+
   <div class="seclabel"><h2>โมดูลทั้งหมด</h2><span id="dateTime"></span></div>
 
   <!-- Module Grid -->
@@ -272,6 +274,20 @@ function tick() {
 }
 tick();
 setInterval(tick, 30000);
+
+// ── แจ้งเตือน Dashboard ──
+google.script.run.withSuccessHandler(function(r){
+  var items=(r&&r.items)||[]; if(!items.length) return;
+  var box=document.getElementById('dashAlerts');
+  box.innerHTML='<div style="margin:18px 4px 0;display:flex;flex-direction:column;gap:10px">'
+    + items.map(function(a){
+        var bg=a.level==='warn'?'#FFF7E6':'#E7F1FF', bd=a.level==='warn'?'#F3D99B':'#BBD3F5', cl=a.level==='warn'?'#8A5A00':'#1B4F8A';
+        return '<div onclick="goTo(\''+(a.page||'index')+'\')" style="cursor:pointer;background:'+bg+';border:1px solid '+bd+';border-radius:14px;padding:13px 16px;color:'+cl+'">'
+          +'<div style="font-weight:700;font-size:14.5px">'+(a.icon||'🔔')+' '+esc(a.title||'')+'</div>'
+          +(a.text?'<div style="font-size:12.5px;margin-top:3px;line-height:1.5;opacity:.92">'+esc(a.text)+'</div>':'')+'</div>';
+      }).join('') + '</div>';
+}).withFailureHandler(function(){}).getDashboardReminders();
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
 
 // ตั้งการ์ดเมนูเป็นลิงก์จริง <a href target=_top> — กดได้บน iPad/iPhone (โหมด standalone หน้าจอโฮม)
 // บน iOS standalone, onclick+window.open ใช้ไม่ได้ ต้องเป็น anchor จริงที่ชี้ exec URL
