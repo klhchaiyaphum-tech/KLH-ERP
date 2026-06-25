@@ -1266,26 +1266,30 @@ function updateBankTxn(row, cat, note, account) {
   } catch(e) { return { ok: false, msg: e.toString() }; }
 }
 
-// ── แก้รายการเช็ค/ACH ที่ถูกจัดเป็นออมทรัพย์(BAY) ผิด → กระแส(BAYC) ──
-//  บัญชีออมทรัพย์สั่งจ่ายเช็คไม่ได้ → desc "เงินออก หมายเลขอ้างอิง" = บัญชีกระแสเสมอ
-//  (รายการโอนระหว่างบัญชีตัวเอง desc ขึ้นต้น "โอนเงิน/รับโอนเงิน BAY K L H" จะไม่โดนแตะ)
-//  รันใน editor ครั้งเดียว · idempotent · คืนรายการที่ย้ายให้ตรวจสอบได้
-function fixCurrentAccountRows() {
+// ── แก้กลับ: คืน auto-debit ประจำที่ย้ายผิดกลับ ออมทรัพย์(BAY) ──
+//  เกณฑ์ "เงินออก หมายเลขอ้างอิง" จับเกิน (เช็ค + auto-debit ใช้ desc เดียวกัน)
+//  คืนทุกแถวที่ย้ายผิด ยกเว้นเช็คจริง (อ้างอิง 0057282577) ที่ต้องอยู่กระแส
+//  รันใน editor ครั้งเดียว · idempotent · คืนรายการให้ตรวจสอบ
+var CHEQUE_REFS_ = ['0057282577'];   // เลขอ้างอิงเช็คจริงที่อยู่บัญชีกระแส (เพิ่มได้ภายหลัง)
+function restoreSavingsRows() {
   try {
     var s = bankSheet_(); if (s.getLastRow() < 2) return 'ไม่มีข้อมูล';
     var rows = s.getDataRange().getValues();
-    var moved = [];
+    var back = [], keep = [];
     for (var i = 1; i < rows.length; i++) {
-      if (String(rows[i][1]).toUpperCase() !== 'BAY' || String(rows[i][2]) !== 'OUT') continue;
-      if (!/เงินออก\s+หมายเลขอ้างอิง/.test(String(rows[i][5] || ''))) continue;
-      s.getRange(i+1, 2).setValue('BAYC');
-      s.getRange(i+1, 11).setValue((BANK_ACCOUNTS['BAYC'] || {}).full || '');
+      if (String(rows[i][1]).toUpperCase() !== 'BAYC' || String(rows[i][2]) !== 'OUT') continue;
+      var subj = String(rows[i][5] || '');
+      if (!/เงินออก\s+หมายเลขอ้างอิง/.test(subj)) continue;
+      var isCheque = false;
+      for (var c = 0; c < CHEQUE_REFS_.length; c++) if (subj.indexOf(CHEQUE_REFS_[c]) >= 0) isCheque = true;
       var d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM-dd') : String(rows[i][0]).slice(0,10);
-      moved.push(d + ' ฿' + Number(rows[i][3]).toLocaleString());
+      if (isCheque) { keep.push(d + ' ฿' + Number(rows[i][3]).toLocaleString()); continue; }
+      s.getRange(i+1, 2).setValue('BAY');                                  // คืนเป็นออมทรัพย์
+      s.getRange(i+1, 11).setValue((BANK_ACCOUNTS['BAY'] || {}).full || '');
+      back.push(d + ' ฿' + Number(rows[i][3]).toLocaleString());
     }
-    if (!moved.length) return 'ไม่พบรายการเช็ค/ACH ที่จัดเป็นออมทรัพย์ผิด (อาจย้ายไปแล้ว)';
-    Logger.log('ย้ายไปกระแสรายวัน: ' + moved.join(' · '));
-    return 'ย้ายไปกระแสรายวัน ' + moved.length + ' รายการ: ' + moved.join(' · ');
+    Logger.log('คืนออมทรัพย์: ' + back.join(' · ') + '\nคงไว้ที่กระแส(เช็ค): ' + keep.join(' · '));
+    return 'คืนกลับออมทรัพย์ ' + back.length + ' รายการ · คงเช็คไว้ที่กระแส ' + keep.length + ' (' + keep.join(', ') + ')';
   } catch(e){ return 'ERROR: ' + e; }
 }
 
