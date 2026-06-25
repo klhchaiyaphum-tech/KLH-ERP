@@ -97,6 +97,153 @@ function coaEnsure_(code, name, type) {
   s.appendRow([code, name, type, true]);
 }
 
+// ════════════════════════════════════════════════════════════
+//  รายงาน Excel การเคลื่อนไหวธนาคาร → ส่งเมล สนง.บัญชี (รายเดือน วันที่ 2)
+//  CONFIG: ACCT_EMAIL = อีเมลสำนักงานบัญชี · ส่ง cc เจ้าของสคริปต์ด้วย
+// ════════════════════════════════════════════════════════════
+function reportPrevMonth_() {
+  var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return Utilities.formatDate(d, 'Asia/Bangkok', 'yyyy-MM');
+}
+function thaiMonth_(ym) {
+  var m = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  var p = String(ym).split('-');
+  return (m[Number(p[1]) - 1] || p[1]) + ' ' + p[0];
+}
+
+// รวบรวมข้อมูลรายงานของเดือน ym จาก BANK_TRANSACTIONS
+function buildBankReportData_(ym) {
+  var out = { ktbDaily:[], ktbOut:[], baySale:[], bayPay:[], transfers:[], pay:[], exp:[],
+              sums:{ k_in:0,k_out:0,b_pp:0,b_tf:0,b_out:0,bc_in:0,pay:0,exp:0 } };
+  var s = bankSheet_(); if (!s || s.getLastRow() < 2) return out;
+  var rows = s.getRange(2,1,s.getLastRow()-1,11).getValues();
+  function dd(v){ return v instanceof Date ? Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd') : String(v||'').slice(0,10); }
+  var ktb = {}, S = out.sums;
+  for (var i=0;i<rows.length;i++){
+    var d = dd(rows[i][0]); if (d.slice(0,7) !== ym) continue;
+    var bank=String(rows[i][1]).toUpperCase(), dir=String(rows[i][2]), amt=Number(rows[i][3])||0;
+    var cat=String(rows[i][4]||''), subj=String(rows[i][5]||'').slice(0,60), coa=String(rows[i][9]||'');
+    if (bank==='KTB' && dir==='IN'){ if(!ktb[d]) ktb[d]=[0,0]; ktb[d][0]++; ktb[d][1]+=amt; S.k_in+=amt; }
+    else if (bank==='KTB' && dir==='OUT'){ out.ktbOut.push([d,amt,(cat==='TRANSFER'?'โอนออก':'ค่าใช้จ่าย'),subj]); S.k_out+=amt; }
+    else if (bank==='BAY' && dir==='IN'){
+      if (cat==='TRANSFER'){ out.transfers.push([d,'กรุงไทย → ออมทรัพย์ (ออมรับโอน)',amt]); S.b_tf+=amt; }
+      else { out.baySale.push([d,amt,subj]); S.b_pp+=amt; }
+    } else if (bank==='BAY' && dir==='OUT'){
+      if (cat==='TRANSFER'){ out.transfers.push([d,'ออมทรัพย์ → กระแส (ออมโอนออก)',amt]); }
+      else { out.bayPay.push([d,amt,coa,cat||'-']); }
+      S.b_out+=amt;
+    } else if (bank==='BAYC' && dir==='IN'){
+      if (cat==='TRANSFER'){ out.transfers.push([d,'ออมทรัพย์ → กระแส (กระแสรับโอน)',amt]); }
+      S.bc_in+=amt;
+    } else if (bank==='BAYC' && dir==='OUT'){
+      if (cat==='PAYMENT'){ out.pay.push([d,amt]); S.pay+=amt; }
+      else { out.exp.push([d,amt,coa,cat||'-']); S.exp+=amt; }
+    }
+  }
+  Object.keys(ktb).sort().forEach(function(k){ out.ktbDaily.push([k,ktb[k][0],Math.round(ktb[k][1]*100)/100]); });
+  ['ktbOut','baySale','bayPay','transfers','pay','exp'].forEach(function(key){
+    out[key].sort(function(a,b){ return a[0]<b[0]?-1:(a[0]>b[0]?1:0); });
+  });
+  return out;
+}
+
+// เขียนแท็บ 1 แท็บ (หัวกรมท่า + แถวรวม) ลงชีตชั่วคราว
+function rptTab_(ss, name, headers, widths, dataRows, totalCol) {
+  var sh = ss.insertSheet(name);
+  sh.getRange(1,1,1,headers.length).setValues([headers]).setBackground('#1A237E').setFontColor('#fff').setFontWeight('bold');
+  var n = dataRows.length;
+  if (n) sh.getRange(2,1,n,headers.length).setValues(dataRows);
+  if (totalCol){
+    var tot=0; for (var i=0;i<n;i++){ if (typeof dataRows[i][totalCol-1]==='number') tot+=dataRows[i][totalCol-1]; }
+    var tr=[]; for (var c=0;c<headers.length;c++) tr.push('');
+    tr[0]='รวมทั้งเดือน'; tr[totalCol-1]=Math.round(tot*100)/100;
+    sh.getRange(2+n,1,1,headers.length).setValues([tr]).setBackground('#ECE6DA').setFontWeight('bold');
+    sh.getRange(2,totalCol,n+1,1).setNumberFormat('#,##0.00');
+  }
+  for (var w=0;w<widths.length;w++) sh.setColumnWidth(w+1, widths[w]);
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+// สร้าง .xlsx รายงานเดือน ym + ส่งเมล สนง.บัญชี
+function emailMonthlyBankReport(ym) {
+  var tmpId = null;
+  try {
+    ym = ym || reportPrevMonth_();
+    var cfg = getConfig();
+    var to = String(cfg.ACCT_EMAIL || '').trim();
+    if (!to) return { ok:false, msg:'ยังไม่ได้ตั้ง ACCT_EMAIL ใน CONFIG (อีเมลสำนักงานบัญชี)' };
+    var ccUser = Session.getActiveUser().getEmail();
+    var data = buildBankReportData_(ym), S = data.sums;
+
+    var tmp = SpreadsheetApp.create('TMP_BANK_REPORT_' + ym); tmpId = tmp.getId();
+
+    // แท็บสรุป (กรอบ)
+    var sum = tmp.getSheets()[0]; sum.setName('สรุป');
+    sum.setColumnWidth(1,32); sum.setColumnWidth(2,20);
+    var sr = [
+      ['สรุปการเคลื่อนไหวธนาคาร — ' + thaiMonth_(ym), ''],
+      ['ห้างหุ้นส่วนจำกัด เคแอลเอช', ''],
+      ['', ''],
+      ['💰 รายรับ', ''],
+      ['กรุงไทย เข้า (ยอดขาย)', S.k_in],
+      ['กรุงศรี PromptPay เข้า (ขาย)', S.b_pp],
+      ['รวมฐานยอดขายรับเข้า', S.k_in + S.b_pp],
+      ['', ''],
+      ['🔁 โยกเงินระหว่างบัญชี', ''],
+      ['กรุงไทย → ออมทรัพย์', S.k_out],
+      ['ออมทรัพย์ → กระแส', S.b_out],
+      ['', ''],
+      ['💸 จ่ายจากกระแสรายวัน', ''],
+      ['ชำระเจ้าหนี้', S.pay],
+      ['ค่าใช้จ่าย', S.exp],
+      ['', ''],
+      ['🏦 ยอดรวมแต่ละช่อง', ''],
+      ['กรุงไทย เข้า', S.k_in],
+      ['กรุงไทย ออก', S.k_out],
+      ['ออมทรัพย์ รับขาย', S.b_pp],
+      ['ออมทรัพย์ รับโอน', S.b_tf],
+      ['ออมทรัพย์ ออก', S.b_out],
+      ['กระแส รับโอน', S.bc_in],
+      ['กระแส จ่ายรวม', S.pay + S.exp]
+    ];
+    sum.getRange(1,1,sr.length,2).setValues(sr);
+    sum.getRange(1,1).setFontSize(14).setFontWeight('bold').setFontColor('#1A237E');
+    sum.getRange(2,1).setFontColor('#888888');
+    [4,9,13,17].forEach(function(r){ sum.getRange(r,1,1,2).setBackground('#37474F').setFontColor('#ffffff').setFontWeight('bold'); });
+    sum.getRange(2,2,sr.length,1).setNumberFormat('#,##0.00');
+
+    rptTab_(tmp,'กรุงไทยเข้า(รายวัน)',['วันที่','จำนวนรายการ','ยอดเข้ารวม'],[110,90,120],data.ktbDaily,3);
+    rptTab_(tmp,'กรุงไทยออก',['วันที่','จำนวนเงิน','ประเภท','รายละเอียด'],[90,110,90,360],data.ktbOut,2);
+    rptTab_(tmp,'ออมทรัพย์รับขาย',['วันที่','จำนวนเงิน','รายละเอียด'],[90,110,360],data.baySale,2);
+    rptTab_(tmp,'ออมทรัพย์จ่ายอื่น',['วันที่','จำนวนเงิน','ผังบัญชี','หมวด'],[90,110,160,90],data.bayPay,2);
+    rptTab_(tmp,'โอนระหว่างบัญชี',['วันที่','รายการ','จำนวนเงิน'],[90,280,120],data.transfers,3);
+    rptTab_(tmp,'กระแสจ่ายเจ้าหนี้',['วันที่','จำนวนเงิน'],[110,130],data.pay,2);
+    rptTab_(tmp,'กระแสค่าใช้จ่าย',['วันที่','จำนวนเงิน','ผังบัญชี','หมวด'],[90,110,160,90],data.exp,2);
+    SpreadsheetApp.flush();
+
+    var url = 'https://docs.google.com/spreadsheets/d/' + tmpId + '/export?format=xlsx';
+    var blob = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } })
+                 .getBlob().setName('รายงานธนาคาร_KLH_' + ym + '.xlsx');
+    var mn = thaiMonth_(ym);
+    GmailApp.sendEmail(to, 'รายงานการเคลื่อนไหวธนาคาร KLH — ' + mn,
+      'เรียน สำนักงานบัญชี\n\nแนบรายงานการเคลื่อนไหวบัญชีธนาคาร หจก. เคแอลเอช ประจำเดือน ' + mn + '\n'
+      + '· กรุงไทย เข้า (รายวัน)\n· กรุงศรีออมทรัพย์ / กระแสรายวัน (รายรายการ)\n\n(ระบบส่งอัตโนมัติ — หากต้องการข้อมูลเพิ่มแจ้งได้)',
+      { attachments: [blob], cc: ccUser, name: 'KLH ระบบบัญชี' });
+
+    return { ok:true, msg:'ส่งรายงาน ' + ym + ' → ' + to + ' (cc ' + ccUser + ') เรียบร้อย' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+  finally { if (tmpId){ try { DriveApp.getFileById(tmpId).setTrashed(true); } catch(e2){} } }
+}
+
+// trigger รายเดือน วันที่ 2 ~07:00 → ส่งรายงานเดือนก่อนหน้า
+function monthlyBankReportJob() { emailMonthlyBankReport(); }
+function setupMonthlyReportTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){ if (t.getHandlerFunction()==='monthlyBankReportJob') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('monthlyBankReportJob').timeBased().onMonthDay(2).atHour(7).create();
+  return 'ตั้ง trigger ส่งรายงานธนาคาร วันที่ 2 ของเดือน ~07:00 แล้ว';
+}
+
 // ── แจ้งเตือนหน้า Dashboard (รวมศูนย์ — เพิ่มรายการอื่นได้ภายหลัง) ──
 function getDashboardReminders() {
   try {
