@@ -298,8 +298,11 @@ function splitBankTxn(row, cat1, coa1, amt2, cat2, coa2, note2) {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
-// trigger รายเดือน วันที่ 2 ~07:00 → ส่งรายงานเดือนก่อนหน้า
-function monthlyBankReportJob() { emailMonthlyBankReport(); }
+// trigger รายเดือน วันที่ 2 ~07:00 → ดึง statement ที่ค้างก่อน แล้วส่งรายงานเดือนก่อนหน้า
+function monthlyBankReportJob() {
+  try { importBayStatements(); } catch(e) {}   // ดึงไฟล์ที่ค้างให้ครบก่อนสรุป
+  emailMonthlyBankReport();
+}
 function setupMonthlyReportTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t){ if (t.getHandlerFunction()==='monthlyBankReportJob') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('monthlyBankReportJob').timeBased().onMonthDay(2).atHour(7).create();
@@ -569,7 +572,7 @@ function listTriggers() {
   ts.forEach(function(t){ var h = t.getHandlerFunction(); cnt[h] = (cnt[h]||0) + 1; });
   var want = {
     dailySalesReport: 'รายงานยอดขาย LINE 08:00',
-    importBayStatements: 'สแกนโฟลเดอร์ statement 23:00',
+    importBayStatements: 'สแกนโฟลเดอร์ statement เช้า 06:00',
     checkWeeklySalesTarget: 'เช็คเป้ายอดขาย อาทิตย์ 19:00',
     dailyBankJob: 'สรุปยอดธนาคาร LINE 06:00'
   };
@@ -1174,9 +1177,9 @@ function setupDailyStatementTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t){
     if (t.getHandlerFunction() === 'importBayStatements') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('importBayStatements').timeBased().everyDays(1).atHour(23).create();
+  ScriptApp.newTrigger('importBayStatements').timeBased().everyDays(1).atHour(6).create();   // เช้า 06:00 — ไฟล์ที่วางกลางคืน/เย็นถูกดึงเช้าวันถัดไปแน่นอน
   var folder = stmtFolder_();
-  return 'ตั้งสแกน statement ทุกคืน 23:00 แล้ว · โฟลเดอร์: ' + folder.getName() + ' (id: ' + folder.getId() + ')';
+  return 'ตั้งสแกน statement ทุกเช้า 06:00 แล้ว · โฟลเดอร์: ' + folder.getName() + ' (id: ' + folder.getId() + ')';
 }
 
 // สรุปยอดธนาคารรายเดือน (ใช้ในหน้า ภพ.30) — ยอดขายฐานภาษี = IN ที่ไม่ใช่ TRANSFER
