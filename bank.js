@@ -236,6 +236,58 @@ function emailMonthlyBankReport(ym) {
   finally { if (tmpId){ try { DriveApp.getFileById(tmpId).setTrashed(true); } catch(e2){} } }
 }
 
+// upsert ค่าใน CONFIG (KEY/VALUE)
+function setConfigValue_(key, value) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('CONFIG') || ss.getSheetByName('Config');
+  if (!s) { s = ss.insertSheet('CONFIG'); s.getRange(1,1,1,2).setValues([['KEY','VALUE']]); }
+  var rows = s.getDataRange().getValues();
+  for (var i=1;i<rows.length;i++){ if (String(rows[i][0]).trim().toUpperCase()===String(key).toUpperCase()){ s.getRange(i+1,2).setValue(value); return; } }
+  s.appendRow([key, value]);
+}
+// ตั้งอีเมลสำนักงานบัญชี (ค่าเริ่ม = pen2020ac@gmail.com) — รันใน editor
+function setReportEmail(email) {
+  email = String(email || 'pen2020ac@gmail.com').trim();
+  setConfigValue_('ACCT_EMAIL', email);
+  return 'ตั้ง ACCT_EMAIL = ' + email;
+}
+
+// จัดรายการค่าน้ำประปา (auto-debit ref 0018902360) → ค่าใช้จ่าย/ค่าน้ำประปา (รวมค่าธรรมเนียม 10 บ./ครั้ง)
+function categorizeWaterBills() {
+  try {
+    coaEnsure_('5320','ค่าน้ำประปา','ค่าใช้จ่าย');
+    var s = bankSheet_(); if (s.getLastRow()<2) return 'ไม่มีข้อมูล';
+    var rows = s.getDataRange().getValues(); var n=0;
+    for (var i=1;i<rows.length;i++){
+      if (String(rows[i][2])!=='OUT') continue;
+      if (!/0018902360/.test(String(rows[i][5]||''))) continue;
+      s.getRange(i+1,5).setValue('EXPENSE');
+      s.getRange(i+1,10).setValue('ค่าน้ำประปา');
+      n++;
+    }
+    return 'จัดเป็นค่าน้ำประปา ' + n + ' รายการ (รวมค่าธรรมเนียม 10 บ./ครั้ง)';
+  } catch(e){ return 'ERROR: ' + e; }
+}
+
+// แยก 1 รายการเป็น 2 หมวด — ส่วน 1 (ที่เหลือ) ใช้ cat1/coa1 · ส่วน 2 (amt2) ใช้ cat2/coa2 เป็นแถวใหม่
+//  ใช้กับ: จ่ายสรรพากร = หนี้สิน(VAT) + ปรับ/ภาษีอื่น · ค่าน้ำ = ค่าน้ำ + ค่าธรรมเนียม
+function splitBankTxn(row, cat1, coa1, amt2, cat2, coa2, note2) {
+  try {
+    var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    var r = s.getRange(row,1,1,11).getValues()[0];
+    var amt = Number(r[3])||0; amt2 = Number(amt2)||0;
+    if (amt2<=0 || amt2>=amt) return { ok:false, msg:'ยอดส่วน 2 ต้อง > 0 และ < ยอดรวม ฿'+amt };
+    var amt1 = Math.round((amt-amt2)*100)/100;
+    s.getRange(row,4).setValue(amt1);
+    s.getRange(row,5).setValue(cat1 || r[4]);
+    s.getRange(row,10).setValue(coa1 || r[9]);
+    s.getRange(row,9).setValue((String(r[8]||'') ? r[8]+' · ' : '') + 'แยกหมวด(1/2)');
+    var key = String(r[7]||('ROW'+row)) + '-SP' + Date.now();
+    s.appendRow([r[0], r[1], r[2], amt2, (cat2||'EXPENSE'), r[5], r[6], key, ((note2||'')+' แยกหมวด(2/2)').trim(), (coa2||''), r[10]]);
+    return { ok:true, msg:'แยกเป็น 2 หมวด: ฿'+amt1+' + ฿'+amt2 };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // trigger รายเดือน วันที่ 2 ~07:00 → ส่งรายงานเดือนก่อนหน้า
 function monthlyBankReportJob() { emailMonthlyBankReport(); }
 function setupMonthlyReportTrigger() {

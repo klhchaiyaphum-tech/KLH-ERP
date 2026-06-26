@@ -5,6 +5,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KLH สมุดเงินธนาคาร</title>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style id="klh-swal">.swal2-popup{border-radius:24px!important;}.swal2-styled{border-radius:999px!important;font-weight:700!important;box-shadow:none!important;}.swal2-input,.swal2-select{border-radius:12px!important;}</style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
 :root{
@@ -383,6 +385,7 @@ function render(txns){
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
           +'<td class="muted" style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
+          +'<button class="btn sm" style="color:#6A1B9A" title="แยกเป็น 2 หมวด (เช่น สรรพากร = หนี้สิน + ปรับ)" onclick="splitRow('+t.row+')">✂️ แยก</button> '
           +'<button class="btn sm" style="color:var(--red)" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
       });
@@ -407,6 +410,27 @@ function saveTxn(row){
   .updateBankTxn(row, document.getElementById('cat-'+row).value, document.getElementById('note-'+row).value, document.getElementById('acc-'+row).value);
 }
 
+function splitRow(row){
+  var cat1=document.getElementById('cat-'+row).value, coa1=document.getElementById('acc-'+row).value;
+  var catOpts=Object.keys(CATS).map(function(c){return '<option value="'+c+'"'+(c===cat1?'':'')+'>'+CATS[c]+'</option>';}).join('');
+  var accOpts=ACCTS.map(function(a){var v=a.name||'';return '<option value="'+esc(v)+'">'+(v?((a.code?a.code+' ':'')+v):'—')+'</option>';}).join('');
+  Swal.fire({
+    title:'✂️ แยกเป็น 2 หมวด',
+    html:'<div style="text-align:left;font-size:13px;color:#666;margin-bottom:6px">ส่วนที่ 1 (ที่เหลือ) ใช้หมวด/ผังบัญชีที่เลือกในแถวอยู่แล้ว · กรอกเฉพาะ<b>ส่วนที่ 2</b>ที่แยกออก</div>'
+      +'<input id="sp2amt" type="number" step="0.01" class="swal2-input" placeholder="ยอดส่วนที่ 2">'
+      +'<select id="sp2cat" class="swal2-select">'+catOpts+'</select>'
+      +'<select id="sp2coa" class="swal2-select">'+accOpts+'</select>',
+    showCancelButton:true, confirmButtonText:'แยก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#6A1B9A',
+    didOpen:function(){ document.getElementById('sp2cat').value='LIABILITY'; },
+    preConfirm:function(){ var a=Number(document.getElementById('sp2amt').value)||0; if(a<=0){Swal.showValidationMessage('ใส่ยอดส่วนที่ 2');return false;}
+      return {amt:a,cat:document.getElementById('sp2cat').value,coa:document.getElementById('sp2coa').value}; }
+  }).then(function(res){ if(!res.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(r){
+      document.getElementById('msg').innerHTML=r.ok?'<div class="okmsg">✅ '+r.msg+'</div>':'<div class="err">'+r.msg+'</div>'; if(r.ok)load();
+    }).withFailureHandler(function(e){document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>';})
+    .splitBankTxn(row, cat1, coa1, res.value.amt, res.value.cat, res.value.coa, '');
+  });
+}
 function delTxn(row){
   if (!confirm('ลบรายการนี้?')) return;
   google.script.run.withSuccessHandler(function(r){ if(r.ok) load(); else document.getElementById('msg').innerHTML='<div class="err">'+r.msg+'</div>'; })
