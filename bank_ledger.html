@@ -298,14 +298,20 @@ function render(txns){
   // หมวดบัญชีที่เป็น "หนี้สิน" (จากผังบัญชี) — ไม่นับเป็นค่าใช้จ่ายในงบ
   var liab = {}; ACCTS.forEach(function(a){ if(a && a.type==='หนี้สิน' && a.name) liab[a.name]=1; });
   // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT) · โยก ออม→กระแส (b2c)
-  var cExp = 0, cPay = 0, cSale = 0, cOther = 0, b2c = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
+  var cExp = 0, cPay = 0, cSale = 0, cOther = 0, cLiab = 0, b2c = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
+  var kOutTf=0, kOutExp=0, bOutTf=0, bOutExp=0;   // แยกโยกเงินจริง vs ค่าใช้จ่าย ต่อบัญชี
   txns.forEach(function(t){
     var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount;
     if (t.cat==='EXPENSE' && !liab[t.account]) { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
     else if (t.cat==='PAYMENT') cPay += t.amount;
     else if (t.cat==='SALE' || t.cat==='AR') cSale += t.amount;
     else if (t.cat==='OTHER') cOther += t.amount;
+    else if (t.cat==='LIABILITY') cLiab += t.amount;   // สรรพากร/ปกส.นำส่ง (หนี้สิน) — มองเป็นเงินจ่ายออก
     if (t.bank==='BAYC' && t.dir==='IN' && t.cat==='TRANSFER') b2c += t.amount;  // โยก ออม→กระแส
+    if (t.dir==='OUT'){
+      if (t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
+      else if (t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
+    }
   });
   var bn = { KTB:'กรุงไทย', BAY:'ออมฯ', BAYC:'กระแสฯ' };
   var expBreak = ['KTB','BAY','BAYC'].filter(function(b){ return expBank[b]>0; })
@@ -320,19 +326,23 @@ function render(txns){
     +'</div></div>'
     +'<div class="kgrp"><div class="kglbl">💸 เงินออก / โยกเงิน</div><div class="kpis">'
     +'<div class="kpi">'
-      +'<div class="kk">↑ โยกเงินออกจากกรุงไทย</div>'
-      +'<div class="kv num" style="color:#D98A0B;font-size:19px">฿'+nf(sums.k_out)+'</div>'
-      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ รับเงินเข้ากรุงศรีออมทรัพย์</div>'
+      +'<div class="kk">↑ โยกออกจากกรุงไทย (โยกจริง)</div>'
+      +'<div class="kv num" style="color:#D98A0B;font-size:19px">฿'+nf(kOutTf)+'</div>'
+      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ เข้ากรุงศรีออมทรัพย์</div>'
       +'<div class="kv num" style="color:#6A1B9A;font-size:19px">฿'+nf(sums.b_tf)+'</div>'
+      +(kOutExp>0?'<div class="kk" style="margin-top:6px;color:#D9512B">+ ค่าธรรมเนียม/ค่าใช้จ่ายกรุงไทย ฿'+nf(kOutExp)+'</div>':'')
     +'</div>'
     +'<div class="kpi">'
-      +'<div class="kk">↑ โยกเงินออกจากกรุงศรีออม</div>'
-      +'<div class="kv num" style="color:#EBA13C;font-size:19px">฿'+nf(sums.b_out)+'</div>'
-      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ รับเงินเข้ากรุงศรีกระแส</div>'
+      +'<div class="kk">↑ โยกออกจากกรุงศรีออม (โยกจริง)</div>'
+      +'<div class="kv num" style="color:#EBA13C;font-size:19px">฿'+nf(bOutTf)+'</div>'
+      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ เข้ากรุงศรีกระแส</div>'
       +'<div class="kv num" style="color:#1565C0;font-size:19px">฿'+nf(b2c)+'</div>'
+      +(bOutExp>0?'<div class="kk" style="margin-top:6px;color:#D9512B">+ ค่าใช้จ่ายออม (ค่าน้ำ ฯลฯ) ฿'+nf(bOutExp)+'</div>':'')
     +'</div>'
     +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(cPay)+'</div><div class="kk">ชำระเจ้าหนี้การค้า</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp)+'</div><div class="kk">ค่าใช้จ่าย<br><span style="font-size:10.5px">'+expBreak+'</span></div></div>'
+    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp+cLiab)+'</div><div class="kk">รวมจ่ายจริง (ค่าใช้จ่าย+นำส่ง)'
+      +'<br><span style="font-size:10.5px">ค่าใช้จ่าย ฿'+nf(cExp)+(cLiab>0?' · สรรพากร/นำส่ง ฿'+nf(cLiab):'')+'</span>'
+      +'<br><span style="font-size:10px">'+expBreak+'</span></div></div>'
     +'</div></div>';
 
   // ── สรุปรายวัน (overview) — คลิกวันเพื่อกรองดูเฉพาะวันนั้น ──

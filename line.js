@@ -78,7 +78,7 @@ function setLineNotifyGroup() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var s = ss.getSheetByName('CONFIG');
   if (!s) { s = ss.insertSheet('CONFIG'); s.getRange(1,1,1,2).setValues([['KEY','VALUE']]); }
-  var gid = 'C9936ac4af81efc524493fe83a0a7b328';
+  var gid = 'Cb3abd1785d20129463eeab9e8ce61a62';   // ห้องรายงาน KLH (เปลี่ยน 2026-06-26)
   var rows = s.getDataRange().getValues(); var found = false;
   for (var i=1;i<rows.length;i++){ if (String(rows[i][0])==='LINE_GROUP_ID'){ s.getRange(i+1,2).setValue(gid); found=true; break; } }
   if (!found) s.appendRow(['LINE_GROUP_ID', gid]);

@@ -114,14 +114,20 @@ function render(bank, tax){
   if(!txns.length && !tax){ document.getElementById('wrap').innerHTML='<div class="err">ไม่มีข้อมูลเดือนนี้</div>'; document.getElementById('latest').textContent='ไม่มีข้อมูล'; return; }
 
   var sums={k_in:0,k_out:0,b_pp:0,b_tf:0,b_out:0,bc_in:0,bc_out:0};
-  var cSale=0,cOther=0,cPay=0,cExp=0,b2c=0,latest='';
+  var cSale=0,cOther=0,cPay=0,cExp=0,cLiab=0,b2c=0,latest='';
+  var kOutTf=0,kOutExp=0,bOutTf=0,bOutExp=0;
   txns.forEach(function(t){
     sums[groupOf(t)] += t.amount;
     if(t.cat==='SALE'||t.cat==='AR') cSale+=t.amount;
     else if(t.cat==='OTHER') cOther+=t.amount;
     else if(t.cat==='PAYMENT') cPay+=t.amount;
     else if(t.cat==='EXPENSE') cExp+=t.amount;
+    else if(t.cat==='LIABILITY') cLiab+=t.amount;
     if(t.bank==='BAYC'&&t.dir==='IN'&&t.cat==='TRANSFER') b2c+=t.amount;
+    if(t.dir==='OUT'){
+      if(t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
+      else if(t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
+    }
     if(t.date>latest) latest=t.date;
   });
   document.getElementById('latest').textContent = latest ? ('📅 ข้อมูลล่าสุด: '+latest) : 'ยังไม่มีรายการเดือนนี้';
@@ -161,12 +167,14 @@ function render(bank, tax){
 
   // ── เงินออก / โยกเงิน (โยก = ออก vs เข้า) ──
   h+='<div class="lbl">💸 เงินออก / โยกเงิน</div><div class="grid2">'
-    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกเงินออกจากกรุงไทย</span><b class="num" style="color:var(--orange)">฿'+nf(sums.k_out)+'</b></div>'
-      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีออมทรัพย์</span><b class="num" style="color:var(--purple)">฿'+nf(sums.b_tf)+'</b></div></div>'
-    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกเงินออกจากกรุงศรีออม</span><b class="num" style="color:var(--orange)">฿'+nf(sums.b_out)+'</b></div>'
-      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีกระแส</span><b class="num" style="color:var(--cyan)">฿'+nf(b2c)+'</b></div></div>'
+    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกออกจากกรุงไทย (โยกจริง)</span><b class="num" style="color:var(--orange)">฿'+nf(kOutTf)+'</b></div>'
+      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีออมทรัพย์</span><b class="num" style="color:var(--purple)">฿'+nf(sums.b_tf)+'</b></div>'
+      +(kOutExp>0?'<div class="tf-line" style="color:var(--red);font-size:12px"><span>+ ค่าธรรมเนียม/ค่าใช้จ่ายกรุงไทย</span><b class="num">฿'+nf(kOutExp)+'</b></div>':'')+'</div>'
+    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกออกจากกรุงศรีออม (โยกจริง)</span><b class="num" style="color:var(--orange)">฿'+nf(bOutTf)+'</b></div>'
+      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีกระแส</span><b class="num" style="color:var(--cyan)">฿'+nf(b2c)+'</b></div>'
+      +(bOutExp>0?'<div class="tf-line" style="color:var(--red);font-size:12px"><span>+ ค่าใช้จ่ายออม (ค่าน้ำ ฯลฯ)</span><b class="num">฿'+nf(bOutExp)+'</b></div>':'')+'</div>'
     +'<div class="bub"><div class="v num" style="color:var(--purple)">฿'+nf(cPay)+'</div><div class="k">ชำระเจ้าหนี้การค้า</div></div>'
-    +'<div class="bub"><div class="v num" style="color:var(--red)">฿'+nf(cExp)+'</div><div class="k">ค่าใช้จ่าย</div></div>'
+    +'<div class="bub"><div class="v num" style="color:var(--red)">฿'+nf(cExp+cLiab)+'</div><div class="k">รวมจ่ายจริง (ค่าใช้จ่าย+นำส่ง)</div><div class="sub">ค่าใช้จ่าย ฿'+nf(cExp)+(cLiab>0?' · สรรพากร/นำส่ง ฿'+nf(cLiab):'')+'</div></div>'
     +'</div>';
 
   // ── 7 ช่องเงินเข้า-ออก 3 บัญชี ──
