@@ -37,7 +37,7 @@ input:focus,select:focus{ border-color:var(--coral); box-shadow:0 0 0 3px var(--
 .btn{ display:inline-flex; align-items:center; gap:6px; padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600; border:1px solid var(--line-2); background:var(--paper); color:var(--ink); }
 .btn.primary{ background:var(--coral); border-color:var(--coral); color:#fff; box-shadow:0 6px 14px -7px var(--coral); }
 .btn.green{ background:var(--green); border-color:var(--green); color:#fff; }
-.btn.sm{ padding:5px 10px; font-size:12px; border-radius:8px; }
+.btn.sm{ padding:4px 8px; font-size:11.5px; border-radius:8px; }
 .body{ padding:16px 20px 22px; }
 #kpis{ display:flex; flex-direction:column; gap:13px; margin-bottom:15px; }
 .kgrp{ background:var(--cream,#fdf7f1); border:1px solid var(--line); border-radius:16px; padding:10px 12px 12px; }
@@ -55,7 +55,7 @@ input:focus,select:focus{ border-color:var(--coral); box-shadow:0 0 0 3px var(--
 .sec-h .cv{ color:var(--ink-3); transition:transform .15s; font-size:12px; }
 .sec.open .sec-h .cv{ transform:rotate(180deg); }
 .sec-b{ display:none; }
-.sec.open .sec-b{ display:block; }
+.sec.open .sec-b{ display:block; overflow-x:auto; }
 table{ width:100%; border-collapse:collapse; font-size:12.5px; }
 th{ text-align:left; padding:8px 11px; font-size:11px; font-weight:700; color:var(--ink-2); background:var(--paper-2); border-top:1px solid var(--line); border-bottom:1px solid var(--line); white-space:nowrap; }
 th.r{ text-align:right; }
@@ -63,7 +63,7 @@ td{ padding:7px 11px; border-bottom:1px solid var(--line); vertical-align:middle
 td.r{ text-align:right; }
 tr:last-child td{ border-bottom:none; }
 tr:hover{ background:#FCE6DC44; }
-td input.note{ width:100%; min-width:140px; padding:5px 8px; font-size:12px; border-radius:8px; }
+td input.note{ width:100%; min-width:90px; padding:5px 8px; font-size:12px; border-radius:8px; }
 td select.cat{ padding:5px 7px; font-size:12px; border-radius:8px; }
 .pill{ display:inline-flex; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
 .pill.SALE{ background:var(--green-soft); color:var(--green); }
@@ -383,10 +383,10 @@ function render(txns){
             +ACCTS.map(function(a){ var v=a.name||''; var lbl=v?((a.code?a.code+' ':'')+v):'—'; return '<option value="'+esc(v)+'"'+(t.account===v?' selected':'')+'>'+lbl+'</option>'; }).join('')
           +'</select></td>'
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
-          +'<td class="muted" style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
+          +'<td class="muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
-          +'<button class="btn sm" style="color:#6A1B9A" title="แยกเป็น 2 หมวด (เช่น สรรพากร = หนี้สิน + ปรับ)" onclick="splitRow('+t.row+')">✂️ แยก</button> '
-          +'<button class="btn sm" style="color:var(--red)" onclick="delTxn('+t.row+')">ลบ</button></td>'
+          +'<button class="btn sm" style="color:#6A1B9A" title="แยกเป็น 2 หมวด (เช่น สรรพากร = หนี้สิน + ปรับ)" onclick="splitRow('+t.row+')">✂️</button> '
+          +'<button class="btn sm" style="color:var(--red)" title="ลบรายการ" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
       });
       h += '</table>';
