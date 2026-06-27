@@ -334,7 +334,7 @@ function render(txns){
     return '<div class="kpi"><div class="kk" style="font-weight:700;color:#6A1B9A">'+label+'</div>'
       +'<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:4px;gap:8px"><span>↑ โยกออก (ต้นทาง)</span><b class="num" style="color:#D98A0B">฿'+nf(out)+'</b></div>'
       +'<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:2px;gap:8px"><span>↓ เข้าปลายทาง</span><b class="num" style="color:#1565C0">฿'+nf(inn)+'</b></div>'
-      +'<div style="border-top:1px solid #ECE6DA;margin-top:5px;padding-top:4px;text-align:center;font-weight:700;color:'+(ok?'#2E7D46':'#D9512B')+'">'+(ok?'✓ ถึงปลายทางครบ':(diff>0?'↓ ปลายทางเกิน ฿'+nf(diff):'⚠️ ขาด ฿'+nf(-diff)))+'</div></div>';
+      +(ok?'':'<div style="border-top:1px solid #ECE6DA;margin-top:5px;padding-top:4px;text-align:center;font-weight:700;color:#D9512B">'+(diff>0?'↓ ปลายทางเกิน ฿'+nf(diff):'⚠️ ขาด ฿'+nf(-diff))+'</div>')+'</div>';
   }
   document.getElementById('kpis').innerHTML =
     '<div class="kgrp"><div class="kglbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'

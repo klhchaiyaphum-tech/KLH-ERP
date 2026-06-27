@@ -170,6 +170,23 @@ function render(bank, tax){
     h+='</div>';
   }
 
+  // ── กราฟแท่งยอดขายต่อวัน ──
+  var saleByDay={};
+  txns.forEach(function(t){ if(t.cat==='SALE'||t.cat==='AR') saleByDay[t.date]=(saleByDay[t.date]||0)+t.amount; });
+  var sdays=Object.keys(saleByDay).sort();
+  if(sdays.length){
+    var maxSale=1; sdays.forEach(function(d){ if(saleByDay[d]>maxSale) maxSale=saleByDay[d]; });
+    h+='<div class="lbl">📊 ยอดขายต่อวัน (เดือนนี้)</div>'
+      +'<div style="background:#fff;border:1px solid #ECE6DA;border-radius:14px;padding:12px 10px 6px;display:flex;align-items:flex-end;gap:2px;height:130px;overflow-x:auto">';
+    sdays.forEach(function(d){
+      var v=saleByDay[d], hp=Math.max(2,Math.round(v/maxSale*100));
+      h+='<div style="flex:1 0 9px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="'+d+' : ฿'+nf(v)+'">'
+        +'<div style="width:78%;background:linear-gradient(180deg,#F6704C,#E2502B);height:'+hp+'%;border-radius:3px 3px 0 0;min-height:2px"></div>'
+        +'<div style="font-size:8px;color:#999;margin-top:3px">'+d.slice(8)+'</div></div>';
+    });
+    h+='</div><div style="text-align:right;font-size:11px;color:#999;margin:2px 4px 0">สูงสุด/วัน ฿'+nf(maxSale)+'</div>';
+  }
+
   // ── เงินเข้า (ต่อธนาคาร — รวมตรง statement) ──
   h+='<div class="lbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="grid2">'
     +mbox('🔵 กรุงไทย เข้า','var(--blue)',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
@@ -191,7 +208,7 @@ function render(bank, tax){
     return '<div class="bub wide"><div class="tf-line"><span style="font-weight:700;color:var(--purple)">'+label+'</span><b></b></div>'
       +'<div class="tf-line" style="font-size:13px"><span>↑ โยกออก (ต้นทาง)</span><b class="num" style="color:var(--orange)">฿'+nf(out)+'</b></div>'
       +'<div class="tf-line" style="font-size:13px"><span>↓ เข้าปลายทาง</span><b class="num" style="color:var(--cyan)">฿'+nf(inn)+'</b></div>'
-      +'<div class="tf-div"></div><div class="tf-line" style="justify-content:center;font-weight:700;color:'+(ok?'#2E7D46':'var(--red)')+'">'+(ok?'✓ ถึงปลายทางครบ':(diff>0?'↓ ปลายทางเกิน ฿'+nf(diff):'⚠️ ขาด ฿'+nf(-diff)))+'</div></div>';
+      +(ok?'':'<div class="tf-div"></div><div class="tf-line" style="justify-content:center;font-weight:700;color:var(--red)">'+(diff>0?'↓ ปลายทางเกิน ฿'+nf(diff):'⚠️ ขาด ฿'+nf(-diff))+'</div>')+'</div>';
   }
   h+='<div class="lbl">🔁 การไหลของเงินโยก (เช็คว่าถึงปลายทางครบไหม)</div><div class="grid2">'
     +mflow('กรุงไทย → กรุงศรีออม',kOutTf,sums.b_tf)
