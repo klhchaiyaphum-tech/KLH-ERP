@@ -474,12 +474,24 @@ function dailySalesReport() {
     } catch(ePP) {}
     var gap = taxSale - lastYearAvg;          // ยอดรับจริง − ยอดปีก่อนเฉลี่ย/เดือน (ลบ = ยังขาด)
 
+    // เฉลี่ยต่อวัน: ผ่านมาแล้ว vs ที่เหลือถึงสิ้นเดือน
+    var dayNum = Number(Utilities.formatDate(new Date(), tz, 'd'));            // วันที่ของเดือน (วันที่ผ่านมาแล้ว)
+    var daysInMonth = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+    var daysLeft = Math.max(0, daysInMonth - dayNum);
+    var avgPast = dayNum > 0 ? taxSale / dayNum : 0;                            // ขายเฉลี่ย/วัน ตั้งแต่ต้นเดือน
+    var needLeft = daysLeft > 0 ? Math.abs(gap) / daysLeft : 0;                 // ต้องเร่ง/วัน ถึงสิ้นเดือน
+
     var rnd = function(n){ return Math.round(n).toLocaleString(); };
-    var msg = '📊 รายงานยอดขาย KLH · เดือน ' + ym + ' (สะสม)\n――――――――\n'
+    var line4 = daysLeft <= 0 ? '🏁 สิ้นเดือนแล้ว'
+      : (gap >= 0 ? '🎉 เกินยอดปีก่อนแล้ว (เหลือ ' + daysLeft + ' วัน)'
+                  : '🎯 ต้องเร่งขายอีกวันละ ฿' + rnd(needLeft) + ' (เหลือ ' + daysLeft + ' วัน) ถึงทันปีก่อน');
+    var msg = '📊 รายงานยอดขาย KLH · เดือน ' + ym + ' (สะสม ' + dayNum + ' วัน)\n――――――――\n'
       + '1️⃣ ยอดขาย KTB:  ฿' + rnd(ktbSale) + '\n'
       + '2️⃣ ยอดขาย กรุงศรี:  ฿' + rnd(baySale) + '\n'
       + '3️⃣ ยอดขายภาษี (รวม):  ฿' + rnd(taxSale) + '\n'
+      + '      📈 เฉลี่ย/วัน (ผ่านมา ' + dayNum + ' วัน): ฿' + rnd(avgPast) + '\n'
       + '4️⃣ ยอดรับจริง เทียบปีที่แล้ว:  ' + (gap >= 0 ? '+' : '') + rnd(gap) + '\n'
+      + '      ' + line4 + '\n'
       + (lastYearAvg ? '      ปีก่อนเฉลี่ย ฿' + rnd(lastYearAvg) + '/เดือน · รับจริง ฿' + rnd(taxSale)
                      : '      (ยังไม่ตั้งยอดปีก่อนในหน้า ภพ.30)') + '\n'
       + '5️⃣ ชำระเจ้าหนี้การค้า:  ฿' + rnd(payment);
