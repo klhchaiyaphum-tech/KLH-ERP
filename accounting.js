@@ -445,47 +445,44 @@ function dailySalesReport() {
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var tz = 'Asia/Bangkok';
-    var now  = new Date();
-    var yest = new Date(now.getTime() - 86400000);
-    var yStr = Utilities.formatDate(yest, tz, 'yyyy-MM-dd');
-    var today= Utilities.formatDate(now,  tz, 'yyyy-MM-dd');
-    var ym   = today.slice(0, 7);
-
+    var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    var ym = today.slice(0, 7);
     function dOf(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v||'').slice(0,10); }
 
-    // ── ยอดขาย POS (SALES_HEADER: 2 PAID_DATE, 4 ENTITY, 9 TOTAL) ──
-    var dayPos = 0, mtdPos = 0, byEnt = {};
-    var sh = ss.getSheetByName('SALES_HEADER');
-    if (sh && sh.getLastRow() > 1) {
-      sh.getDataRange().getValues().slice(1).forEach(function(r){
-        var pd = dOf(r[2]); var tot = Number(r[9]) || 0;
-        if (pd === yStr) { dayPos += tot; var e = String(r[4]||'ไม่ระบุ'); byEnt[e] = (byEnt[e]||0) + tot; }
-        if (pd.slice(0,7) === ym && pd <= today) mtdPos += tot;
-      });
-    }
-
-    // ── เงินเข้าธนาคารเมื่อวาน (BANK_TRANSACTIONS IN ที่เป็นขาย) ──
-    var dayBankKtb = 0, dayBankBay = 0, mtdBank = 0;
+    // ── ยอดขาย/ชำระเจ้าหนี้ สะสมเดือนนี้ จากธนาคาร ──
+    var ktbSale = 0, baySale = 0, payment = 0;
     var bk = ss.getSheetByName('BANK_TRANSACTIONS');
     if (bk && bk.getLastRow() > 1) {
       bk.getDataRange().getValues().slice(1).forEach(function(r){
-        var pd = dOf(r[0]); if (r[2] !== 'IN') return;
-        var cat = String(r[4]||''); if (cat === 'TRANSFER') return;
-        var amt = Number(r[3]) || 0;
-        if (pd === yStr) { if (r[1]==='KTB') dayBankKtb += amt; else dayBankBay += amt; }
-        if (pd.slice(0,7) === ym && pd <= today && (cat==='SALE'||cat==='AR')) mtdBank += amt;
+        var pd = dOf(r[0]); if (pd.slice(0,7) !== ym || pd > today) return;
+        var cat = String(r[4]||''), amt = Number(r[3]) || 0;
+        if (r[2] === 'IN' && (cat === 'SALE' || cat === 'AR')) {
+          if (String(r[1]).toUpperCase() === 'KTB') ktbSale += amt; else baySale += amt;   // กรุงศรี = ออม+กระแส
+        }
+        if (r[2] === 'OUT' && cat === 'PAYMENT') payment += amt;
       });
     }
+    var taxSale = ktbSale + baySale;
+
+    // ── ยอดขายปีที่แล้ว เฉลี่ย/เดือน (TAX_ESTIMATE: 0 MONTH, 5 LAST_YEAR_AVG) ──
+    var lastYearAvg = 0;
+    var te = ss.getSheetByName('TAX_ESTIMATE');
+    if (te && te.getLastRow() > 1) {
+      te.getDataRange().getValues().slice(1).forEach(function(r){
+        var m = r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'yyyy-MM') : String(r[0]||'').slice(0,7);
+        if (m === ym) lastYearAvg = Number(r[5]) || 0;
+      });
+    }
+    var gap = taxSale - lastYearAvg;   // ฐานภาษีรวม − ยอดปีก่อนเฉลี่ย/เดือน (ลบ = ยังขาด)
 
     var rnd = function(n){ return Math.round(n).toLocaleString(); };
-    var msg = '📊 รายงานยอดขาย KLH\n📅 เมื่อวาน ' + yStr + '\n――――――――\n'
-      + '💵 ยอดขาย POS: ฿' + rnd(dayPos) + '\n';
-    Object.keys(byEnt).forEach(function(e){ msg += '   • ' + e + ': ฿' + rnd(byEnt[e]) + '\n'; });
-    msg += '🏦 เงินเข้าธนาคาร: กรุงไทย ฿' + rnd(dayBankKtb) + ' · กรุงศรี ฿' + rnd(dayBankBay) + '\n'
-      + '――――――――\n'
-      + '📈 สะสมเดือนนี้ (' + ym + ')\n'
-      + '   ยอดขาย POS: ฿' + rnd(mtdPos) + '\n'
-      + '   เงินเข้าธนาคาร(ขาย): ฿' + rnd(mtdBank);
+    var msg = '📊 รายงานยอดขาย KLH · เดือน ' + ym + ' (สะสม)\n――――――――\n'
+      + '1️⃣ ยอดขาย KTB:  ฿' + rnd(ktbSale) + '\n'
+      + '2️⃣ ยอดขาย กรุงศรี:  ฿' + rnd(baySale) + '\n'
+      + '3️⃣ ยอดขายภาษี (รวม):  ฿' + rnd(taxSale) + '\n'
+      + '4️⃣ ยอดขาด/เกินยอดสร้าง:  ' + (gap >= 0 ? '+' : '') + rnd(gap)
+        + (lastYearAvg ? '\n      (เทียบปีก่อนเฉลี่ย ฿' + rnd(lastYearAvg) + '/เดือน)' : '\n      (ยังไม่ตั้งยอดปีก่อนในหน้า ภพ.30)') + '\n'
+      + '5️⃣ ชำระเจ้าหนี้การค้า:  ฿' + rnd(payment);
     sendWmsLine_(msg);
     return msg;
   } catch(e) { Logger.log('dailySalesReport: ' + e); return 'error: ' + e; }
