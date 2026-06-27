@@ -250,7 +250,24 @@ function pbConfirm(rowKey, on) {
   s.getRange(row,15).setValue(on ? Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm') : '');
   return { ok:true };
 }
-// ── ส่งกลับ KLH DATA (เฉพาะ "ยืนยันแล้ว" + backup + log) ──
+// ── ยืนยันทั้งหมด (bulk) — รันใน editor · status ว่าง=ทั้ง จับคู่แล้ว+เพิ่มใหม่ ──
+function pbConfirmAll(statusFilter) {
+  try {
+    var s = pbSheet_(); if (!s || s.getLastRow()<2) return 'ไม่มีข้อมูล';
+    var n = s.getLastRow()-1;
+    var st = s.getRange(2,1,n,1).getValues();
+    var c=0, m=0, nw=0;
+    for (var i=0;i<st.length;i++){
+      var v=String(st[i][0]);
+      var pick = statusFilter ? (v===statusFilter) : (v==='จับคู่แล้ว'||v==='เพิ่มใหม่');
+      if (pick){ if(v==='จับคู่แล้ว')m++; else if(v==='เพิ่มใหม่')nw++; st[i][0]='ยืนยันแล้ว'; c++; }
+    }
+    s.getRange(2,1,n,1).setValues(st);
+    return 'ยืนยันแล้ว '+c+' รายการ (จับคู่แล้ว '+m+' · เพิ่มใหม่ '+nw+') → รัน pbPushToKlh() เพื่อส่งเข้า KLH DATA';
+  } catch(e){ return 'ERROR: '+e; }
+}
+
+// ── ส่งกลับ KLH DATA (เฉพาะ "ยืนยันแล้ว" + backup + log) — batch ทั้งหมด กัน timeout ──
 //   มีบาร์โค้ด → อัปเดต "ส่ง + ปลีก" เท่านั้น (ไม่แตะทุน — FIFO/รับเข้าเป็นเจ้าของ)
 //   ไม่มีบาร์โค้ด → สร้างสินค้าใหม่ + ออกรหัสภายใน 21xxxxxxxxxxx (ทุนตั้งต้นจาก Excel)
 function pbPushToKlh() {
@@ -258,57 +275,58 @@ function pbPushToKlh() {
     var s = pbSheet_(); if (!s || s.getLastRow()<2) return { ok:false, msg:'ไม่มีข้อมูล' };
     var n = s.getLastRow()-1;
     var vals = s.getRange(2,1,n,PB_HEAD.length).getValues();
-    var conf = vals.filter(function(r){ return String(r[0])==='ยืนยันแล้ว'; });
-    if (!conf.length) return { ok:false, msg:'ไม่มีแถวที่ยืนยันแล้ว' };
+    if (!vals.some(function(r){ return String(r[0])==='ยืนยันแล้ว'; })) return { ok:false, msg:'ไม่มีแถวที่ยืนยันแล้ว' };
     var klh = klhDataSheet_(); var data = klh.getDataRange().getValues();
     var width = Math.max(klh.getLastColumn(), 35);
-    var idx = {}; var maxPlu = 0;
+    var idx = {}, maxPlu = 0;
     for (var i=1;i<data.length;i++){
       var b=String(data[i][0]).trim(); if(b) idx[b]=i;
       if (/^21\d{11}$/.test(b)){ var nn=parseInt(b.substring(2,12),10); if(nn>maxPlu) maxPlu=nn; }
     }
     var ss = SpreadsheetApp.openById(SHEET_ID);
-    // backup snapshot KLH DATA
     var bakName = 'KLHDATA_BAK_'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd_HHmmss');
-    var bak = ss.insertSheet(bakName);
-    bak.getRange(1,1,data.length,data[0].length).setValues(data);
-    // log
-    var log = ss.getSheetByName('PRICE_UPDATE_LOG') || ss.insertSheet('PRICE_UPDATE_LOG');
-    if (log.getLastRow()===0) log.appendRow(['DATE','ACTION','BARCODE','NAME','COST_OLD','COST_NEW','RETAIL_OLD','RETAIL_NEW','WHOLE_OLD','WHOLE_NEW']);
+    ss.insertSheet(bakName).getRange(1,1,data.length,data[0].length).setValues(data);   // backup (batch)
     var now = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm');
     var today = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd');
-    var updated=0, created=0, confKeys={}, newRows=[], newKeys=[];
-    conf.forEach(function(r){
+    var updated=0, created=0, logRows=[], newRows=[];
+    for (var vi=0; vi<vals.length; vi++){
+      var r = vals[vi]; if (String(r[0])!=='ยืนยันแล้ว') continue;
       var bc = String(r[1]).trim();
       if (bc && idx[bc]!=null){
-        // อัปเดตของเดิม — ส่ง/ปลีก เท่านั้น
-        var ri = idx[bc], sheetRow = ri+1;
-        if (r[6]!=='') klh.getRange(sheetRow,24).setValue(r[6]);   // X = ปลีก
-        if (r[7]!=='') klh.getRange(sheetRow,22).setValue(r[7]);   // V = ส่ง
-        log.appendRow([now,'UPDATE', bc, data[ri][1], data[ri][17], data[ri][17], data[ri][23], r[6], data[ri][21], r[7]]);
-        confKeys[r[15]]=1; updated++;
+        var ri = idx[bc];
+        var oldRetail=data[ri][23], oldWhole=data[ri][21], oldCost=data[ri][17];
+        if (r[6]!=='') data[ri][23] = r[6];   // X ปลีก (แก้ใน array)
+        if (r[7]!=='') data[ri][21] = r[7];   // V ส่ง
+        logRows.push([now,'UPDATE', bc, data[ri][1], oldCost, oldCost, oldRetail, r[6], oldWhole, r[7]]);
+        vals[vi][0]='ส่งแล้ว'; updated++;
       } else if (!bc){
-        // สร้างสินค้าใหม่ + รหัสภายใน
         maxPlu++; var d12='21'+('0000000000'+maxPlu).slice(-10); var newBc=d12+ean13Check_(d12);
         var cost=pbNum_(r[5])||0, retail=pbNum_(r[6])||0, whole=pbNum_(r[7])||0;
         var row=[]; for (var c=0;c<width;c++) row.push('');
-        row[0]=newBc; row[1]=String(r[2]||''); row[3]=String(r[3]||'');  // A บาร์โค้ด, B ชื่อ, D ขนาด
-        row[15]=cost; row[16]='7%'; row[17]=cost;                        // P ทุนคำนวณ, Q ภาษี, R ทุน
-        row[21]=whole; row[23]=retail; row[24]=today;                    // V ส่ง, X ปลีก, Y วันที่
-        newRows.push(row); newKeys.push(r[15]);
-        log.appendRow([now,'NEW', newBc, r[2], '', cost, '', retail, '', whole]);
-        created++;
+        row[0]=newBc; row[1]=String(r[2]||''); row[3]=String(r[3]||'');
+        row[15]=cost; row[16]='7%'; row[17]=cost; row[21]=whole; row[23]=retail; row[24]=today;
+        newRows.push(row);
+        logRows.push([now,'NEW', newBc, r[2], '', cost, '', retail, '', whole]);
+        vals[vi][1]=newBc; vals[vi][0]='ส่งแล้ว'; created++;
       }
-    });
-    if (newRows.length){
-      klh.getRange(klh.getLastRow()+1,1,newRows.length,width).setValues(newRows);
-      // เขียนบาร์โค้ดใหม่กลับ PRICE_BOOK
-      var nk={}; for (var k=0;k<newKeys.length;k++) nk[newKeys[k]]=newRows[k][0];
-      for (var j2=0;j2<vals.length;j2++){ if(nk[vals[j2][15]]!=null){ s.getRange(j2+2,2).setValue(nk[vals[j2][15]]); confKeys[vals[j2][15]]=1; } }
     }
-    // mark ส่งแล้ว
-    var keys = s.getRange(2,16,n,1).getValues();
-    for (var j=0;j<keys.length;j++){ if(confKeys[keys[j][0]]) s.getRange(j+2,1).setValue('ส่งแล้ว'); }
+    // เขียนคืน KLH DATA: คอลัมน์ V(22) + X(24) ทั้งหมดทีเดียว
+    if (data.length>1){
+      var vCol=[], xCol=[];
+      for (var d2=1; d2<data.length; d2++){ vCol.push([data[d2][21]]); xCol.push([data[d2][23]]); }
+      klh.getRange(2,22,vCol.length,1).setValues(vCol);
+      klh.getRange(2,24,xCol.length,1).setValues(xCol);
+    }
+    if (newRows.length) klh.getRange(klh.getLastRow()+1,1,newRows.length,width).setValues(newRows);
+    // log (batch)
+    var log = ss.getSheetByName('PRICE_UPDATE_LOG') || ss.insertSheet('PRICE_UPDATE_LOG');
+    if (log.getLastRow()===0) log.appendRow(['DATE','ACTION','BARCODE','NAME','COST_OLD','COST_NEW','RETAIL_OLD','RETAIL_NEW','WHOLE_OLD','WHOLE_NEW']);
+    if (logRows.length) log.getRange(log.getLastRow()+1,1,logRows.length,10).setValues(logRows);
+    // เขียนคืน PRICE_BOOK: สถานะ(1) + บาร์โค้ด(2) ทั้งคอลัมน์
+    var stCol=[], bcCol=[];
+    for (var v2=0; v2<vals.length; v2++){ stCol.push([vals[v2][0]]); bcCol.push([vals[v2][1]]); }
+    s.getRange(2,1,n,1).setValues(stCol);
+    s.getRange(2,2,n,1).setValues(bcCol);
     return { ok:true, updated:updated, created:created, backup:bakName };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }

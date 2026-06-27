@@ -185,9 +185,10 @@ function render(bank, tax){
       var ymSel=document.getElementById('month').value, nowD=new Date();
       var curYm=nowD.getFullYear()+'-'+('0'+(nowD.getMonth()+1)).slice(-2);
       var dim=new Date(Number(ymSel.slice(0,4)),Number(ymSel.slice(5,7)),0).getDate();
-      var dLeft=(ymSel===curYm)?Math.max(0,dim-nowD.getDate()):0;
+      var elapsed=(ymSel===curYm)?Math.max(0,nowD.getDate()-1):dim;   // ข้อมูลถึงเมื่อวาน
+      var dLeft=Math.max(0,dim-elapsed);
       if(tgt>0 && cSale>=tgt) h+='<div class="sub" style="margin-top:7px;font-size:13.5px;color:var(--green);font-weight:700">🎉 ถึงเป้าแล้ว (เป้า ฿'+nf(tgt)+')</div>';
-      else if(tgt>0 && dLeft>0) h+='<div class="sub" style="margin-top:7px;font-size:13.5px">🎯 เป้าเฉลี่ยต่อวันที่เหลือ: <b style="color:var(--coral2)">฿'+nf(Math.round((tgt-cSale)/dLeft))+'</b><br>(เหลือ '+dLeft+' วัน ถึงเป้า ฿'+nf(tgt)+')</div>';
+      else if(tgt>0 && dLeft>0) h+='<div class="sub" style="margin-top:7px;font-size:13.5px">🎯 เป้าเฉลี่ยต่อวันที่เหลือ: <b style="color:var(--coral2)">฿'+nf(Math.round((tgt-cSale)/dLeft))+'</b><br>(ข้อมูล '+elapsed+' วัน · เหลือ '+dLeft+' วัน ถึงเป้า ฿'+nf(tgt)+')</div>';
     }
     h+='</div>'
       +'<div style="font-size:11px;color:#999;margin:0 4px 4px">แท่งหน่วย พันบาท · 🟦 เสาร์-อาทิตย์</div>'
