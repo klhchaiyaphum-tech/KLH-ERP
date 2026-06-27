@@ -328,6 +328,14 @@ function render(txns){
     h+='<div style="display:flex;justify-content:space-between;border-top:1px solid #ECE6DA;margin-top:5px;padding-top:4px;font-weight:800;gap:8px"><span>รวม</span><b class="num" style="color:'+color+'">฿'+nf(total)+'</b></div></div>';
     return h;
   }
+  // กล่องไหลของเงินโยก: ต้นทาง(ออก) → ปลายทาง(เข้า) ดูว่าถึงครบไหม
+  function flowbox(label, out, inn){
+    var diff=Math.round((inn-out)*100)/100, ok=Math.abs(diff)<1;
+    return '<div class="kpi"><div class="kk" style="font-weight:700;color:#6A1B9A">'+label+'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:4px;gap:8px"><span>↑ โยกออก (ต้นทาง)</span><b class="num" style="color:#D98A0B">฿'+nf(out)+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:2px;gap:8px"><span>↓ เข้าปลายทาง</span><b class="num" style="color:#1565C0">฿'+nf(inn)+'</b></div>'
+      +'<div style="border-top:1px solid #ECE6DA;margin-top:5px;padding-top:4px;text-align:center;font-weight:700;color:'+(ok?'#2E7D46':'#D9512B')+'">'+(ok?'✓ ถึงปลายทางครบ':(diff>0?'↓ ปลายทางเกิน ฿'+nf(diff):'⚠️ ขาด ฿'+nf(-diff)))+'</div></div>';
+  }
   document.getElementById('kpis').innerHTML =
     '<div class="kgrp"><div class="kglbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'
     + kbox('🔵 กรุงไทย เข้า','#3A37C9',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
@@ -339,6 +347,10 @@ function render(txns){
     + kbox('🟠 กรุงไทย ออก','#D98A0B',[['โยกออก (โยกจริง)',kOutTf],['ค่าธรรมเนียม/อื่นๆ',kOutExp]],sums.k_out)
     + kbox('🟡 กรุงศรีออม ออก','#EBA13C',[['โยกออก (โยกจริง)',bOutTf],['ค่าน้ำ/ค่าธรรมเนียม',bOutExp]],sums.b_out)
     + kbox('🔴 กรุงศรีกระแส ออก','#D9512B',[['ชำระเจ้าหนี้',cPay],['ค่าใช้จ่าย',expBank.BAYC],['สรรพากร/นำส่ง',cLiab]],sums.bc_out)
+    + '</div></div>'
+    + '<div class="kgrp"><div class="kglbl">🔁 การไหลของเงินโยก (ต้นทาง → ปลายทาง — เช็คว่าถึงครบไหม)</div><div class="kpis">'
+    + flowbox('กรุงไทย → กรุงศรีออม', kOutTf, sums.b_tf)
+    + flowbox('กรุงศรีออม → กรุงศรีกระแส', bOutTf, b2c)
     + '</div></div>';
 
   // ── สรุปรายวัน (overview) — คลิกวันเพื่อกรองดูเฉพาะวันนั้น ──

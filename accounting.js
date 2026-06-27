@@ -445,16 +445,17 @@ function dailySalesReport() {
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var tz = 'Asia/Bangkok';
-    var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    var ym = today.slice(0, 7);
+    var yest = new Date(Date.now() - 86400000);                       // ย้อนไปเมื่อวาน (รายงานเช้า = สรุปถึงเมื่อวาน)
+    var yStr = Utilities.formatDate(yest, tz, 'yyyy-MM-dd');
+    var ym = yStr.slice(0, 7);
     function dOf(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v||'').slice(0,10); }
 
-    // ── ยอดขาย/ชำระเจ้าหนี้ สะสมเดือนนี้ จากธนาคาร ──
+    // ── ยอดขาย/ชำระเจ้าหนี้ สะสมเดือนนี้ ถึงเมื่อวาน จากธนาคาร ──
     var ktbSale = 0, baySale = 0, payment = 0;
     var bk = ss.getSheetByName('BANK_TRANSACTIONS');
     if (bk && bk.getLastRow() > 1) {
       bk.getDataRange().getValues().slice(1).forEach(function(r){
-        var pd = dOf(r[0]); if (pd.slice(0,7) !== ym || pd > today) return;
+        var pd = dOf(r[0]); if (pd.slice(0,7) !== ym || pd > yStr) return;
         var cat = String(r[4]||''), amt = Number(r[3]) || 0;
         if (r[2] === 'IN' && (cat === 'SALE' || cat === 'AR')) {
           if (String(r[1]).toUpperCase() === 'KTB') ktbSale += amt; else baySale += amt;   // กรุงศรี = ออม+กระแส
@@ -475,7 +476,7 @@ function dailySalesReport() {
     var gap = taxSale - lastYearAvg;          // ยอดรับจริง − ยอดปีก่อนเฉลี่ย/เดือน (ลบ = ยังขาด)
 
     // เฉลี่ยต่อวัน: ผ่านมาแล้ว vs ที่เหลือถึงสิ้นเดือน
-    var dayNum = Number(Utilities.formatDate(new Date(), tz, 'd'));            // วันที่ของเดือน (วันที่ผ่านมาแล้ว)
+    var dayNum = Number(Utilities.formatDate(yest, tz, 'd'));                  // วันที่เมื่อวาน = จำนวนวันที่ผ่านมาแล้ว
     var daysInMonth = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
     var daysLeft = Math.max(0, daysInMonth - dayNum);
     var avgPast = dayNum > 0 ? taxSale / dayNum : 0;                            // ขายเฉลี่ย/วัน ตั้งแต่ต้นเดือน
