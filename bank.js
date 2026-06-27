@@ -279,23 +279,55 @@ function categorizeWaterBills() {
   } catch(e){ return 'ERROR: ' + e; }
 }
 
-// แยก 1 รายการเป็น 2 หมวด — ส่วน 1 (ที่เหลือ) ใช้ cat1/coa1 · ส่วน 2 (amt2) ใช้ cat2/coa2 เป็นแถวใหม่
-//  ใช้กับ: จ่ายสรรพากร = หนี้สิน(VAT) + ปรับ/ภาษีอื่น · ค่าน้ำ = ค่าน้ำ + ค่าธรรมเนียม
+// แยกลงบัญชี 2 หมวด — แต่ "คงแถวธนาคารเต็มจำนวน" (ตรง statement) เก็บการแยกเป็น metadata คอลัมน์ L(12)
+//  รูปแบบ SPLIT = "amt2|cat2|coa2" · ส่วนหลัก = ยอดรวม-amt2 ใช้ cat1/coa1 · ใช้ตอนลงบัญชี/P&L เท่านั้น
+//  ใช้กับ: สรรพากร = หนี้สิน(VAT) + เบี้ยปรับ(ค่าใช้จ่าย) · ค่าน้ำ = ค่าน้ำ + ค่าธรรมเนียม
 function splitBankTxn(row, cat1, coa1, amt2, cat2, coa2, note2) {
   try {
     var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
     var r = s.getRange(row,1,1,11).getValues()[0];
     var amt = Number(r[3])||0; amt2 = Number(amt2)||0;
     if (amt2<=0 || amt2>=amt) return { ok:false, msg:'ยอดส่วน 2 ต้อง > 0 และ < ยอดรวม ฿'+amt };
-    var amt1 = Math.round((amt-amt2)*100)/100;
-    s.getRange(row,4).setValue(amt1);
-    s.getRange(row,5).setValue(cat1 || r[4]);
+    if (String(s.getRange(1,12).getValue())!=='SPLIT') s.getRange(1,12).setValue('SPLIT').setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    s.getRange(row,5).setValue(cat1 || r[4]);                 // ส่วนหลัก (ยอดรวม-amt2)
     s.getRange(row,10).setValue(coa1 || r[9]);
-    s.getRange(row,9).setValue((String(r[8]||'') ? r[8]+' · ' : '') + 'แยกหมวด(1/2)');
-    var key = String(r[7]||('ROW'+row)) + '-SP' + Date.now();
-    s.appendRow([r[0], r[1], r[2], amt2, (cat2||'EXPENSE'), r[5], r[6], key, ((note2||'')+' แยกหมวด(2/2)').trim(), (coa2||''), r[10]]);
-    return { ok:true, msg:'แยกเป็น 2 หมวด: ฿'+amt1+' + ฿'+amt2 };
+    s.getRange(row,12).setValue(amt2 + '|' + (cat2||'EXPENSE') + '|' + (coa2||''));   // ส่วนแยก
+    s.getRange(row,9).setValue((String(r[8]||'') ? r[8]+' · ' : '') + 'แยกลงบัญชี ฿'+amt2+'→'+(coa2||cat2));
+    return { ok:true, msg:'แยกลงบัญชีแล้ว (สมุดคงยอดเต็ม ฿'+amt+'): ส่วนแยก ฿'+amt2+' → '+(coa2||cat2) };
   } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// ล้างการแยกลงบัญชี (คืนเป็นหมวดเดียว)
+function clearSplit(row) {
+  try {
+    var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    s.getRange(row,12).setValue('');
+    return { ok:true, msg:'ล้างการแยกแล้ว' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// แปลงรายการที่เคยถูกแยกเป็น 2 แถว (แบบเก่า) → รวมกลับเป็นแถวเดียว + เก็บ metadata (รันใน editor ครั้งเดียว)
+function fixSplitToMetadata() {
+  try {
+    var s = bankSheet_(); var last = s.getLastRow(); if (last<2) return 'ไม่มีข้อมูล';
+    if (String(s.getRange(1,12).getValue())!=='SPLIT') s.getRange(1,12).setValue('SPLIT').setFontWeight('bold');
+    var rows = s.getRange(2,1,last-1,12).getValues();
+    var keyToRow = {};
+    for (var i=0;i<rows.length;i++) keyToRow[String(rows[i][7])] = i;   // key(col H) → index
+    var del = [], merged = [];
+    for (var j=0;j<rows.length;j++){
+      if (!/แยกหมวด\(2\/2\)/.test(String(rows[j][8]||''))) continue;     // แถวส่วนแยก (แบบเก่า)
+      var key = String(rows[j][7]||''); var origKey = key.replace(/-SP\d+$/,'');
+      var oi = keyToRow[origKey]; if (oi==null) continue;
+      var amt2 = Number(rows[j][3])||0, cat2 = String(rows[j][4]||'EXPENSE'), coa2 = String(rows[j][9]||'');
+      var orow = oi+2;
+      var newAmt = Math.round(((Number(rows[oi][3])||0) + amt2)*100)/100;
+      s.getRange(orow,4).setValue(newAmt);                              // คืนยอดเต็ม
+      s.getRange(orow,12).setValue(amt2 + '|' + cat2 + '|' + coa2);     // เก็บ metadata
+      s.getRange(orow,9).setValue(String(rows[oi][8]||'').replace(/\s*·?\s*แยกหมวด\(1\/2\)/,'') + ' · แยกลงบัญชี ฿'+amt2+'→'+coa2);
+      del.push(j+2); merged.push('฿'+newAmt);
+    }
+    del.sort(function(a,b){ return b-a; }).forEach(function(r){ s.deleteRow(r); });
+    return del.length ? ('รวมกลับ '+del.length+' รายการ + เก็บการแยกเป็น metadata: '+merged.join(', ')) : 'ไม่พบรายการที่แยกแบบเก่า';
+  } catch(e){ return 'ERROR: '+e; }
 }
 
 // trigger รายเดือน วันที่ 2 ~07:00 → ดึง statement ที่ค้างก่อน แล้วส่งรายงานเดือนก่อนหน้า
@@ -1326,12 +1358,14 @@ function getBankTxns(yyyymm) {
           ? Utilities.formatDate(rows[i][0], 'Asia/Bangkok', 'yyyy-MM-dd')
           : String(rows[i][0]);
         if (d.slice(0, 7) !== ym) continue;
+        var sp = String(rows[i][11] || ''), split = null;
+        if (sp.indexOf('|') >= 0) { var p = sp.split('|'); split = { amt:Number(p[0])||0, cat:p[1]||'', coa:p[2]||'' }; }
         out.push({
           row: i + 1, date: d,
           bank: String(rows[i][1] || ''), dir: String(rows[i][2] || ''),
           amount: Number(rows[i][3]) || 0, cat: String(rows[i][4] || ''),
           subject: String(rows[i][5] || ''), note: String(rows[i][8] || ''),
-          account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || '')
+          account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || ''), split: split
         });
       }
     }
@@ -1557,19 +1591,25 @@ function getBankExpenses(yyyymm) {
     var s = bankSheet_();
     var typeMap = chartTypeMap_();
     var by = {}, total = 0, unspecified = 0;
+    function addExp(cat, acc, amt){
+      if (cat !== 'EXPENSE' || amt <= 0) return;
+      acc = String(acc || '').trim();
+      var aType = typeMap[acc] || '';
+      if (aType === 'หนี้สิน' || aType === 'สินทรัพย์' || /หนี้สิน/.test(acc)) return;  // ไม่ใช่ค่าใช้จ่าย P&L
+      if (!acc) { acc = 'ค่าใช้จ่ายอื่น (ยังไม่ระบุ)'; unspecified += amt; }
+      by[acc] = (by[acc] || 0) + amt;
+      total += amt;
+    }
     if (s.getLastRow() > 1) {
       s.getDataRange().getValues().slice(1).forEach(function(r) {
         var d = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(r[0]);
         if (d.slice(0, 7) !== ym) return;
-        var cat = String(r[4] || '');
-        if (cat !== 'EXPENSE') return;                    // เฉพาะค่าใช้จ่ายจริง (ชำระหนี้/หนี้สิน = งบดุล ไม่เข้า P&L)
         var amt = Number(r[3]) || 0;
-        var acc = String(r[9] || '').trim();
-        var aType = typeMap[acc] || '';
-        if (aType === 'หนี้สิน' || aType === 'สินทรัพย์' || /หนี้สิน/.test(acc)) return;  // ไม่ใช่ค่าใช้จ่าย P&L
-        if (!acc) { acc = 'ค่าใช้จ่ายอื่น (ยังไม่ระบุ)'; unspecified += amt; }
-        by[acc] = (by[acc] || 0) + amt;
-        total += amt;
+        // แยกลงบัญชี (metadata col L) — ส่วนหลัก + ส่วนแยก คิดแยกกัน
+        var sp = String(r[11] || ''), sAmt = 0, sCat = '', sCoa = '';
+        if (sp.indexOf('|') >= 0) { var p = sp.split('|'); sAmt = Number(p[0]) || 0; sCat = p[1] || ''; sCoa = p[2] || ''; }
+        addExp(String(r[4] || ''), String(r[9] || ''), amt - sAmt);   // ส่วนหลัก
+        if (sAmt > 0) addExp(sCat, sCoa, sAmt);                        // ส่วนแยก
       });
     }
     var rows = [];

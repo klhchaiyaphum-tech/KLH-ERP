@@ -299,51 +299,47 @@ function render(txns){
   var liab = {}; ACCTS.forEach(function(a){ if(a && a.type==='หนี้สิน' && a.name) liab[a.name]=1; });
   // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT) · โยก ออม→กระแส (b2c)
   var cExp = 0, cPay = 0, cSale = 0, cOther = 0, cLiab = 0, b2c = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
-  var kOutTf=0, kOutExp=0, bOutTf=0, bOutExp=0;   // แยกโยกเงินจริง vs ค่าใช้จ่าย ต่อบัญชี
+  var kOutTf=0, kOutExp=0, bOutTf=0, bOutExp=0;   // ออก: โยกจริง vs ค่าใช้จ่าย ต่อบัญชี
+  var kSale=0, kOther=0, bcSale=0;                 // เข้า: หลัก vs อื่นๆ ต่อบัญชี
+  function alloc(cat,coa,amt,bank){   // ลงหมวดบัญชี (honor split)
+    if (cat==='EXPENSE' && !liab[coa]) { cExp+=amt; expBank[bank]=(expBank[bank]||0)+amt; }
+    else if (cat==='PAYMENT') cPay+=amt;
+    else if (cat==='SALE'||cat==='AR') cSale+=amt;
+    else if (cat==='OTHER') cOther+=amt;
+    else if (cat==='LIABILITY') cLiab+=amt;
+  }
   txns.forEach(function(t){
     var g=groupOf(t); grp[g].push(t); sums[g]+=t.amount;
-    if (t.cat==='EXPENSE' && !liab[t.account]) { cExp += t.amount; expBank[t.bank] = (expBank[t.bank]||0) + t.amount; }
-    else if (t.cat==='PAYMENT') cPay += t.amount;
-    else if (t.cat==='SALE' || t.cat==='AR') cSale += t.amount;
-    else if (t.cat==='OTHER') cOther += t.amount;
-    else if (t.cat==='LIABILITY') cLiab += t.amount;   // สรรพากร/ปกส.นำส่ง (หนี้สิน) — มองเป็นเงินจ่ายออก
-    if (t.bank==='BAYC' && t.dir==='IN' && t.cat==='TRANSFER') b2c += t.amount;  // โยก ออม→กระแส
-    if (t.dir==='OUT'){
+    var sp=t.split, prim=t.amount-(sp?sp.amt:0);
+    alloc(t.cat, t.account, prim, t.bank);
+    if (sp && sp.amt>0) alloc(sp.cat, sp.coa, sp.amt, t.bank);
+    if (t.dir==='IN'){
+      if (t.bank==='KTB'){ if(t.cat==='OTHER') kOther+=t.amount; else kSale+=t.amount; }
+      else if (t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else bcSale+=t.amount; }
+    } else {
       if (t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
       else if (t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
     }
   });
-  var bn = { KTB:'กรุงไทย', BAY:'ออมฯ', BAYC:'กระแสฯ' };
-  var expBreak = ['KTB','BAY','BAYC'].filter(function(b){ return expBank[b]>0; })
-    .map(function(b){ return bn[b]+' ฿'+nf(expBank[b]); }).join(' · ') || 'ยังไม่มี';
-  // กลุ่มที่ 1 = รายรับ · กลุ่มที่ 2 = เงินออก/โยกเงิน
+  // กล่องต่อธนาคาร: หลัก + อื่นๆ + รวม (รวม = ยอดธนาคารจริง = ตรง statement)
+  function kbox(title,color,lines,total){
+    var h='<div class="kpi"><div class="kk" style="font-weight:700;color:'+color+'">'+title+'</div>';
+    lines.forEach(function(l){ h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px;gap:8px"><span>'+l[0]+'</span><b class="num">฿'+nf(l[1])+'</b></div>'; });
+    h+='<div style="display:flex;justify-content:space-between;border-top:1px solid #ECE6DA;margin-top:5px;padding-top:4px;font-weight:800;gap:8px"><span>รวม</span><b class="num" style="color:'+color+'">฿'+nf(total)+'</b></div></div>';
+    return h;
+  }
   document.getElementById('kpis').innerHTML =
-    '<div class="kgrp"><div class="kglbl">💰 รายรับ</div><div class="kpis">'
-    +'<div class="kpi"><div class="kv num" style="color:#3A37C9">฿'+nf(sums.k_in)+'</div><div class="kk">กรุงไทย เข้า (ขาย)</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#2E9E55">฿'+nf(sums.b_pp)+'</div><div class="kk">กรุงศรี PromptPay (ขาย)<br>ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(cSale)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม<br><span style="font-size:10px">(ไม่รวมรายได้อื่น/โยกเงิน)</span></div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#00897B">฿'+nf(cOther)+'</div><div class="kk">รายได้อื่น/เงินคืน<br><span style="font-size:10px">เช่น ADJ FEE คืน</span></div></div>'
-    +'</div></div>'
-    +'<div class="kgrp"><div class="kglbl">💸 เงินออก / โยกเงิน</div><div class="kpis">'
-    +'<div class="kpi">'
-      +'<div class="kk">↑ โยกออกจากกรุงไทย (โยกจริง)</div>'
-      +'<div class="kv num" style="color:#D98A0B;font-size:19px">฿'+nf(kOutTf)+'</div>'
-      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ เข้ากรุงศรีออมทรัพย์</div>'
-      +'<div class="kv num" style="color:#6A1B9A;font-size:19px">฿'+nf(sums.b_tf)+'</div>'
-      +(kOutExp>0?'<div class="kk" style="margin-top:6px;color:#D9512B">+ ค่าธรรมเนียม/ค่าใช้จ่ายกรุงไทย ฿'+nf(kOutExp)+'</div>':'')
-    +'</div>'
-    +'<div class="kpi">'
-      +'<div class="kk">↑ โยกออกจากกรุงศรีออม (โยกจริง)</div>'
-      +'<div class="kv num" style="color:#EBA13C;font-size:19px">฿'+nf(bOutTf)+'</div>'
-      +'<div class="kk" style="margin-top:7px;border-top:1px dashed #ECE6DA;padding-top:6px">↓ เข้ากรุงศรีกระแส</div>'
-      +'<div class="kv num" style="color:#1565C0;font-size:19px">฿'+nf(b2c)+'</div>'
-      +(bOutExp>0?'<div class="kk" style="margin-top:6px;color:#D9512B">+ ค่าใช้จ่ายออม (ค่าน้ำ ฯลฯ) ฿'+nf(bOutExp)+'</div>':'')
-    +'</div>'
-    +'<div class="kpi"><div class="kv num" style="color:#6A1B9A">฿'+nf(cPay)+'</div><div class="kk">ชำระเจ้าหนี้การค้า</div></div>'
-    +'<div class="kpi"><div class="kv num" style="color:#D9512B">฿'+nf(cExp+cLiab)+'</div><div class="kk">รวมจ่ายจริง (ค่าใช้จ่าย+นำส่ง)'
-      +'<br><span style="font-size:10.5px">ค่าใช้จ่าย ฿'+nf(cExp)+(cLiab>0?' · สรรพากร/นำส่ง ฿'+nf(cLiab):'')+'</span>'
-      +'<br><span style="font-size:10px">'+expBreak+'</span></div></div>'
-    +'</div></div>';
+    '<div class="kgrp"><div class="kglbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'
+    + kbox('🔵 กรุงไทย เข้า','#3A37C9',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
+    + kbox('🟢 กรุงศรีออม เข้า','#2E9E55',[['รับขาย (PromptPay)',sums.b_pp],['รับโอนจากกรุงไทย',sums.b_tf]],sums.b_pp+sums.b_tf)
+    + kbox('🔷 กรุงศรีกระแส เข้า','#1565C0',[['รับโอนจากออม',b2c],['รับขาย',bcSale]],sums.bc_in)
+    + '<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(cSale)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม<br><span style="font-size:10px">(ขายทุกบัญชี · ไม่รวมโยก/รายได้อื่น)</span></div></div>'
+    + '</div></div>'
+    + '<div class="kgrp"><div class="kglbl">💸 เงินออก (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'
+    + kbox('🟠 กรุงไทย ออก','#D98A0B',[['โยกออก (โยกจริง)',kOutTf],['ค่าธรรมเนียม/อื่นๆ',kOutExp]],sums.k_out)
+    + kbox('🟡 กรุงศรีออม ออก','#EBA13C',[['โยกออก (โยกจริง)',bOutTf],['ค่าน้ำ/ค่าธรรมเนียม',bOutExp]],sums.b_out)
+    + kbox('🔴 กรุงศรีกระแส ออก','#D9512B',[['ชำระเจ้าหนี้',cPay],['ค่าใช้จ่าย',expBank.BAYC],['สรรพากร/นำส่ง',cLiab]],sums.bc_out)
+    + '</div></div>';
 
   // ── สรุปรายวัน (overview) — คลิกวันเพื่อกรองดูเฉพาะวันนั้น ──
   var days = {};
@@ -385,7 +381,7 @@ function render(txns){
       rows.forEach(function(t){
         h += '<tr>'
           +'<td class="num">'+t.date+'</td>'
-          +'<td class="r num" style="font-weight:700">฿'+nf(t.amount)+'</td>'
+          +'<td class="r num" style="font-weight:700">฿'+nf(t.amount)+(t.split?'<div style="font-size:10px;color:#6A1B9A;font-weight:400">↳ แยก ฿'+nf(t.split.amt)+'→'+esc(t.split.coa||t.split.cat)+'</div>':'')+'</td>'
           +'<td><select class="cat" id="cat-'+t.row+'">'
             +Object.keys(CATS).map(function(c){ return '<option value="'+c+'"'+(t.cat===c?' selected':'')+'>'+CATS[c]+'</option>'; }).join('')
           +'</select></td>'
@@ -395,7 +391,8 @@ function render(txns){
           +'<td><input class="note" id="note-'+t.row+'" value="'+esc(t.note)+'" placeholder="เช่น จ่ายเจ้าหนี้.../ค่าไฟ"></td>'
           +'<td class="muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
-          +'<button class="btn sm" style="color:#6A1B9A" title="แยกเป็น 2 หมวด (เช่น สรรพากร = หนี้สิน + ปรับ)" onclick="splitRow('+t.row+')">✂️</button> '
+          +'<button class="btn sm" style="color:#6A1B9A" title="แยกลงบัญชี 2 หมวด (คงยอดเต็มในสมุด)" onclick="splitRow('+t.row+')">✂️</button> '
+          +(t.split?'<button class="btn sm" style="color:#888" title="ล้างการแยก" onclick="clrSplit('+t.row+')">✕</button> ':'')
           +'<button class="btn sm" style="color:var(--red)" title="ลบรายการ" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
       });
@@ -440,6 +437,9 @@ function splitRow(row){
     }).withFailureHandler(function(e){document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>';})
     .splitBankTxn(row, cat1, coa1, res.value.amt, res.value.cat, res.value.coa, '');
   });
+}
+function clrSplit(row){
+  google.script.run.withSuccessHandler(function(r){ if(r&&r.ok)load(); }).clearSplit(row);
 }
 function delTxn(row){
   if (!confirm('ลบรายการนี้?')) return;

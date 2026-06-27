@@ -115,21 +115,34 @@ function render(bank, tax){
 
   var sums={k_in:0,k_out:0,b_pp:0,b_tf:0,b_out:0,bc_in:0,bc_out:0};
   var cSale=0,cOther=0,cPay=0,cExp=0,cLiab=0,b2c=0,latest='';
-  var kOutTf=0,kOutExp=0,bOutTf=0,bOutExp=0;
+  var kOutTf=0,kOutExp=0,bOutTf=0,bOutExp=0,kSale=0,kOther=0,bcSale=0,expBAYC=0;
+  function alloc(cat,coa,amt,bank){
+    if(cat==='EXPENSE'){ cExp+=amt; if(bank==='BAYC') expBAYC+=amt; }
+    else if(cat==='PAYMENT') cPay+=amt;
+    else if(cat==='SALE'||cat==='AR') cSale+=amt;
+    else if(cat==='OTHER') cOther+=amt;
+    else if(cat==='LIABILITY') cLiab+=amt;
+  }
   txns.forEach(function(t){
     sums[groupOf(t)] += t.amount;
-    if(t.cat==='SALE'||t.cat==='AR') cSale+=t.amount;
-    else if(t.cat==='OTHER') cOther+=t.amount;
-    else if(t.cat==='PAYMENT') cPay+=t.amount;
-    else if(t.cat==='EXPENSE') cExp+=t.amount;
-    else if(t.cat==='LIABILITY') cLiab+=t.amount;
-    if(t.bank==='BAYC'&&t.dir==='IN'&&t.cat==='TRANSFER') b2c+=t.amount;
-    if(t.dir==='OUT'){
+    var sp=t.split, prim=t.amount-(sp?sp.amt:0);
+    alloc(t.cat,t.account,prim,t.bank);
+    if(sp&&sp.amt>0) alloc(sp.cat,sp.coa,sp.amt,t.bank);
+    if(t.dir==='IN'){
+      if(t.bank==='KTB'){ if(t.cat==='OTHER') kOther+=t.amount; else kSale+=t.amount; }
+      else if(t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else bcSale+=t.amount; }
+    } else {
       if(t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
       else if(t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
     }
     if(t.date>latest) latest=t.date;
   });
+  function mbox(title,color,lines,total){
+    var x='<div class="bub wide"><div class="tf-line"><span style="font-weight:700;color:'+color+'">'+title+'</span><b></b></div>';
+    lines.forEach(function(l){ x+='<div class="tf-line" style="font-size:13px"><span>'+l[0]+'</span><b class="num">฿'+nf(l[1])+'</b></div>'; });
+    x+='<div class="tf-div"></div><div class="tf-line"><span style="font-weight:700">รวม (ตรง statement)</span><b class="num" style="color:'+color+'">฿'+nf(total)+'</b></div></div>';
+    return x;
+  }
   document.getElementById('latest').textContent = latest ? ('📅 ข้อมูลล่าสุด: '+latest) : 'ยังไม่มีรายการเดือนนี้';
 
   var h='';
@@ -157,24 +170,19 @@ function render(bank, tax){
     h+='</div>';
   }
 
-  // ── สรุปรายรับ ──
-  h+='<div class="lbl">💰 รายรับ</div><div class="grid2">'
-    +'<div class="bub"><div class="v num" style="color:var(--blue)">฿'+nf(sums.k_in)+'</div><div class="k">กรุงไทย เข้า (ขาย)</div></div>'
-    +'<div class="bub"><div class="v num" style="color:var(--green)">฿'+nf(sums.b_pp)+'</div><div class="k">กรุงศรี PromptPay (ขาย)</div><div class="sub">ค่าธรรมเนียม ≈฿'+nf(sums.b_pp*0.005)+'</div></div>'
-    +'<div class="bub wide"><div class="v num" style="color:var(--coral2)">฿'+nf(cSale)+'</div><div class="k">💰 ฐานยอดขายภาษีรวม (ไม่รวมรายได้อื่น/โยกเงิน)</div></div>'
-    +'<div class="bub wide"><div class="v num" style="color:#00897B">฿'+nf(cOther)+'</div><div class="k">รายได้อื่น/เงินคืน (เช่น ADJ FEE คืน)</div></div>'
+  // ── เงินเข้า (ต่อธนาคาร — รวมตรง statement) ──
+  h+='<div class="lbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="grid2">'
+    +mbox('🔵 กรุงไทย เข้า','var(--blue)',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
+    +mbox('🟢 กรุงศรีออม เข้า','var(--green)',[['รับขาย (PromptPay)',sums.b_pp],['รับโอนจากกรุงไทย',sums.b_tf]],sums.b_pp+sums.b_tf)
+    +mbox('🔷 กรุงศรีกระแส เข้า','var(--cyan)',[['รับโอนจากออม',b2c],['รับขาย',bcSale]],sums.bc_in)
+    +'<div class="bub wide"><div class="v num" style="color:var(--coral2)">฿'+nf(cSale)+'</div><div class="k">💰 ฐานยอดขายภาษีรวม (ขายทุกบัญชี ไม่รวมโยก/รายได้อื่น)</div></div>'
     +'</div>';
 
-  // ── เงินออก / โยกเงิน (โยก = ออก vs เข้า) ──
-  h+='<div class="lbl">💸 เงินออก / โยกเงิน</div><div class="grid2">'
-    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกออกจากกรุงไทย (โยกจริง)</span><b class="num" style="color:var(--orange)">฿'+nf(kOutTf)+'</b></div>'
-      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีออมทรัพย์</span><b class="num" style="color:var(--purple)">฿'+nf(sums.b_tf)+'</b></div>'
-      +(kOutExp>0?'<div class="tf-line" style="color:var(--red);font-size:12px"><span>+ ค่าธรรมเนียม/ค่าใช้จ่ายกรุงไทย</span><b class="num">฿'+nf(kOutExp)+'</b></div>':'')+'</div>'
-    +'<div class="bub wide"><div class="tf-line"><span>↑ โยกออกจากกรุงศรีออม (โยกจริง)</span><b class="num" style="color:var(--orange)">฿'+nf(bOutTf)+'</b></div>'
-      +'<div class="tf-div"></div><div class="tf-line"><span>↓ เข้ากรุงศรีกระแส</span><b class="num" style="color:var(--cyan)">฿'+nf(b2c)+'</b></div>'
-      +(bOutExp>0?'<div class="tf-line" style="color:var(--red);font-size:12px"><span>+ ค่าใช้จ่ายออม (ค่าน้ำ ฯลฯ)</span><b class="num">฿'+nf(bOutExp)+'</b></div>':'')+'</div>'
-    +'<div class="bub"><div class="v num" style="color:var(--purple)">฿'+nf(cPay)+'</div><div class="k">ชำระเจ้าหนี้การค้า</div></div>'
-    +'<div class="bub"><div class="v num" style="color:var(--red)">฿'+nf(cExp+cLiab)+'</div><div class="k">รวมจ่ายจริง (ค่าใช้จ่าย+นำส่ง)</div><div class="sub">ค่าใช้จ่าย ฿'+nf(cExp)+(cLiab>0?' · สรรพากร/นำส่ง ฿'+nf(cLiab):'')+'</div></div>'
+  // ── เงินออก (ต่อธนาคาร — รวมตรง statement) ──
+  h+='<div class="lbl">💸 เงินออก (ต่อธนาคาร — รวมตรง statement)</div><div class="grid2">'
+    +mbox('🟠 กรุงไทย ออก','var(--orange)',[['โยกออก (โยกจริง)',kOutTf],['ค่าธรรมเนียม/อื่นๆ',kOutExp]],sums.k_out)
+    +mbox('🟡 กรุงศรีออม ออก','var(--orange)',[['โยกออก (โยกจริง)',bOutTf],['ค่าน้ำ/ค่าธรรมเนียม',bOutExp]],sums.b_out)
+    +mbox('🔴 กรุงศรีกระแส ออก','var(--red)',[['ชำระเจ้าหนี้',cPay],['ค่าใช้จ่าย',expBAYC],['สรรพากร/นำส่ง',cLiab]],sums.bc_out)
     +'</div>';
 
   // ── 7 ช่องเงินเข้า-ออก 3 บัญชี ──
