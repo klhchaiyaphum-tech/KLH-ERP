@@ -176,7 +176,21 @@ function render(bank, tax){
   var sdays=Object.keys(saleByDay).sort();
   if(sdays.length){
     var maxSale=1; sdays.forEach(function(d){ if(saleByDay[d]>maxSale) maxSale=saleByDay[d]; });
-    h+='<div class="lbl">📊 ยอดขายต่อวัน (เดือนนี้) · หน่วย พันบาท</div>'
+    // กล่องรวม + เป้าเฉลี่ยต่อวันที่เหลือ (ย้ายมาอยู่กับกราฟ)
+    h+='<div class="lbl">📊 ยอดขายรายวัน + เป้า (เดือนนี้)</div>'
+      +'<div class="bub wide" style="margin-bottom:8px"><div class="v num" style="color:var(--coral2)">฿'+nf(cSale)+'</div>'
+      +'<div class="k">💰 ฐานยอดขายภาษีรวม (ขายทุกบัญชี ไม่รวมโยก/รายได้อื่น)</div>';
+    if(tax && tax.estimate){
+      var tgt=(Number(tax.estimate.targetSales)>0)?Number(tax.estimate.targetSales):(Number(tax.estimate.lastYearAvg)||0);
+      var ymSel=document.getElementById('month').value, nowD=new Date();
+      var curYm=nowD.getFullYear()+'-'+('0'+(nowD.getMonth()+1)).slice(-2);
+      var dim=new Date(Number(ymSel.slice(0,4)),Number(ymSel.slice(5,7)),0).getDate();
+      var dLeft=(ymSel===curYm)?Math.max(0,dim-nowD.getDate()):0;
+      if(tgt>0 && cSale>=tgt) h+='<div class="sub" style="margin-top:7px;font-size:13.5px;color:var(--green);font-weight:700">🎉 ถึงเป้าแล้ว (เป้า ฿'+nf(tgt)+')</div>';
+      else if(tgt>0 && dLeft>0) h+='<div class="sub" style="margin-top:7px;font-size:13.5px">🎯 เป้าเฉลี่ยต่อวันที่เหลือ: <b style="color:var(--coral2)">฿'+nf(Math.round((tgt-cSale)/dLeft))+'</b><br>(เหลือ '+dLeft+' วัน ถึงเป้า ฿'+nf(tgt)+')</div>';
+    }
+    h+='</div>'
+      +'<div style="font-size:11px;color:#999;margin:0 4px 4px">แท่งหน่วย พันบาท · 🟦 เสาร์-อาทิตย์</div>'
       +'<div style="background:#fff;border:1px solid #ECE6DA;border-radius:14px;padding:14px 10px 6px;display:flex;align-items:flex-end;gap:3px;height:155px;overflow-x:auto">';
     sdays.forEach(function(d){
       var v=saleByDay[d], hp=Math.max(3,Math.round(v/maxSale*78));   // เว้นที่บนให้ตัวเลข
@@ -198,7 +212,6 @@ function render(bank, tax){
     +mbox('🔵 กรุงไทย เข้า','var(--blue)',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
     +mbox('🟢 กรุงศรีออม เข้า','var(--green)',[['รับขาย (PromptPay)',sums.b_pp],['รับโอนจากกรุงไทย',sums.b_tf]],sums.b_pp+sums.b_tf)
     +mbox('🔷 กรุงศรีกระแส เข้า','var(--cyan)',[['รับโอนจากออม',b2c],['รับขาย',bcSale]],sums.bc_in)
-    +'<div class="bub wide"><div class="v num" style="color:var(--coral2)">฿'+nf(cSale)+'</div><div class="k">💰 ฐานยอดขายภาษีรวม (ขายทุกบัญชี ไม่รวมโยก/รายได้อื่น)</div></div>'
     +'</div>';
 
   // ── เงินออก (ต่อธนาคาร — รวมตรง statement) ──
