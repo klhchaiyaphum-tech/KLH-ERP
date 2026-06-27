@@ -176,15 +176,21 @@ function render(bank, tax){
   var sdays=Object.keys(saleByDay).sort();
   if(sdays.length){
     var maxSale=1; sdays.forEach(function(d){ if(saleByDay[d]>maxSale) maxSale=saleByDay[d]; });
-    h+='<div class="lbl">📊 ยอดขายต่อวัน (เดือนนี้)</div>'
-      +'<div style="background:#fff;border:1px solid #ECE6DA;border-radius:14px;padding:12px 10px 6px;display:flex;align-items:flex-end;gap:2px;height:130px;overflow-x:auto">';
+    h+='<div class="lbl">📊 ยอดขายต่อวัน (เดือนนี้) · หน่วย พันบาท</div>'
+      +'<div style="background:#fff;border:1px solid #ECE6DA;border-radius:14px;padding:14px 10px 6px;display:flex;align-items:flex-end;gap:3px;height:155px;overflow-x:auto">';
     sdays.forEach(function(d){
-      var v=saleByDay[d], hp=Math.max(2,Math.round(v/maxSale*100));
-      h+='<div style="flex:1 0 9px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="'+d+' : ฿'+nf(v)+'">'
-        +'<div style="width:78%;background:linear-gradient(180deg,#F6704C,#E2502B);height:'+hp+'%;border-radius:3px 3px 0 0;min-height:2px"></div>'
-        +'<div style="font-size:8px;color:#999;margin-top:3px">'+d.slice(8)+'</div></div>';
+      var v=saleByDay[d], hp=Math.max(3,Math.round(v/maxSale*78));   // เว้นที่บนให้ตัวเลข
+      var dow=new Date(d+'T00:00:00').getDay();                      // 0=อา 6=ส
+      var wknd=(dow===0||dow===6);
+      var grad=wknd?'linear-gradient(180deg,#5B86E5,#1565C0)':'linear-gradient(180deg,#F6704C,#E2502B)';
+      var dcol=dow===0?'#D9512B':(dow===6?'#1565C0':'#999');
+      var lbl=v>=1000?(Math.round(v/1000)+'k'):nf(v);
+      h+='<div style="flex:1 0 26px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%'+(wknd?';background:#EAF1FB;border-radius:7px':'')+'" title="'+d+' : ฿'+nf(v)+'">'
+        +'<div style="font-size:8.5px;color:#555;margin-bottom:2px;white-space:nowrap;font-weight:600">'+lbl+'</div>'
+        +'<div style="width:72%;background:'+grad+';height:'+hp+'%;border-radius:3px 3px 0 0;min-height:3px"></div>'
+        +'<div style="font-size:9px;color:'+dcol+';margin-top:3px;font-weight:'+(wknd?'700':'400')+'">'+d.slice(8)+'</div></div>';
     });
-    h+='</div><div style="text-align:right;font-size:11px;color:#999;margin:2px 4px 0">สูงสุด/วัน ฿'+nf(maxSale)+'</div>';
+    h+='</div><div style="text-align:right;font-size:11px;color:#999;margin:2px 4px 0">สูงสุด/วัน ฿'+nf(maxSale)+' · 🟦 เสาร์-อาทิตย์</div>';
   }
 
   // ── เงินเข้า (ต่อธนาคาร — รวมตรง statement) ──
