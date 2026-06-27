@@ -462,26 +462,26 @@ function dailySalesReport() {
         if (r[2] === 'OUT' && cat === 'PAYMENT') payment += amt;
       });
     }
-    var taxSale = ktbSale + baySale;
-
-    // ── ยอดขายปีที่แล้ว เฉลี่ย/เดือน (TAX_ESTIMATE: 0 MONTH, 5 LAST_YEAR_AVG) ──
+    // ── ใช้ค่าตรงหน้า ภพ.30 (getPP30): ยอดรับจริง + ยอดขายปีที่แล้วเฉลี่ย/เดือน ──
+    var taxSale = ktbSale + baySale;          // ฐานภาษี (SALE+AR) = ตรงกับ salesBase หน้า ภพ.30
     var lastYearAvg = 0;
-    var te = ss.getSheetByName('TAX_ESTIMATE');
-    if (te && te.getLastRow() > 1) {
-      te.getDataRange().getValues().slice(1).forEach(function(r){
-        var m = r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'yyyy-MM') : String(r[0]||'').slice(0,7);
-        if (m === ym) lastYearAvg = Number(r[5]) || 0;
-      });
-    }
-    var gap = taxSale - lastYearAvg;   // ฐานภาษีรวม − ยอดปีก่อนเฉลี่ย/เดือน (ลบ = ยังขาด)
+    try {
+      var pp = getPP30(ym);
+      if (pp && pp.ok) {
+        if (Number(pp.actualSales) > 0) taxSale = Number(pp.actualSales);   // ยอดรับจริงจากธนาคาร (แหล่งเดียวกับหน้า)
+        if (pp.estimate) lastYearAvg = Number(pp.estimate.lastYearAvg) || 0;
+      }
+    } catch(ePP) {}
+    var gap = taxSale - lastYearAvg;          // ยอดรับจริง − ยอดปีก่อนเฉลี่ย/เดือน (ลบ = ยังขาด)
 
     var rnd = function(n){ return Math.round(n).toLocaleString(); };
     var msg = '📊 รายงานยอดขาย KLH · เดือน ' + ym + ' (สะสม)\n――――――――\n'
       + '1️⃣ ยอดขาย KTB:  ฿' + rnd(ktbSale) + '\n'
       + '2️⃣ ยอดขาย กรุงศรี:  ฿' + rnd(baySale) + '\n'
       + '3️⃣ ยอดขายภาษี (รวม):  ฿' + rnd(taxSale) + '\n'
-      + '4️⃣ ยอดขาด/เกินยอดสร้าง:  ' + (gap >= 0 ? '+' : '') + rnd(gap)
-        + (lastYearAvg ? '\n      (เทียบปีก่อนเฉลี่ย ฿' + rnd(lastYearAvg) + '/เดือน)' : '\n      (ยังไม่ตั้งยอดปีก่อนในหน้า ภพ.30)') + '\n'
+      + '4️⃣ ยอดรับจริง เทียบปีที่แล้ว:  ' + (gap >= 0 ? '+' : '') + rnd(gap) + '\n'
+      + (lastYearAvg ? '      ปีก่อนเฉลี่ย ฿' + rnd(lastYearAvg) + '/เดือน · รับจริง ฿' + rnd(taxSale)
+                     : '      (ยังไม่ตั้งยอดปีก่อนในหน้า ภพ.30)') + '\n'
       + '5️⃣ ชำระเจ้าหนี้การค้า:  ฿' + rnd(payment);
     sendWmsLine_(msg);
     return msg;
