@@ -254,6 +254,17 @@ function setReportEmail(email) {
   return 'ตั้ง ACCT_EMAIL = ' + email;
 }
 
+// เพิ่มผังบัญชี (รันใน editor) — code/name/type · type: รายได้/ค่าใช้จ่าย/หนี้สิน/สินทรัพย์/ทุน
+function addCoa(code, name, type) {
+  coaEnsure_(String(code), String(name), String(type || 'ค่าใช้จ่าย'));
+  return 'เพิ่มผังบัญชี ' + code + ' ' + name + ' (' + type + ')';
+}
+// เพิ่มรายได้อื่น: ดอกเบี้ยรับ
+function addInterestAccount() {
+  coaEnsure_('4210','ดอกเบี้ยรับ','รายได้');
+  return 'เพิ่มผังบัญชี 4210 ดอกเบี้ยรับ (รายได้) — รีเฟรชหน้าธนาคารแล้วเลือกได้ในช่องผังบัญชี';
+}
+
 // เพิ่มผังบัญชีสรรพากร (รันใน editor ครั้งเดียว · idempotent)
 function addTaxAccounts() {
   coaEnsure_('2300','ภาษีมูลค่าเพิ่มนำส่ง (สรรพากร)','หนี้สิน');   // จ่าย VAT นำส่ง = ลดหนี้สิน (ไม่เข้า P&L)
