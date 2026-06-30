@@ -115,7 +115,7 @@ function render(bank, tax){
 
   var sums={k_in:0,k_out:0,b_pp:0,b_tf:0,b_out:0,bc_in:0,bc_out:0};
   var cSale=0,cOther=0,cPay=0,cExp=0,cLiab=0,b2c=0,latest='';
-  var kOutTf=0,kOutExp=0,bOutTf=0,bOutExp=0,kSale=0,kOther=0,bcSale=0,expBAYC=0;
+  var kOutTf=0,kOutExp=0,bOutTf=0,bOutExp=0,kSale=0,kOther=0,bSale=0,bOther=0,bcSale=0,bcOther=0,expBAYC=0;
   function alloc(cat,coa,amt,bank){
     if(cat==='EXPENSE'){ cExp+=amt; if(bank==='BAYC') expBAYC+=amt; }
     else if(cat==='PAYMENT') cPay+=amt;
@@ -130,7 +130,8 @@ function render(bank, tax){
     if(sp&&sp.amt>0) alloc(sp.cat,sp.coa,sp.amt,t.bank);
     if(t.dir==='IN'){
       if(t.bank==='KTB'){ if(t.cat==='OTHER') kOther+=t.amount; else kSale+=t.amount; }
-      else if(t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else bcSale+=t.amount; }
+      else if(t.bank==='BAY'){ if(t.cat==='TRANSFER'){} else if(t.cat==='OTHER') bOther+=t.amount; else bSale+=t.amount; }
+      else if(t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else if(t.cat==='OTHER') bcOther+=t.amount; else bcSale+=t.amount; }
     } else {
       if(t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
       else if(t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
@@ -211,8 +212,8 @@ function render(bank, tax){
   // ── เงินเข้า (ต่อธนาคาร — รวมตรง statement) ──
   h+='<div class="lbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="grid2">'
     +mbox('🔵 กรุงไทย เข้า','var(--blue)',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
-    +mbox('🟢 กรุงศรีออม เข้า','var(--green)',[['รับขาย (PromptPay)',sums.b_pp],['รับโอนจากกรุงไทย',sums.b_tf]],sums.b_pp+sums.b_tf)
-    +mbox('🔷 กรุงศรีกระแส เข้า','var(--cyan)',[['รับโอนจากออม',b2c],['รับขาย',bcSale]],sums.bc_in)
+    +mbox('🟢 กรุงศรีออม เข้า','var(--green)',[['รับขาย (PromptPay)',bSale],['รับโอนจากกรุงไทย',sums.b_tf]].concat(bOther>0?[['ดอกเบี้ย/รายได้อื่น',bOther]]:[]),sums.b_pp+sums.b_tf)
+    +mbox('🔷 กรุงศรีกระแส เข้า','var(--cyan)',[['รับโอนจากออม',b2c],['รับขาย',bcSale]].concat(bcOther>0?[['ดอกเบี้ย/รายได้อื่น',bcOther]]:[]),sums.bc_in)
     +'</div>';
 
   // ── เงินออก (ต่อธนาคาร — รวมตรง statement) ──

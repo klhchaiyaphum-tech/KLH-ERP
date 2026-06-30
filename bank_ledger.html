@@ -300,7 +300,7 @@ function render(txns){
   // แยกตามหมวด: ค่าใช้จ่าย (EXPENSE) แยกรายบัญชี · ชำระเจ้าหนี้ (PAYMENT) · โยก ออม→กระแส (b2c)
   var cExp = 0, cPay = 0, cSale = 0, cOther = 0, cLiab = 0, b2c = 0, expBank = { KTB:0, BAY:0, BAYC:0 };
   var kOutTf=0, kOutExp=0, bOutTf=0, bOutExp=0;   // ออก: โยกจริง vs ค่าใช้จ่าย ต่อบัญชี
-  var kSale=0, kOther=0, bcSale=0;                 // เข้า: หลัก vs อื่นๆ ต่อบัญชี
+  var kSale=0, kOther=0, bSale=0, bOther=0, bcSale=0, bcOther=0;   // เข้า: ขาย vs ดอกเบี้ย/อื่นๆ ต่อบัญชี
   function alloc(cat,coa,amt,bank){   // ลงหมวดบัญชี (honor split)
     if (cat==='EXPENSE' && !liab[coa]) { cExp+=amt; expBank[bank]=(expBank[bank]||0)+amt; }
     else if (cat==='PAYMENT') cPay+=amt;
@@ -315,7 +315,8 @@ function render(txns){
     if (sp && sp.amt>0) alloc(sp.cat, sp.coa, sp.amt, t.bank);
     if (t.dir==='IN'){
       if (t.bank==='KTB'){ if(t.cat==='OTHER') kOther+=t.amount; else kSale+=t.amount; }
-      else if (t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else bcSale+=t.amount; }
+      else if (t.bank==='BAY'){ if(t.cat==='TRANSFER'){} else if(t.cat==='OTHER') bOther+=t.amount; else bSale+=t.amount; }
+      else if (t.bank==='BAYC'){ if(t.cat==='TRANSFER') b2c+=t.amount; else if(t.cat==='OTHER') bcOther+=t.amount; else bcSale+=t.amount; }
     } else {
       if (t.bank==='KTB'){ if(t.cat==='TRANSFER') kOutTf+=t.amount; else kOutExp+=t.amount; }
       else if (t.bank==='BAY'){ if(t.cat==='TRANSFER') bOutTf+=t.amount; else bOutExp+=t.amount; }
@@ -339,8 +340,8 @@ function render(txns){
   document.getElementById('kpis').innerHTML =
     '<div class="kgrp"><div class="kglbl">💰 เงินเข้า (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'
     + kbox('🔵 กรุงไทย เข้า','#3A37C9',[['ขาย',kSale],['เงินคืน/รายได้อื่น',kOther]],sums.k_in)
-    + kbox('🟢 กรุงศรีออม เข้า','#2E9E55',[['รับขาย (PromptPay)',sums.b_pp],['รับโอนจากกรุงไทย',sums.b_tf]],sums.b_pp+sums.b_tf)
-    + kbox('🔷 กรุงศรีกระแส เข้า','#1565C0',[['รับโอนจากออม',b2c],['รับขาย',bcSale]],sums.bc_in)
+    + kbox('🟢 กรุงศรีออม เข้า','#2E9E55',[['รับขาย (PromptPay)',bSale],['รับโอนจากกรุงไทย',sums.b_tf]].concat(bOther>0?[['ดอกเบี้ย/รายได้อื่น',bOther]]:[]),sums.b_pp+sums.b_tf)
+    + kbox('🔷 กรุงศรีกระแส เข้า','#1565C0',[['รับโอนจากออม',b2c],['รับขาย',bcSale]].concat(bcOther>0?[['ดอกเบี้ย/รายได้อื่น',bcOther]]:[]),sums.bc_in)
     + '<div class="kpi"><div class="kv num" style="color:var(--coral-2)">฿'+nf(cSale)+'</div><div class="kk">💰 ฐานยอดขายภาษีรวม<br><span style="font-size:10px">(ขายทุกบัญชี · ไม่รวมโยก/รายได้อื่น)</span></div></div>'
     + '</div></div>'
     + '<div class="kgrp"><div class="kglbl">💸 เงินออก (ต่อธนาคาร — รวมตรง statement)</div><div class="kpis">'
