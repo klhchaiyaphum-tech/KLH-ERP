@@ -457,9 +457,11 @@ function clrSplit(row){
 }
 function learnRule(row){
   var cat=document.getElementById('cat-'+row).value, coa=document.getElementById('acc-'+row).value;
+  Swal.fire({title:'กำลังจำผู้รับ...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
   google.script.run.withSuccessHandler(function(r){
-    document.getElementById('msg').innerHTML=r.ok?'<div class="okmsg">🧠 '+r.msg+'</div>':'<div class="err">'+r.msg+'</div>'; if(r.ok)load();
-  }).withFailureHandler(function(e){document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>';})
+    if(r&&r.ok){ Swal.fire({icon:'success',title:'จำผู้รับแล้ว 🧠',html:esc(r.msg),confirmButtonText:'โอเค'}); load(); }
+    else Swal.fire({icon:'warning',title:'จำไม่ได้',html:esc((r&&r.msg)||'ผิดพลาด')});
+  }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); })
   .bankLearnRule(row, cat, coa, '');
 }
 function delTxn(row){
