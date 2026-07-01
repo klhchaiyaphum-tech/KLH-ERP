@@ -702,10 +702,16 @@ function bankRulesSheet_() {
       .setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff'); s.setFrozenRows(1); }
   return s;
 }
-// ดึงคีย์ผู้รับจากรายละเอียด = เลขบัญชีปลายทาง (เช่น X342811)
+// ดึงคีย์ผู้รับจากรายละเอียด:
+//   ACCT:<เลขบัญชีปลายทาง>  = โอนเข้าบัญชีผู้รับ (เงินเดือน/เจ้าหนี้)
+//   BILL:<ชื่อบิลเลอร์>       = จ่ายบิล E-Payment (สรรพากร/ปกส/ค่าไฟ/ค่าเน็ต)
 function ruleKeyFromDesc_(subj) {
-  var m = String(subj||'').match(/บัญชีปลายทาง\s*[:：]?\s*(X?\d{4,})/);
-  return m ? m[1] : '';
+  subj = String(subj||'');
+  var m = subj.match(/บัญชีปลายทาง\s*[:：]?\s*(X?\d{4,})/);
+  if (m) return 'ACCT:' + m[1];
+  var b = subj.match(/จ่ายบิล\s+(.+?)\s+(?:E-?Payment|หมายเลขอ้างอิง|$)/i);
+  if (b) return 'BILL:' + b[1].replace(/\s+/g,' ').trim();
+  return '';
 }
 // จำกฎจากรายการนี้ (cat/coa = ที่เลือกในแถว) + จัดให้รายการที่ตรงทันที
 function bankLearnRule(row, cat, coa, label) {
@@ -729,16 +735,13 @@ function applyBankRules_() {
   var rs = bankRulesSheet_(); if (rs.getLastRow()<2) return 0;
   var rules = rs.getRange(2,1,rs.getLastRow()-1,3).getValues().filter(function(x){ return String(x[0]); });
   if (!rules.length) return 0;
+  var byKey = {}; rules.forEach(function(x){ byKey[String(x[0])] = x; });
   var rng = s.getRange(2,1,s.getLastRow()-1,10); var rows = rng.getValues(); var changed=0;
   for (var i=0;i<rows.length;i++){
-    var subj = String(rows[i][5]||'');
-    for (var j=0;j<rules.length;j++){
-      if (subj.indexOf(rules[j][0])>=0){
-        if (String(rows[i][4])!==rules[j][1]){ rows[i][4]=rules[j][1]; changed++; }
-        if (rules[j][2] && String(rows[i][9])!==rules[j][2]) rows[i][9]=rules[j][2];
-        break;
-      }
-    }
+    var rk = ruleKeyFromDesc_(rows[i][5]); if (!rk) continue;
+    var rule = byKey[rk]; if (!rule) continue;
+    if (String(rows[i][4])!==rule[1]){ rows[i][4]=rule[1]; changed++; }
+    if (rule[2] && String(rows[i][9])!==rule[2]) rows[i][9]=rule[2];
   }
   rng.setValues(rows); return changed;
 }
