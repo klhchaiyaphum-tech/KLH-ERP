@@ -155,6 +155,9 @@ function pbImportFromDriveCsv() {
     for (var i = 1; i < rows.length; i++) {
       var r = rows[i];
       if (!r || !r[2]) continue;             // ต้องมีชื่อ
+      var nm = String(r[2]).trim();
+      if (nm==='รายการ' || nm==='ชื่อสินค้า') continue;                        // ข้ามหัวตาราง/แถวว่าง
+      if (!(parseFloat(r[11])||parseFloat(r[6])||parseFloat(r[8]))) continue;   // ไม่มีราคาเลย = ข้าม
       batch.push([ r[2], r[3], r[4],         // name, size, pack
                    r[11], r[6], r[8],        // cost_unit_num, retail_num, whole_num
                    r[0] + '/' + r[1] ]);     // source = file/sheet
@@ -250,6 +253,32 @@ function pbConfirm(rowKey, on) {
   s.getRange(row,15).setValue(on ? Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm') : '');
   return { ok:true };
 }
+// ── ลบสินค้าใหม่ (PLU 21xxx) ที่ "ไม่มีราคาเลย" ออกจาก KLH DATA — batch + backup ──
+//   เกิดจากแถวว่าง/หัวตาราง ในสมุดราคา (name="รายการ" ราคา 0) ที่ถูกสร้างเป็นสินค้า
+//   ปลอดภัย: แตะเฉพาะ PLU 21xxx (ที่สร้างใหม่) ที่ ทุน+ปลีก+ส่ง = 0 · ไม่แตะสินค้าเดิม
+function cleanupJunkKlhRows() {
+  try {
+    var klh = klhDataSheet_(); var data = klh.getDataRange().getValues();
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var bak = 'KLHDATA_BAK_'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd_HHmmss');
+    ss.insertSheet(bak).getRange(1,1,data.length,data[0].length).setValues(data);
+    var kept = [data[0]], removed = 0, sample = [];
+    var num = function(v){ var x=parseFloat(v); return isNaN(x)?0:x; };
+    for (var i=1;i<data.length;i++){
+      var bc = String(data[i][0]||'').trim();
+      var isPlu = /^21\d{11}$/.test(bc);
+      var noPrice = num(data[i][15])===0 && num(data[i][17])===0 && num(data[i][23])===0 && num(data[i][21])===0;
+      if (isPlu && noPrice){ removed++; if(sample.length<8) sample.push(String(data[i][1]||'')||bc); }
+      else kept.push(data[i]);
+    }
+    if (!removed) return 'ไม่พบสินค้า PLU ที่ไม่มีราคา (สะอาดแล้ว) · backup: '+bak;
+    var W = data[0].length;
+    klh.getRange(1,1,kept.length,W).setValues(kept);
+    if (klh.getLastRow()>kept.length) klh.deleteRows(kept.length+1, klh.getLastRow()-kept.length);
+    return 'ลบสินค้าว่าง (PLU ไม่มีราคา) '+removed+' แถว · เหลือ '+(kept.length-1)+' สินค้า · backup: '+bak+' · ตัวอย่าง: '+sample.join(', ');
+  } catch(e){ return 'ERROR: '+e; }
+}
+
 // ── ยืนยันทั้งหมด (bulk) — รันใน editor · status ว่าง=ทั้ง จับคู่แล้ว+เพิ่มใหม่ ──
 function pbConfirmAll(statusFilter) {
   try {
