@@ -554,7 +554,7 @@ function fetchBankEmails(daysBack, opts) {
 
     if (added > 0) {
       var alerts = categorizeBankTxns_();
-      backfillAccountNumbers();
+      backfillAccountNumbers(); applyBankRules_();
       if (alerts.length) sendWmsLine_('🔔 ตรวจอีเมลธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n'));
     }
     return { ok: true, added: added, skipped: skipped, msg: 'บันทึกใหม่ ' + added + ' รายการ (ซ้ำ ' + skipped + ')' };
@@ -689,6 +689,60 @@ function adjustSocialSecurity(yyyymm) {
   s.getRange(s.getLastRow() + 1, 1, add.length, W).setValues(add);
   return { ok: true, n: n, msg: 'แยกประกันสังคม ' + n + ' รายการ (รวม ฿' + total.toLocaleString() + ') → ครึ่งค่าใช้จ่าย + ครึ่งหนี้สิน' };
 }
+
+// ════════════════════════════════════════════════════════════
+//  กฎจำผู้รับ → จัดหมวด/ผังบัญชีอัตโนมัติ (เช่น เงินเดือนพนักงาน)
+//  จำที่ "บัญชีปลายทาง" (คงที่ต่อผู้รับ) → ยอดต่างกันแต่ละเดือนก็ยังตรง
+// ════════════════════════════════════════════════════════════
+var SH_RULES = 'BANK_RULES';
+function bankRulesSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID); var s = ss.getSheetByName(SH_RULES);
+  if (!s) { s = ss.insertSheet(SH_RULES);
+    s.getRange(1,1,1,5).setValues([['KEY(บัญชีปลายทาง)','CATEGORY','COA(ผังบัญชี)','LABEL','CREATED']])
+      .setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff'); s.setFrozenRows(1); }
+  return s;
+}
+// ดึงคีย์ผู้รับจากรายละเอียด = เลขบัญชีปลายทาง (เช่น X342811)
+function ruleKeyFromDesc_(subj) {
+  var m = String(subj||'').match(/บัญชีปลายทาง\s*[:：]?\s*(X?\d{4,})/);
+  return m ? m[1] : '';
+}
+// จำกฎจากรายการนี้ (cat/coa = ที่เลือกในแถว) + จัดให้รายการที่ตรงทันที
+function bankLearnRule(row, cat, coa, label) {
+  try {
+    var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    var r = s.getRange(row,1,1,10).getValues()[0];
+    var key = ruleKeyFromDesc_(r[5]);
+    if (!key) return { ok:false, msg:'รายการนี้ไม่มี "บัญชีปลายทาง" ในรายละเอียด — จำอัตโนมัติไม่ได้' };
+    cat = String(cat||r[4]||'EXPENSE'); coa = String(coa||r[9]||''); label = String(label||'').slice(0,40) || String(r[5]||'').slice(0,40);
+    var rs = bankRulesSheet_(); var last = rs.getLastRow();
+    var rr = last>1 ? rs.getRange(2,1,last-1,5).getValues() : [];
+    for (var i=0;i<rr.length;i++){ if (String(rr[i][0])===key){ rs.getRange(i+2,2,1,3).setValues([[cat,coa,label]]); var m2=applyBankRules_(); return { ok:true, key:key, msg:'อัปเดตกฎ '+key+' → '+(coa||cat)+' · จัด '+m2+' รายการ' }; } }
+    rs.appendRow([key, cat, coa, label, Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm')]);
+    var m = applyBankRules_();
+    return { ok:true, key:key, msg:'จำแล้ว: ปลายทาง '+key+' → '+(coa||cat)+' · จัดให้ '+m+' รายการที่ตรง' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// จัดหมวดตามกฎที่จำไว้ (batch) — คืนจำนวนที่เปลี่ยน
+function applyBankRules_() {
+  var s = bankSheet_(); if (s.getLastRow()<2) return 0;
+  var rs = bankRulesSheet_(); if (rs.getLastRow()<2) return 0;
+  var rules = rs.getRange(2,1,rs.getLastRow()-1,3).getValues().filter(function(x){ return String(x[0]); });
+  if (!rules.length) return 0;
+  var rng = s.getRange(2,1,s.getLastRow()-1,10); var rows = rng.getValues(); var changed=0;
+  for (var i=0;i<rows.length;i++){
+    var subj = String(rows[i][5]||'');
+    for (var j=0;j<rules.length;j++){
+      if (subj.indexOf(rules[j][0])>=0){
+        if (String(rows[i][4])!==rules[j][1]){ rows[i][4]=rules[j][1]; changed++; }
+        if (rules[j][2] && String(rows[i][9])!==rules[j][2]) rows[i][9]=rules[j][2];
+        break;
+      }
+    }
+  }
+  rng.setValues(rows); return changed;
+}
+function applyBankRules() { return 'จัดหมวดตามกฎที่จำไว้ ' + applyBankRules_() + ' รายการ'; }
 
 // ── จัดประเภทตามผังเงิน 5 ข้อ + คืนรายการที่ต้องเตือน ──────────────
 // 1) KTB IN = ยอดขาย KLH ทั้งหมด
@@ -882,7 +936,7 @@ function importBayStatements() {
     }
 
     var imported = ctx.imported, fileCount = ctx.fileCount, errs = ctx.errs, alerts = ctx.alerts;
-    if (imported > 0) { alerts = alerts.concat(categorizeBankTxns_()); backfillAccountNumbers(); }
+    if (imported > 0) { alerts = alerts.concat(categorizeBankTxns_()); backfillAccountNumbers(); applyBankRules_(); }
     if (alerts.length) sendWmsLine_('🏦 ตรวจ statement ธนาคาร:\n' + alerts.slice(0, 10).join('\n――――\n')
       + (alerts.length > 10 ? '\n…และอีก ' + (alerts.length - 10) + ' รายการ (ดูในสมุดเงินธนาคาร)' : ''));
     return { ok: errs.length === 0, files: fileCount, imported: imported,

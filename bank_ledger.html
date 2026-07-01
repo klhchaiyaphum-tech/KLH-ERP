@@ -405,6 +405,7 @@ function render(txns){
           +'<td class="muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
           +'<button class="btn sm" style="color:#6A1B9A" title="แยกลงบัญชี 2 หมวด (คงยอดเต็มในสมุด)" onclick="splitRow('+t.row+')">✂️</button> '
+          +'<button class="btn sm" style="color:#00897B" title="จำผู้รับนี้ → จัดหมวด/ผังบัญชีนี้อัตโนมัติทุกครั้ง (เช่น เงินเดือน)" onclick="learnRule('+t.row+')">🧠</button> '
           +(t.split?'<button class="btn sm" style="color:#888" title="ล้างการแยก" onclick="clrSplit('+t.row+')">✕</button> ':'')
           +'<button class="btn sm" style="color:var(--red)" title="ลบรายการ" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
@@ -453,6 +454,13 @@ function splitRow(row){
 }
 function clrSplit(row){
   google.script.run.withSuccessHandler(function(r){ if(r&&r.ok)load(); }).clearSplit(row);
+}
+function learnRule(row){
+  var cat=document.getElementById('cat-'+row).value, coa=document.getElementById('acc-'+row).value;
+  google.script.run.withSuccessHandler(function(r){
+    document.getElementById('msg').innerHTML=r.ok?'<div class="okmsg">🧠 '+r.msg+'</div>':'<div class="err">'+r.msg+'</div>'; if(r.ok)load();
+  }).withFailureHandler(function(e){document.getElementById('msg').innerHTML='<div class="err">'+e.message+'</div>';})
+  .bankLearnRule(row, cat, coa, '');
 }
 function delTxn(row){
   if (!confirm('ลบรายการนี้?')) return;
