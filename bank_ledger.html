@@ -406,7 +406,7 @@ function render(txns){
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
           +'<button class="btn sm" style="color:#6A1B9A" title="แยกลงบัญชี 2 หมวด (คงยอดเต็มในสมุด)" onclick="splitRow('+t.row+')">✂️</button> '
           + (t.learned
-              ? '<button class="btn sm" style="color:#fff;background:#2E7D46;border-color:#2E7D46" title="จำแล้ว → '+esc(t.ruleCoa||'')+' · กดเพื่อเลิกจำ" onclick="forgetRule('+t.row+')">🧠✓</button> '
+              ? '<button class="btn sm" style="color:#fff;background:#2E7D46;border-color:#2E7D46" title="จำแล้ว → '+esc(t.ruleCoa||'')+(t.ruleSup?' · ชำระเจ้าหนี้ '+esc(t.ruleSup):'')+' · กดเพื่อเลิกจำ" onclick="forgetRule('+t.row+')">🧠✓'+(t.ruleSup?'🏷️':'')+'</button> '
               : (t.canLearn ? '<button class="btn sm" style="color:#00897B" title="จำผู้รับนี้ → จัดหมวด/ผังบัญชีนี้อัตโนมัติทุกครั้ง (เช่น เงินเดือน/บิล)" onclick="learnRule('+t.row+')">🧠</button> ' : ''))
           +(t.split?'<button class="btn sm" style="color:#888" title="ล้างการแยก" onclick="clrSplit('+t.row+')">✕</button> ':'')
           +'<button class="btn sm" style="color:var(--red)" title="ลบรายการ" onclick="delTxn('+t.row+')">ลบ</button></td>'
@@ -457,14 +457,39 @@ function splitRow(row){
 function clrSplit(row){
   google.script.run.withSuccessHandler(function(r){ if(r&&r.ok)load(); }).clearSplit(row);
 }
+var _supCache=null;
 function learnRule(row){
   var cat=document.getElementById('cat-'+row).value, coa=document.getElementById('acc-'+row).value;
+  // ชำระเจ้าหนี้ → เปิดให้ผูกกับเจ้าหนี้การค้า (ครั้งหน้าจับคู่ + ระบุเลขบัญชีให้)
+  if(cat==='PAYMENT'){
+    if(_supCache){ askSupplier(row,cat,coa,_supCache); return; }
+    Swal.fire({title:'โหลดรายชื่อเจ้าหนี้...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
+    google.script.run.withSuccessHandler(function(r){ _supCache=(r&&r.items)||[]; askSupplier(row,cat,coa,_supCache); })
+      .withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); }).getSupplierList();
+    return;
+  }
+  doLearn(row,cat,coa,'');
+}
+function askSupplier(row,cat,coa,sup){
+  var opts='<option value="">— ไม่ผูก (จำแค่ว่า "ชำระเจ้าหนี้") —</option>'
+    +sup.map(function(s){return '<option value="'+esc(s.code)+'">'+esc(s.name)+' ('+esc(s.code)+')</option>';}).join('');
+  Swal.fire({title:'จำผู้รับ — ชำระเจ้าหนี้ 🧠',
+    html:'<div style="text-align:left;font-size:13px;color:#666;margin-bottom:8px">ผูกกับ<b>เจ้าหนี้การค้า</b> → ครั้งหน้าโอนคนเดิม ระบบจำได้ทันที และบันทึกเลขบัญชีปลายทางให้เจ้าหนี้ (ไว้ตัด AP อัตโนมัติ)</div>'
+      +'<input id="lrq" class="swal2-input" placeholder="🔍 พิมพ์ค้นชื่อเจ้าหนี้" oninput="filterSup()">'
+      +'<select id="lrsup" class="swal2-select" size="6" style="width:90%">'+opts+'</select>',
+    showCancelButton:true,confirmButtonText:'จำ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#00897B',
+    preConfirm:function(){ return document.getElementById('lrsup').value; }
+  }).then(function(a){ if(!a.isConfirmed) return; doLearn(row,cat,coa,a.value||''); });
+}
+function filterSup(){ var q=(document.getElementById('lrq').value||'').toLowerCase(); var s=document.getElementById('lrsup');
+  for(var i=0;i<s.options.length;i++){ var o=s.options[i]; o.style.display=(!q||o.text.toLowerCase().indexOf(q)>=0||o.value==='')?'':'none'; } }
+function doLearn(row,cat,coa,supplier){
   Swal.fire({title:'กำลังจำผู้รับ...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
   google.script.run.withSuccessHandler(function(r){
     if(r&&r.ok){ Swal.fire({icon:'success',title:'จำผู้รับแล้ว 🧠',html:esc(r.msg),confirmButtonText:'โอเค'}); load(); }
     else Swal.fire({icon:'warning',title:'จำไม่ได้',html:esc((r&&r.msg)||'ผิดพลาด')});
   }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); })
-  .bankLearnRule(row, cat, coa, '');
+  .bankLearnRule(row, cat, coa, '', supplier);
 }
 function forgetRule(row){
   Swal.fire({title:'เลิกจำผู้รับนี้?',text:'ครั้งหน้าจะไม่จัดหมวดอัตโนมัติ',icon:'warning',showCancelButton:true,confirmButtonText:'เลิกจำ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#D9512B'})

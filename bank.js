@@ -698,9 +698,30 @@ var SH_RULES = 'BANK_RULES';
 function bankRulesSheet_() {
   var ss = SpreadsheetApp.openById(SHEET_ID); var s = ss.getSheetByName(SH_RULES);
   if (!s) { s = ss.insertSheet(SH_RULES);
-    s.getRange(1,1,1,5).setValues([['KEY(บัญชีปลายทาง)','CATEGORY','COA(ผังบัญชี)','LABEL','CREATED']])
+    s.getRange(1,1,1,6).setValues([['KEY(บัญชีปลายทาง)','CATEGORY','COA(ผังบัญชี)','LABEL','CREATED','SUPPLIER(VEND)']])
       .setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff'); s.setFrozenRows(1); }
+  if (String(s.getRange(1,6).getValue())!=='SUPPLIER(VEND)') s.getRange(1,6).setValue('SUPPLIER(VEND)').setFontWeight('bold');
   return s;
+}
+// รายชื่อเจ้าหนี้ (ให้ UI ผูก) — code + name จาก SUPPLIER_MASTER
+function getSupplierList() {
+  try {
+    var sm = SpreadsheetApp.openById(SHEET_ID).getSheetByName('SUPPLIER_MASTER');
+    if (!sm || sm.getLastRow()<2) return { ok:true, items:[] };
+    var rows = sm.getRange(2,1,sm.getLastRow()-1,2).getValues();
+    var items = rows.filter(function(r){ return String(r[0]) && String(r[1]).indexOf('⊘')<0; })
+      .map(function(r){ return { code:String(r[0]), name:String(r[1]) }; });
+    return { ok:true, items:items };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// ผูกเลขบัญชีปลายทางเข้ากับเจ้าหนี้ (SUPPLIER_MASTER col H) ถ้ายังว่าง
+function linkAcctToSupplier_(supCode, key) {
+  if (String(key).indexOf('ACCT:')!==0) return;
+  var acct = key.slice(5);
+  var sm = SpreadsheetApp.openById(SHEET_ID).getSheetByName('SUPPLIER_MASTER');
+  if (!sm || sm.getLastRow()<2) return;
+  var codes = sm.getRange(2,1,sm.getLastRow()-1,1).getValues();
+  for (var i=0;i<codes.length;i++){ if (String(codes[i][0])===String(supCode)){ if(!String(sm.getRange(i+2,8).getValue()||'')) sm.getRange(i+2,8).setValue(acct); return; } }
 }
 // ดึงคีย์ผู้รับจากรายละเอียด:
 //   ACCT:<เลขบัญชีปลายทาง>  = โอนเข้าบัญชีผู้รับ (เงินเดือน/เจ้าหนี้)
@@ -714,20 +735,28 @@ function ruleKeyFromDesc_(subj) {
   return '';
 }
 // จำกฎจากรายการนี้ (cat/coa = ที่เลือกในแถว) + จัดให้รายการที่ตรงทันที
-function bankLearnRule(row, cat, coa, label) {
+function bankLearnRule(row, cat, coa, label, supplier) {
   try {
     var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
     var r = s.getRange(row,1,1,10).getValues()[0];
     var key = ruleKeyFromDesc_(r[5]);
     if (!key) return { ok:false, msg:'รายการนี้ไม่มี "บัญชีปลายทาง" ในรายละเอียด — จำอัตโนมัติไม่ได้' };
     cat = String(cat||r[4]||'EXPENSE'); coa = String(coa||r[9]||''); label = String(label||'').slice(0,40) || String(r[5]||'').slice(0,40);
+    supplier = String(supplier||'');
+    var supName = '';
+    if (supplier) { linkAcctToSupplier_(supplier, key); supName = supNameOf_(supplier); }
     var rs = bankRulesSheet_(); var last = rs.getLastRow();
-    var rr = last>1 ? rs.getRange(2,1,last-1,5).getValues() : [];
-    for (var i=0;i<rr.length;i++){ if (String(rr[i][0])===key){ rs.getRange(i+2,2,1,3).setValues([[cat,coa,label]]); var m2=applyBankRules_(); return { ok:true, key:key, msg:'อัปเดตกฎ '+key+' → '+(coa||cat)+' · จัด '+m2+' รายการ' }; } }
-    rs.appendRow([key, cat, coa, label, Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm')]);
+    var rr = last>1 ? rs.getRange(2,1,last-1,6).getValues() : [];
+    for (var i=0;i<rr.length;i++){ if (String(rr[i][0])===key){ rs.getRange(i+2,2,1,3).setValues([[cat,coa,label]]); rs.getRange(i+2,6).setValue(supplier); var m2=applyBankRules_(); return { ok:true, key:key, msg:'อัปเดตกฎ '+key+' → '+(coa||cat)+(supName?' · เจ้าหนี้ '+supName:'')+' · จัด '+m2+' รายการ' }; } }
+    rs.appendRow([key, cat, coa, label, Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm'), supplier]);
     var m = applyBankRules_();
-    return { ok:true, key:key, msg:'จำแล้ว: ปลายทาง '+key+' → '+(coa||cat)+' · จัดให้ '+m+' รายการที่ตรง' };
+    return { ok:true, key:key, msg:'จำแล้ว: ปลายทาง '+key+' → '+(coa||cat)+(supName?' · ชำระเจ้าหนี้ '+supName:'')+' · จัดให้ '+m+' รายการที่ตรง' };
   } catch(e){ return { ok:false, msg:String(e) }; }
+}
+function supNameOf_(code) {
+  try { var sm = SpreadsheetApp.openById(SHEET_ID).getSheetByName('SUPPLIER_MASTER'); if(!sm||sm.getLastRow()<2) return code;
+    var v = sm.getRange(2,1,sm.getLastRow()-1,2).getValues();
+    for (var i=0;i<v.length;i++){ if(String(v[i][0])===String(code)) return String(v[i][1]); } return code; } catch(e){ return code; }
 }
 // เลิกจำผู้รับของรายการนี้ (ลบกฎออกจาก BANK_RULES)
 function forgetRule(row) {
@@ -1146,6 +1175,8 @@ function parseKrungsriCsv_(grid, fileName, s, seen, alerts, forceBank) {
     if (code === 'FE') { cat = 'EXPENSE'; acct = 'ค่าธรรมเนียมธนาคาร'; }
     else if (code === 'IN') { cat = 'OTHER'; acct = 'ดอกเบี้ยรับ'; }    // ดอกเบี้ยเงินฝาก (ฝากประจำ ฯลฯ)
     else if (code === 'TX') { cat = 'WHT'; acct = 'ภาษีถูกหัก ณ ที่จ่าย'; }  // ภาษีหัก ณ ที่จ่ายดอกเบี้ย 1% = สินทรัพย์/เครดิตภาษี (ไม่เข้า P&L)
+    else if (/^ดอกเบี้ย/.test(desc)) { if (amtIn>0){ cat='OTHER'; acct='ดอกเบี้ยรับ'; } else { cat='EXPENSE'; acct='ดอกเบี้ยธนาคาร'; } }  // เข้า=รับ · ออก=ดอกเบี้ย OD จ่าย
+    else if (/^ค่าธรรมเนียม/.test(desc)) { cat='EXPENSE'; acct='ค่าธรรมเนียมธนาคาร'; }
     else if (/K L H/.test(desc)) cat = 'TRANSFER';              // โยกเงินภายในชื่อตัวเอง
     else if (amtIn > 0 && /รับโอนเงิน|จ่ายคิวอาร์|พร้อมเพย์/.test(desc)) { cat = 'SALE'; isCustomerIn = true; }
     else if (amtOut > 0 && /โอนเงิน|จ่าย|เงินออก/.test(desc)) cat = 'PAYMENT';
@@ -1433,8 +1464,8 @@ function getBankTxns(yyyymm) {
     var s = bankSheet_();
     var out = [];
     // โหลดกฎที่จำไว้ (BANK_RULES) → บอกว่าแถวไหน "จำแล้ว"
-    var ruleMap = {};
-    try { var rs = bankRulesSheet_(); if (rs.getLastRow()>1) rs.getRange(2,1,rs.getLastRow()-1,3).getValues().forEach(function(x){ if(String(x[0])) ruleMap[String(x[0])] = String(x[2]||x[1]||''); }); } catch(eR){}
+    var ruleMap = {}, supMap = {};
+    try { var rs = bankRulesSheet_(); if (rs.getLastRow()>1) rs.getRange(2,1,rs.getLastRow()-1,6).getValues().forEach(function(x){ if(String(x[0])){ ruleMap[String(x[0])] = String(x[2]||x[1]||''); if(String(x[5])) supMap[String(x[0])] = supNameOf_(String(x[5])); } }); } catch(eR){}
     if (s.getLastRow() > 1) {
       var rows = s.getDataRange().getValues();
       for (var i = 1; i < rows.length; i++) {
@@ -1452,7 +1483,8 @@ function getBankTxns(yyyymm) {
           amount: Number(rows[i][3]) || 0, cat: String(rows[i][4] || ''),
           subject: String(rows[i][5] || ''), note: String(rows[i][8] || ''),
           account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || ''), split: split,
-          learned: !!learned, ruleCoa: learned ? ruleMap[rk] : '', canLearn: !!rk
+          learned: !!learned, ruleCoa: learned ? ruleMap[rk] : '', canLearn: !!rk,
+          ruleSup: (learned && supMap[rk]) ? supMap[rk] : ''
         });
       }
     }
