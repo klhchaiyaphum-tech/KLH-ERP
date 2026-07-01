@@ -405,7 +405,9 @@ function render(txns){
           +'<td class="muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
           +'<button class="btn sm" style="color:#6A1B9A" title="แยกลงบัญชี 2 หมวด (คงยอดเต็มในสมุด)" onclick="splitRow('+t.row+')">✂️</button> '
-          +'<button class="btn sm" style="color:#00897B" title="จำผู้รับนี้ → จัดหมวด/ผังบัญชีนี้อัตโนมัติทุกครั้ง (เช่น เงินเดือน)" onclick="learnRule('+t.row+')">🧠</button> '
+          + (t.learned
+              ? '<button class="btn sm" style="color:#fff;background:#2E7D46;border-color:#2E7D46" title="จำแล้ว → '+esc(t.ruleCoa||'')+' · กดเพื่อเลิกจำ" onclick="forgetRule('+t.row+')">🧠✓</button> '
+              : (t.canLearn ? '<button class="btn sm" style="color:#00897B" title="จำผู้รับนี้ → จัดหมวด/ผังบัญชีนี้อัตโนมัติทุกครั้ง (เช่น เงินเดือน/บิล)" onclick="learnRule('+t.row+')">🧠</button> ' : ''))
           +(t.split?'<button class="btn sm" style="color:#888" title="ล้างการแยก" onclick="clrSplit('+t.row+')">✕</button> ':'')
           +'<button class="btn sm" style="color:var(--red)" title="ลบรายการ" onclick="delTxn('+t.row+')">ลบ</button></td>'
           +'</tr>';
@@ -463,6 +465,15 @@ function learnRule(row){
     else Swal.fire({icon:'warning',title:'จำไม่ได้',html:esc((r&&r.msg)||'ผิดพลาด')});
   }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); })
   .bankLearnRule(row, cat, coa, '');
+}
+function forgetRule(row){
+  Swal.fire({title:'เลิกจำผู้รับนี้?',text:'ครั้งหน้าจะไม่จัดหมวดอัตโนมัติ',icon:'warning',showCancelButton:true,confirmButtonText:'เลิกจำ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#D9512B'})
+  .then(function(a){ if(!a.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'เลิกจำแล้ว',timer:1500,showConfirmButton:false}); load(); }
+      else Swal.fire({icon:'warning',title:'ไม่สำเร็จ',html:esc((r&&r.msg)||'')});
+    }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); }).forgetRule(row);
+  });
 }
 function delTxn(row){
   if (!confirm('ลบรายการนี้?')) return;

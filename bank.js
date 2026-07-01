@@ -729,6 +729,19 @@ function bankLearnRule(row, cat, coa, label) {
     return { ok:true, key:key, msg:'จำแล้ว: ปลายทาง '+key+' → '+(coa||cat)+' · จัดให้ '+m+' รายการที่ตรง' };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
+// เลิกจำผู้รับของรายการนี้ (ลบกฎออกจาก BANK_RULES)
+function forgetRule(row) {
+  try {
+    var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    var key = ruleKeyFromDesc_(s.getRange(row,6).getValue());
+    if (!key) return { ok:false, msg:'รายการนี้ไม่มีคีย์จำ' };
+    var rs = bankRulesSheet_(); if (rs.getLastRow()<2) return { ok:false, msg:'ยังไม่มีกฎ' };
+    var vals = rs.getRange(2,1,rs.getLastRow()-1,1).getValues();
+    for (var i=0;i<vals.length;i++){ if (String(vals[i][0])===key){ rs.deleteRow(i+2); return { ok:true, msg:'เลิกจำ '+key+' แล้ว (ครั้งหน้าไม่จัดหมวดอัตโนมัติ)' }; } }
+    return { ok:false, msg:'ไม่พบกฎของผู้รับนี้' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // จัดหมวดตามกฎที่จำไว้ (batch) — คืนจำนวนที่เปลี่ยน
 function applyBankRules_() {
   var s = bankSheet_(); if (s.getLastRow()<2) return 0;
@@ -1419,6 +1432,9 @@ function getBankTxns(yyyymm) {
     var ym = yyyymm || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
     var s = bankSheet_();
     var out = [];
+    // โหลดกฎที่จำไว้ (BANK_RULES) → บอกว่าแถวไหน "จำแล้ว"
+    var ruleMap = {};
+    try { var rs = bankRulesSheet_(); if (rs.getLastRow()>1) rs.getRange(2,1,rs.getLastRow()-1,3).getValues().forEach(function(x){ if(String(x[0])) ruleMap[String(x[0])] = String(x[2]||x[1]||''); }); } catch(eR){}
     if (s.getLastRow() > 1) {
       var rows = s.getDataRange().getValues();
       for (var i = 1; i < rows.length; i++) {
@@ -1428,12 +1444,15 @@ function getBankTxns(yyyymm) {
         if (d.slice(0, 7) !== ym) continue;
         var sp = String(rows[i][11] || ''), split = null;
         if (sp.indexOf('|') >= 0) { var p = sp.split('|'); split = { amt:Number(p[0])||0, cat:p[1]||'', coa:p[2]||'' }; }
+        var rk = ruleKeyFromDesc_(rows[i][5]);
+        var learned = rk && ruleMap.hasOwnProperty(rk);
         out.push({
           row: i + 1, date: d,
           bank: String(rows[i][1] || ''), dir: String(rows[i][2] || ''),
           amount: Number(rows[i][3]) || 0, cat: String(rows[i][4] || ''),
           subject: String(rows[i][5] || ''), note: String(rows[i][8] || ''),
-          account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || ''), split: split
+          account: String(rows[i][9] || ''), acctNo: String(rows[i][10] || ''), split: split,
+          learned: !!learned, ruleCoa: learned ? ruleMap[rk] : '', canLearn: !!rk
         });
       }
     }
