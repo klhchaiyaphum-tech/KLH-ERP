@@ -704,7 +704,8 @@ function bankRulesSheet_() {
   return s;
 }
 // รายชื่อเจ้าหนี้ (ให้ UI ผูก) — code + name จาก SUPPLIER_MASTER
-function getSupplierList() {
+// NOTE: ชื่อต้องไม่ชนกับ getSupplierList() ใน Code.js (คืน array) — GAS global เดียว
+function bankSupplierList() {
   try {
     var sm = SpreadsheetApp.openById(SHEET_ID).getSheetByName('SUPPLIER_MASTER');
     if (!sm || sm.getLastRow()<2) return { ok:true, items:[] };

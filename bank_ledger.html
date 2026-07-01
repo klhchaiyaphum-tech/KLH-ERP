@@ -222,6 +222,7 @@ function showStatement(){
 var _stClose=0;
 function renderStatement(r){
   _stClose=r.close;
+  _stMeta={bank:document.getElementById('stBank').value, toDate:r.toDate};
   var h='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
     +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดยกมา '+r.open.date+'</div><div class="kv num">฿'+nf(r.open.balance)+'</div></div>'
     +'<div class="kpi" style="flex:1;min-width:150px"><div class="kk">ยอดคงเหลือ '+r.toDate+'</div><div class="kv num" style="color:'+(r.close<0?'var(--red)':'var(--green)')+'">฿'+nf(r.close)+'</div></div>'
@@ -245,19 +246,43 @@ function renderStatement(r){
   h+='<div style="background:var(--paper-2);border:1px dashed var(--line-2);border-radius:12px;padding:10px 12px;margin-top:12px">'
     +'<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🔍 เทียบกับ statement ธนาคารจริง (สิ้นเดือน)</div>'
     +'<div class="addrow"><span style="font-size:12.5px">ยอดปิดจริงจากธนาคาร ณ '+r.toDate+':</span>'
-    +'<input type="number" id="stRealClose" placeholder="ใส่ยอดจาก statement" style="width:170px" step="0.01">'
+    +'<input type="number" id="stRealClose" placeholder="ใส่ยอดจาก statement" style="width:170px" step="0.01" oninput="compareReal()">'
     +'<button class="btn sm" onclick="compareReal()">เทียบ</button>'
-    +'<span id="stDiff" style="font-size:13px;font-weight:700"></span></div></div>';
+    +'<span id="stDiff" style="font-size:13px;font-weight:700"></span>'
+    +'<button class="btn sm green" id="stConfirmBal" onclick="confirmBalance()" style="display:none" title="ตั้งยอดปิดจริงเป็นยอดยกมาจุดใหม่ สำหรับงวดถัดไป">✅ ยืนยัน & ตั้งเป็นยอดยกมา</button>'
+    +'</div></div>';
   document.getElementById('stResult').innerHTML=h;
 }
+var _stMeta={bank:'',toDate:''};
 function compareReal(){
   var v=document.getElementById('stRealClose').value;
-  if(v===''){ document.getElementById('stDiff').textContent=''; return; }
+  var btn=document.getElementById('stConfirmBal');
+  if(v===''){ document.getElementById('stDiff').textContent=''; if(btn)btn.style.display='none'; return; }
   var diff=Math.round((_stClose-Number(v))*100)/100;
   var ok=Math.abs(diff)<0.01;
   document.getElementById('stDiff').innerHTML = ok
     ? '<span style="color:var(--green)">✅ ตรงกัน</span>'
     : '<span style="color:var(--red)">⚠️ ต่าง ฿'+nf(diff)+' (คำนวณ ฿'+nf(_stClose)+' · ธนาคาร ฿'+nf(Number(v))+')</span>';
+  // ยืนยันได้เฉพาะเมื่อยอดตรง → กันตกแต่งบัญชี (ล็อกจุดที่ระบบตรงกับธนาคารจริง)
+  if(btn) btn.style.display = ok ? '' : 'none';
+}
+// ยืนยันว่ายอดตรง → ตั้งยอดปิดจริงเป็น "ยอดยกมา" จุดใหม่ (checkpoint) สำหรับงวดถัดไป
+function confirmBalance(){
+  var v=document.getElementById('stRealClose').value;
+  if(v===''){ return; }
+  var diff=Math.round((_stClose-Number(v))*100)/100;
+  if(Math.abs(diff)>=0.01){ Swal.fire({icon:'warning',title:'ยอดยังไม่ตรง',html:'ตั้งเป็นยอดยกมาได้เฉพาะเมื่อยอดตรงกับ statement เท่านั้น'}); return; }
+  Swal.fire({title:'ยืนยันยอดตรง?',
+    html:'ตั้ง <b>฿'+nf(Number(v))+'</b> เป็นยอดยกมาใหม่ ('+_stMeta.bank+' ณ '+_stMeta.toDate+')<br><span style="font-size:12px;color:#666">งวดถัดไปจะยกยอดจากจุดนี้ · ใช้ตรวจว่ายอดตรงต่อเนื่อง</span>',
+    icon:'question',showCancelButton:true,confirmButtonText:'ยืนยัน & ตั้งเป็นยอดยกมา',cancelButtonText:'ยกเลิก',confirmButtonColor:'#2E7D46'})
+  .then(function(a){ if(!a.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'ตั้งยอดยกมาแล้ว ✅',html:esc(r.msg),timer:2200,showConfirmButton:false});
+        loadAnchors(); }
+      else Swal.fire({icon:'error',title:'ไม่สำเร็จ',html:esc((r&&r.msg)||'')});
+    }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); })
+    .saveAccountBalance(_stMeta.toDate, _stMeta.bank, Number(v), 'ยืนยันตรงกับ statement (checkpoint)');
+  });
 }
 
 function load(){
@@ -465,7 +490,7 @@ function learnRule(row){
     if(_supCache){ askSupplier(row,cat,coa,_supCache); return; }
     Swal.fire({title:'โหลดรายชื่อเจ้าหนี้...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
     google.script.run.withSuccessHandler(function(r){ _supCache=(r&&r.items)||[]; askSupplier(row,cat,coa,_supCache); })
-      .withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); }).getSupplierList();
+      .withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); }).bankSupplierList();
     return;
   }
   doLearn(row,cat,coa,'');
