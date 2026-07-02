@@ -168,12 +168,12 @@ function rptTab_(ss, name, headers, widths, dataRows, totalCol) {
 }
 
 // สร้าง .xlsx รายงานเดือน ym + ส่งเมล สนง.บัญชี
-function emailMonthlyBankReport(ym) {
+function emailMonthlyBankReport(ym, toOverride) {
   var tmpId = null;
   try {
     ym = ym || reportPrevMonth_();
     var cfg = getConfig();
-    var to = String(cfg.ACCT_EMAIL || '').trim();
+    var to = String(toOverride || cfg.ACCT_EMAIL || '').trim();
     if (!to) return { ok:false, msg:'ยังไม่ได้ตั้ง ACCT_EMAIL ใน CONFIG (อีเมลสำนักงานบัญชี)' };
     // cc เจ้าของ: ใน trigger getActiveUser() คืนค่าว่าง → ใช้ OWNER_EMAIL(CONFIG) ก่อน แล้ว getEffectiveUser()
     var ccUser = String(cfg.OWNER_EMAIL || '').trim()
@@ -348,6 +348,14 @@ function fixSplitToMetadata() {
     del.sort(function(a,b){ return b-a; }).forEach(function(r){ s.deleteRow(r); });
     return del.length ? ('รวมกลับ '+del.length+' รายการ + เก็บการแยกเป็น metadata: '+merged.join(', ')) : 'ไม่พบรายการที่แยกแบบเก่า';
   } catch(e){ return 'ERROR: '+e; }
+}
+
+// ★ ทดลองส่งรายงานเดือน — ส่งหา "เจ้าของ" คนเดียว (preview) ไม่ถึงสนงบัญชี · รันใน editor
+//   testMonthlyReport('2026-06')  → ส่งรายงาน มิ.ย. มาที่อีเมลคุณ ให้ตรวจก่อนส่งจริง
+function testMonthlyReport(ym) {
+  var me = String(getConfig().OWNER_EMAIL || '').trim() || Session.getEffectiveUser().getEmail();
+  var r = emailMonthlyBankReport(ym || reportPrevMonth_(), me);
+  return r.ok ? ('✅ ส่ง preview ' + (ym||reportPrevMonth_()) + ' → ' + me + ' (ยังไม่ส่งสนงบัญชี)') : ('❌ ' + r.msg);
 }
 
 // trigger รายเดือน วันที่ 2 ~07:00 → ดึง statement ที่ค้างก่อน แล้วส่งรายงานเดือนก่อนหน้า
@@ -1061,7 +1069,7 @@ function parseMt940_(text, s, seen) {
 // header: วันที่/เวลา | รายการ(code) | รายละเอียด | หมายเลขเช็ค | ถอนเงิน/ฝากเงิน | ภาษี | ยอดคงเหลือ | ช่องทาง
 // ทิศทาง: ยอดคงเหลือเพิ่ม = เข้า · ลด = ออก · PromptPay(MORPSD/NMPSDP/IORSDT) = ขาย · อื่น = รายได้อื่น
 function parseKtbStatementGrid_(grid, fileName, s, seen) {
-  var hRow = -1, cDate = 0, cCode = 1, cDetail = 2, cAmt = 4, cBal = 6;
+  var hRow = -1, cDate = 0, cCode = 1, cDetail = 2, cAmt = 4, cTax = -1, cBal = 6;
   for (var i = 0; i < Math.min(grid.length, 20); i++) {
     var row = (grid[i] || []).map(function(x){ return String(x || ''); });
     if (row.some(function(c){ return /ยอดคงเหลือ/.test(c); }) && row.some(function(c){ return /วันที่/.test(c); })) {
@@ -1069,6 +1077,7 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
       for (var j = 0; j < row.length; j++) {
         if (/วันที่/.test(row[j])) cDate = j;
         if (/ถอน|ฝาก/.test(row[j])) cAmt = j;
+        if (/^ภาษี$/.test(row[j].trim())) cTax = j;   // คอลัมน์ภาษีหัก ณ ที่จ่าย (ดอกเบี้ย)
         if (/คงเหลือ/.test(row[j])) cBal = j;
         if (/รายละเอียด/.test(row[j])) cDetail = j;
         if (/^รายการ$/.test(row[j].trim())) cCode = j;
@@ -1097,10 +1106,20 @@ function parseKtbStatementGrid_(grid, fileName, s, seen) {
     if (amt <= 0) amt = Math.abs(delta);
     var d = parseThaiDate_(cell);
     var detail = (String(grid[r][cCode] || '') + ' ' + String(grid[r][cDetail] || '')).replace(/\s+/g, ' ').trim().slice(0, 120);
-    var cat = '';
-    if (dir === 'IN') cat = ktbInCat_(detail);
+    var tax = (cTax >= 0) ? Math.abs(num(grid[r][cTax]) || 0) : 0;
+    var cat = '', coa = '';
+    if (dir === 'IN') {
+      cat = ktbInCat_(detail);
+      if (tax > 0 || /IIPS|ดอกเบี้ย|interest/i.test(detail)) { cat = 'OTHER'; coa = 'ดอกเบี้ยรับ'; }   // ดอกเบี้ยเงินฝาก
+    }
     var key = 'STMT-KTB-' + d + '-' + dir + '-' + amt + '-' + bal;   // ยอดคงเหลือ = unique ต่อรายการ
-    rows.push([d, 'KTB', dir, amt, cat, detail, now, key, '', '']);
+    rows.push([d, 'KTB', dir, amt, cat, detail, now, key, '', coa]);
+    // ภาษีหัก ณ ที่จ่ายดอกเบี้ย (คอลัมน์ "ภาษี" ในไฟล์) — ยอดฝากเป็นยอดเต็ม ยอดเข้าจริง=เต็ม-ภาษี
+    // แยกเป็นรายการ OUT เพื่อ (1) ยอดคงเหลือวิ่งตรง statement (2) ลงเครดิตภาษี (WHT)
+    if (dir === 'IN' && tax > 0) {
+      var kt = 'STMT-KTB-' + d + '-TX-' + tax + '-' + bal;
+      rows.push([d, 'KTB', 'OUT', tax, 'WHT', detail + ' (ภาษีหัก ณ ที่จ่าย)', now, kt, '', 'ภาษีถูกหัก ณ ที่จ่าย']);
+    }
     if (!minD || d < minD) minD = d;
     if (!maxD || d > maxD) maxD = d;
     prev = bal;
