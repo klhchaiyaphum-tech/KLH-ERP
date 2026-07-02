@@ -175,7 +175,10 @@ function emailMonthlyBankReport(ym) {
     var cfg = getConfig();
     var to = String(cfg.ACCT_EMAIL || '').trim();
     if (!to) return { ok:false, msg:'ยังไม่ได้ตั้ง ACCT_EMAIL ใน CONFIG (อีเมลสำนักงานบัญชี)' };
-    var ccUser = Session.getActiveUser().getEmail();
+    // cc เจ้าของ: ใน trigger getActiveUser() คืนค่าว่าง → ใช้ OWNER_EMAIL(CONFIG) ก่อน แล้ว getEffectiveUser()
+    var ccUser = String(cfg.OWNER_EMAIL || '').trim()
+      || Session.getEffectiveUser().getEmail()
+      || Session.getActiveUser().getEmail();
     var data = buildBankReportData_(ym), S = data.sums;
 
     var tmp = SpreadsheetApp.create('TMP_BANK_REPORT_' + ym); tmpId = tmp.getId();
@@ -252,6 +255,12 @@ function setReportEmail(email) {
   email = String(email || 'pen2020ac@gmail.com').trim();
   setConfigValue_('ACCT_EMAIL', email);
   return 'ตั้ง ACCT_EMAIL = ' + email;
+}
+// ตั้งอีเมลเจ้าของ (cc รายงานเดือน) — ค่าเริ่ม num.surasak@gmail.com · รันใน editor ครั้งเดียว
+function setOwnerEmail(email) {
+  email = String(email || 'num.surasak@gmail.com').trim();
+  setConfigValue_('OWNER_EMAIL', email);
+  return 'ตั้ง OWNER_EMAIL (cc รายงานเดือน) = ' + email;
 }
 
 // เพิ่มผังบัญชี (รันใน editor) — code/name/type · type: รายได้/ค่าใช้จ่าย/หนี้สิน/สินทรัพย์/ทุน
