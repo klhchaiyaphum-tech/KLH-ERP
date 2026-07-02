@@ -615,13 +615,13 @@ function listTriggers() {
   ts.forEach(function(t){ var h = t.getHandlerFunction(); cnt[h] = (cnt[h]||0) + 1; });
   var want = {
     dailySalesReport: 'รายงานยอดขาย LINE 08:00',
-    importBayStatements: 'สแกนโฟลเดอร์ statement เช้า 06:00',
     checkWeeklySalesTarget: 'เช็คเป้ายอดขาย อาทิตย์ 19:00',
-    dailyBankJob: 'สรุปยอดธนาคาร LINE 06:00'
+    dailyBankJob: 'ธนาคาร 06:00 (ดูดไฟล์+สรุป+alert AR ในตัว)'
   };
   var out = ['📋 Trigger ที่ติดตั้ง (' + ts.length + '):'];
   Object.keys(cnt).forEach(function(h){ out.push('  ✅ ' + h + (want[h]?' — '+want[h]:'') + (cnt[h]>1?' ('+cnt[h]+' ตัว!)':'')); });
   Object.keys(want).forEach(function(h){ if (!cnt[h]) out.push('  ❌ ขาด: ' + h + ' — ' + want[h]); });
+  if (cnt.importBayStatements) out.push('  ⚠️ importBayStatements ยังตั้งแยกอยู่ — รัน setupBankDaily() เพื่อรวมเป็นตัวเดียว (กันรันซ้ำ 06:00)');
   var msg = out.join('\n');
   Logger.log(msg);
   return msg;
@@ -1431,6 +1431,8 @@ function bankDayPresence_(ymd) {
 
 // รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE + เตือนถ้าเมื่อวานไม่มียอด
 function dailyBankJob() {
+  // 1) ดูดไฟล์ statement ที่วางใน Drive ก่อน (กรุงศรี/กระแส/ฝากประจำ) — จะได้เข้าสรุปทัน + ยิง alert AR ในตัว
+  try { importBayStatements(); } catch(eImp) {}
   var ktb = fetchKtbDaily(2);
   var ym = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
   var yest = Utilities.formatDate(new Date(Date.now() - 86400000), 'Asia/Bangkok', 'yyyy-MM-dd');
@@ -1818,4 +1820,16 @@ function setupDailyBankTrigger() {
   });
   ScriptApp.newTrigger('dailyBankJob').timeBased().everyDays(1).atHour(6).create();
   return 'ตั้ง trigger อ่านอีเมลธนาคารทุกวัน 06:00 แล้ว';
+}
+
+// ★ ตั้ง trigger ธนาคาร "รวม" — เหลือ 06:00 ตัวเดียว (dailyBankJob ดูดไฟล์+สรุป+alert AR ในตัว)
+//   ลบ importBayStatements + dailyBankJob เก่าทิ้ง แล้วสร้างใหม่ตัวเดียว — กันรัน 2 job ห้องเดียว 06:00
+function setupBankDaily() {
+  var removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    var h = t.getHandlerFunction();
+    if (h === 'dailyBankJob' || h === 'importBayStatements') { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  ScriptApp.newTrigger('dailyBankJob').timeBased().everyDays(1).atHour(6).create();
+  return 'ตั้ง trigger ธนาคารรวมแล้ว: dailyBankJob 06:00 (ดูดไฟล์→สรุป→alert AR) · ลบตัวซ้ำ '+removed+' ตัว';
 }
