@@ -430,6 +430,7 @@ function render(txns){
           +'<td class="muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(t.subject)+'">'+esc(t.subject)+'</td>'
           +'<td style="white-space:nowrap"><button class="btn sm green" onclick="saveTxn('+t.row+')">บันทึก</button> '
           +'<button class="btn sm" style="color:#6A1B9A" title="แยกลงบัญชี 2 หมวด (คงยอดเต็มในสมุด)" onclick="splitRow('+t.row+')">✂️</button> '
+          + (t.dir==='IN' ? '<button class="btn sm" style="color:#B26A00" title="หักภาษี ณ ที่จ่าย (เพิ่มรายการหักแยก เช่น ภาษีดอกเบี้ย) — ยอดคงเหลือจะลดลงตรง statement" onclick="addWht('+t.row+','+t.amount+')">฿−ภาษี</button> ' : '')
           + (t.learned
               ? '<button class="btn sm" style="color:#fff;background:#2E7D46;border-color:#2E7D46" title="จำแล้ว → '+esc(t.ruleCoa||'')+(t.ruleSup?' · ชำระเจ้าหนี้ '+esc(t.ruleSup):'')+' · กดเพื่อเลิกจำ" onclick="forgetRule('+t.row+')">🧠✓'+(t.ruleSup?'🏷️':'')+'</button> '
               : (t.canLearn ? '<button class="btn sm" style="color:#00897B" title="จำผู้รับนี้ → จัดหมวด/ผังบัญชีนี้อัตโนมัติทุกครั้ง (เช่น เงินเดือน/บิล)" onclick="learnRule('+t.row+')">🧠</button> ' : ''))
@@ -481,6 +482,23 @@ function splitRow(row){
 }
 function clrSplit(row){
   google.script.run.withSuccessHandler(function(r){ if(r&&r.ok)load(); }).clearSplit(row);
+}
+// ฿−ภาษี : เพิ่มรายการ "ภาษีหัก ณ ที่จ่าย" แยก (OUT) — ยอดรับเข้าเต็มถูกหักภาษี เงินเข้าจริง=เต็ม-ภาษี
+function addWht(row, amount){
+  Swal.fire({title:'฿− ภาษีหัก ณ ที่จ่าย',
+    html:'<div style="text-align:left;font-size:13px;color:#666;margin-bottom:8px">รายการนี้รับเข้าเต็ม <b>฿'+nf(amount)+'</b> แต่ถูกหักภาษี ณ ที่จ่าย → ระบบจะเพิ่มรายการ<b>หักออก</b>ตามยอดภาษี เพื่อให้ยอดคงเหลือตรง statement + ลงเครดิตภาษี</div>'
+      +'<input id="whtAmt" type="number" step="0.01" class="swal2-input" placeholder="ยอดภาษีที่ถูกหัก เช่น 0.90">',
+    showCancelButton:true, confirmButtonText:'เพิ่มรายการหักภาษี', cancelButtonText:'ยกเลิก', confirmButtonColor:'#B26A00',
+    preConfirm:function(){ var a=Number(document.getElementById('whtAmt').value)||0; if(a<=0){Swal.showValidationMessage('ใส่ยอดภาษี > 0');return false;}
+      if(a>=amount){Swal.showValidationMessage('ยอดภาษีต้องน้อยกว่ายอดรับเข้า');return false;} return a; }
+  }).then(function(res){ if(!res.isConfirmed) return;
+    Swal.fire({title:'กำลังบันทึก...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'บันทึกภาษีแล้ว',html:esc(r.msg),timer:2200,showConfirmButton:false}); load(); }
+      else Swal.fire({icon:'error',title:'ไม่สำเร็จ',html:esc((r&&r.msg)||'')});
+    }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); })
+    .bookWht(row, res.value);
+  });
 }
 var _supCache=null;
 function learnRule(row){

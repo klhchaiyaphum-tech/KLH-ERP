@@ -316,6 +316,28 @@ function splitBankTxn(row, cat1, coa1, amt2, cat2, coa2, note2) {
     return { ok:true, msg:'แยกลงบัญชีแล้ว (สมุดคงยอดเต็ม ฿'+amt+'): ส่วนแยก ฿'+amt2+' → '+(coa2||cat2) };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
+// เพิ่มรายการภาษีหัก ณ ที่จ่าย (WHT) แยกจากรายการรับเข้า — เงินเข้าจริง = ยอดเต็ม − ภาษี
+//  ใช้กับ: ดอกเบี้ย KTB ที่ไฟล์แสดงยอดเต็ม+ภาษีในคอลัมน์เดียว, เงินได้อื่นที่ถูกหัก ณ ที่จ่าย
+function bookWht(row, tax) {
+  try {
+    var s = bankSheet_(); if (row<2 || row>s.getLastRow()) return { ok:false, msg:'แถวไม่ถูกต้อง' };
+    tax = Number(tax)||0; if (tax<=0) return { ok:false, msg:'ใส่ยอดภาษี > 0' };
+    var r = s.getRange(row,1,1,10).getValues()[0];
+    if (String(r[2])!=='IN') return { ok:false, msg:'ใช้ได้เฉพาะรายการรับเข้า (IN)' };
+    if (tax >= (Number(r[3])||0)) return { ok:false, msg:'ยอดภาษีต้องน้อยกว่ายอดรับเข้า' };
+    var bank = String(r[1]||''), desc = String(r[5]||'');
+    var d = r[0] instanceof Date ? Utilities.formatDate(r[0],'Asia/Bangkok','yyyy-MM-dd') : String(r[0]).slice(0,10);
+    coaEnsure_('1450','ภาษีถูกหัก ณ ที่จ่าย (เครดิตภาษี)','สินทรัพย์');
+    var key = 'WHT-'+bank+'-'+d+'-'+tax+'-'+row;
+    // กันซ้ำ (กดหลายที)
+    var last = s.getLastRow();
+    if (last>1) { var keys = s.getRange(2,8,last-1,1).getValues(); for (var i=0;i<keys.length;i++){ if (String(keys[i][0])===key) return { ok:false, msg:'รายการภาษีนี้บันทึกไว้แล้ว' }; } }
+    s.appendRow([r[0], bank, 'OUT', tax, 'WHT', desc + ' (ภาษีหัก ณ ที่จ่าย)',
+                 Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm'), key,
+                 'ภาษีหัก ณ ที่จ่าย (จากรายการรับเข้า แถว '+row+')', 'ภาษีถูกหัก ณ ที่จ่าย (เครดิตภาษี)']);
+    return { ok:true, msg:'บันทึกภาษีหัก ณ ที่จ่าย ฿'+tax+' (OUT) — เงินเข้าจริง ฿'+(Math.round(((Number(r[3])||0)-tax)*100)/100)+' ยอดคงเหลือลดลงตรง statement' };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
 // ล้างการแยกลงบัญชี (คืนเป็นหมวดเดียว)
 function clearSplit(row) {
   try {
