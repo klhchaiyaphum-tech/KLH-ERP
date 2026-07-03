@@ -359,3 +359,45 @@ function pbPushToKlh() {
     return { ok:true, updated:updated, created:created, backup:bakName };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
+
+// ── ตรวจความถูกต้อง KLH DATA หลัง pricebook push + cleanup (อ่านอย่างเดียว) ──
+//  เรียกผ่าน ?diag=klh&k=klh2569 (ชั่วคราว) หรือรันใน editor
+function verifyKlhData() {
+  try {
+    var klh = klhDataSheet_();
+    var data = klh.getDataRange().getValues();
+    var n = data.length - 1;
+    var num = function(v){ var x=parseFloat(v); return isNaN(x)?0:x; };
+    var dupMap = {}, dups = [], noName = 0, noBarcode = 0;
+    var plu = 0, pluNoPrice = 0, noRetail = 0, negMargin = [], costNoRetail = 0;
+    var priceOk = 0;
+    for (var i=1;i<data.length;i++){
+      var bc = String(data[i][0]||'').trim();
+      var name = String(data[i][1]||'').trim();
+      if (!bc) noBarcode++;
+      else { if (dupMap[bc]) { if(dups.length<10) dups.push(bc+' '+name.slice(0,20)); } dupMap[bc]=(dupMap[bc]||0)+1; }
+      if (!name) noName++;
+      var cost=num(data[i][17]), retail=num(data[i][23]), whole=num(data[i][21]), calc=num(data[i][15]);
+      var isPlu = /^21\d{11}$/.test(bc);
+      if (isPlu) { plu++; if (cost===0&&retail===0&&whole===0&&calc===0) pluNoPrice++; }
+      if (retail===0 && whole===0) noRetail++;
+      if (cost>0 && retail>0) { priceOk++; if (retail<cost) { if(negMargin.length<10) negMargin.push(bc+' '+name.slice(0,18)+' ทุน'+cost+'>ปลีก'+retail); } }
+      if (cost>0 && retail===0 && whole===0) costNoRetail++;
+    }
+    var dupCount = 0; Object.keys(dupMap).forEach(function(k){ if(dupMap[k]>1) dupCount++; });
+    var negCount = 0;
+    for (var j=1;j<data.length;j++){ var c=num(data[j][17]), rt=num(data[j][23]); if (c>0&&rt>0&&rt<c) negCount++; }
+    // backup sheets
+    var baks = SpreadsheetApp.openById(SHEET_ID).getSheets()
+      .map(function(s2){ return s2.getName(); })
+      .filter(function(nm){ return nm.indexOf('KLHDATA_BAK_')===0; });
+    return { ok:true,
+      total:n, columns:data[0].length,
+      barcode_missing:noBarcode, name_missing:noName,
+      dup_barcodes:dupCount, dup_samples:dups,
+      plu_total:plu, plu_no_price_left:pluNoPrice,
+      no_price_at_all:noRetail, cost_but_no_sell:costNoRetail,
+      both_prices:priceOk, negative_margin:negCount, neg_samples:negMargin,
+      backups:baks };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
