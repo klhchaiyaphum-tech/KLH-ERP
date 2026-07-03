@@ -1497,8 +1497,37 @@ function bankDayPresence_(ymd) {
   return has;
 }
 
+// ── ดูดไฟล์แนบ statement จากอีเมลกรุงศรี → วางลงโฟลเดอร์ BANK_STATEMENTS (ท่อ import เดิมจัดการต่อ) ──
+//  รองรับบริการ e-Statement/CashLink ที่ธนาคารส่งอีเมลอัตโนมัติ (csv/xls/xlsx/zip/txt MT940)
+//  กันซ้ำด้วย label 'KLH-imported' บน thread ที่ดูดแล้ว
+function fetchBayStatementEmails(daysBack) {
+  try {
+    daysBack = Number(daysBack) || 3;
+    var since = Utilities.formatDate(new Date(Date.now() - daysBack*86400000), 'Asia/Bangkok', 'yyyy/MM/dd');
+    var lbl = GmailApp.getUserLabelByName('KLH-imported') || GmailApp.createLabel('KLH-imported');
+    var folder = stmtFolder_();
+    var saved = 0;
+    var threads = GmailApp.search('from:(krungsri.com OR krungsribizonline.com OR bay.co.th) has:attachment -label:KLH-imported after:' + since, 0, 20);
+    threads.forEach(function(th) {
+      var got = false;
+      th.getMessages().forEach(function(m) {
+        m.getAttachments().forEach(function(att) {
+          var nm = att.getName();
+          if (!/\.(csv|xlsx?|zip|txt)$/i.test(nm)) return;
+          folder.createFile(att.copyBlob().setName(nm));
+          saved++; got = true;
+        });
+      });
+      if (got) th.addLabel(lbl);
+    });
+    return { ok:true, saved:saved, msg:'ดูดไฟล์แนบจากอีเมลกรุงศรี ' + saved + ' ไฟล์ → BANK_STATEMENTS' };
+  } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
 // รายวัน 06:00: ดึง KTB รายวัน (MT940) + สรุปยอดสะสมส่ง LINE + เตือนถ้าเมื่อวานไม่มียอด
 function dailyBankJob() {
+  // 0) ถ้าธนาคารส่งอีเมล statement อัตโนมัติ (e-Statement/CashLink) → ดูดไฟล์แนบลงโฟลเดอร์ก่อน
+  try { fetchBayStatementEmails(3); } catch(eEm) {}
   // 1) ดูดไฟล์ statement ที่วางใน Drive ก่อน (กรุงศรี/กระแส/ฝากประจำ) — จะได้เข้าสรุปทัน + ยิง alert AR ในตัว
   try { importBayStatements(); } catch(eImp) {}
   var ktb = fetchKtbDaily(2);
