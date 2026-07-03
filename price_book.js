@@ -401,3 +401,60 @@ function verifyKlhData() {
       backups:baks };
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
+
+// ── สินค้าซ้ำ (ชื่อเหมือนกัน คนละบาร์โค้ด เช่น PLU เก่า vs บาร์โค้ดจริงจาก excel) ──
+function pbDupGroups(limit) {
+  try {
+    limit = Number(limit)||100;
+    var klh = klhDataSheet_(); var data = klh.getDataRange().getValues();
+    var sn = function(v){ var x=parseFloat(v); return isNaN(x)?0:x; };
+    var map = {};
+    for (var i=1;i<data.length;i++){
+      var name = String(data[i][1]||'').trim(); if (!name) continue;
+      var k = name.replace(/\s+/g,'').toLowerCase();
+      (map[k]=map[k]||[]).push({ bc:String(data[i][0]||''), name:name, size:String(data[i][2]||''),
+        cost:sn(data[i][17]), whole:sn(data[i][21]), retail:sn(data[i][23]),
+        plu:/^21\d{11}$/.test(String(data[i][0]||'')) });
+    }
+    var groups = [], total = 0;
+    Object.keys(map).forEach(function(k){
+      if (map[k].length>1){ total++; if (groups.length<limit) groups.push(map[k]); }
+    });
+    return { ok:true, total:total, shown:groups.length, groups:groups };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
+// ลบตัวซ้ำ: เก็บ keepBc ลบ delBcs — เติมราคาที่ขาดจากตัวที่ลบก่อน (เฉพาะช่องที่ตัวเก็บ=0)
+// backup อัตโนมัติวันละ 1 ชุด (KLHDATA_BAK_DUP_yyyymmdd)
+function pbResolveDup(keepBc, delBcs) {
+  try {
+    keepBc = String(keepBc||''); delBcs = (delBcs||[]).map(String);
+    if (!keepBc || !delBcs.length) return { ok:false, msg:'ข้อมูลไม่ครบ' };
+    if (delBcs.indexOf(keepBc)>=0) return { ok:false, msg:'บาร์โค้ดที่เก็บซ้ำกับที่ลบ' };
+    var klh = klhDataSheet_(); var data = klh.getDataRange().getValues();
+    var sn = function(v){ var x=parseFloat(v); return isNaN(x)?0:x; };
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var bak = 'KLHDATA_BAK_DUP_'+Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd');
+    if (!ss.getSheetByName(bak)) ss.insertSheet(bak).getRange(1,1,data.length,data[0].length).setValues(data);
+    var keepIdx = -1, delIdx = [];
+    for (var i=1;i<data.length;i++){
+      var bc = String(data[i][0]||'');
+      if (bc===keepBc) keepIdx = i;
+      else if (delBcs.indexOf(bc)>=0) delIdx.push(i);
+    }
+    if (keepIdx<0) return { ok:false, msg:'ไม่พบบาร์โค้ด '+keepBc };
+    if (!delIdx.length) return { ok:false, msg:'ไม่พบแถวที่จะลบ (อาจลบไปแล้ว)' };
+    // เติมราคา/ทุนที่ขาดจากตัวที่ลบ
+    var fills = [[15,'ทุนคำนวณ'],[17,'ทุน'],[21,'ส่ง'],[23,'ปลีก']], filled = [];
+    delIdx.forEach(function(di){
+      fills.forEach(function(f){
+        if (sn(data[keepIdx][f[0]])===0 && sn(data[di][f[0]])>0){
+          klh.getRange(keepIdx+1, f[0]+1).setValue(sn(data[di][f[0]]));
+          data[keepIdx][f[0]] = sn(data[di][f[0]]); filled.push(f[1]);
+        }
+      });
+    });
+    delIdx.sort(function(a,b){ return b-a; }).forEach(function(di){ klh.deleteRow(di+1); });
+    return { ok:true, msg:'ลบ '+delIdx.length+' รายการ · เก็บ '+keepBc+(filled.length?' · เติมที่ขาด: '+filled.join(', '):'')+' · backup: '+bak };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}

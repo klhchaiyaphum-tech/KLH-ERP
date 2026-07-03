@@ -69,6 +69,7 @@ body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","
   <input id="fQ" placeholder="ค้นชื่อสินค้า" style="width:160px" onkeydown="if(event.key==='Enter')resetLoad()">
   <button class="btn" onclick="resetLoad()">ค้นหา</button>
   <button class="gbtn" onclick="pushKlh()">⬆️ ส่งกลับ KLH DATA</button>
+  <button class="btn" style="color:#B26A00" onclick="loadDups()">🧹 ตรวจสินค้าซ้ำ</button>
   <button class="btn" onclick="goHome()">หลัก</button>
 </div>
 <div class="stats" id="stats"></div>
@@ -100,6 +101,66 @@ function loadStats(){
       +'<span class="s b-push">ส่งแล้ว '+s.pushed+'</span>';
   }).pbStats();
 }
+// ── 🧹 สินค้าซ้ำ (ชื่อเหมือน คนละบาร์โค้ด) — เลือกเก็บ 1 ลบที่เหลือ ทีละกลุ่ม ──
+function loadDups(){
+  document.getElementById('list').innerHTML='<div class="loading">กำลังหาสินค้าชื่อซ้ำใน KLH DATA...</div>';
+  document.getElementById('pager').innerHTML='';
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok){ document.getElementById('list').innerHTML='<div class="empty">'+esc((r&&r.msg)||'โหลดไม่ได้')+'</div>'; return; }
+    renderDups(r);
+  }).withFailureHandler(function(e){ document.getElementById('list').innerHTML='<div class="empty">'+esc(''+e)+'</div>'; })
+  .pbDupGroups(100);
+}
+function dupPrice(it){ return 'ทุน '+nf(it.cost)+' · ส่ง '+nf(it.whole)+' · ปลีก '+nf(it.retail); }
+function renderDups(r){
+  if(!r.groups.length){ document.getElementById('list').innerHTML='<div class="empty">🎉 ไม่พบสินค้าชื่อซ้ำ — KLH DATA สะอาดแล้ว</div>'; return; }
+  var h='<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13.5px">'
+    +'🧹 พบชื่อซ้ำ <b>'+r.total+'</b> กลุ่ม (แสดง '+r.shown+') — เลือก <b>ตัวที่เก็บ</b> แล้วกดลบที่เหลือ · ราคาที่ตัวเก็บไม่มี ระบบเติมจากตัวที่ลบให้ · มี backup อัตโนมัติ</div>';
+  r.groups.forEach(function(g,gi){
+    // ค่าเริ่มต้น: เก็บตัวที่ไม่ใช่ PLU และมีราคา (ถ้ามี)
+    var def=0; for(var i=0;i<g.length;i++){ if(!g[i].plu&&(g[i].retail>0||g[i].whole>0)){def=i;break;} if(!g[i].plu)def=i; }
+    h+='<div class="row" id="dupg-'+gi+'" style="display:block;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-weight:700;margin-bottom:8px">'+esc(g[0].name)+' <span style="color:#999;font-weight:400;font-size:12px">('+g.length+' รายการ)</span></div>';
+    g.forEach(function(it,ii){
+      h+='<label style="display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:13px;'+(ii===def?'background:#E8F5E9':'')+'">'
+        +'<input type="radio" name="keep-'+gi+'" value="'+esc(it.bc)+'"'+(ii===def?' checked':'')+' onchange="hlKeep('+gi+')">'
+        +'<span style="min-width:120px;font-family:monospace">'+esc(it.bc)+'</span>'
+        +(it.plu?'<span style="background:#FFE0B2;border-radius:6px;padding:1px 6px;font-size:11px">PLU</span>':'<span style="background:#C8E6C9;border-radius:6px;padding:1px 6px;font-size:11px">บาร์โค้ดจริง</span>')
+        +'<span style="color:#666">'+esc(it.size)+'</span>'
+        +'<span style="margin-left:auto;color:#444">'+dupPrice(it)+'</span></label>';
+    });
+    h+='<div style="margin-top:8px;display:flex;gap:8px">'
+      +'<button class="gbtn" style="background:#B26A00" onclick="resolveDup('+gi+')">🗑️ เก็บตัวที่เลือก ลบที่เหลือ ('+(g.length-1)+')</button>'
+      +'<button class="btn" onclick="document.getElementById(\'dupg-'+gi+'\').style.display=\'none\'">ข้ามกลุ่มนี้</button></div></div>';
+  });
+  h+='<div style="text-align:center;margin:14px"><button class="btn" onclick="loadDups()">🔄 โหลดกลุ่มถัดไป</button> <button class="btn" onclick="resetLoad()">กลับรายการ pricebook</button></div>';
+  document.getElementById('list').innerHTML=h;
+  window._dupGroups=r.groups;
+}
+function hlKeep(gi){
+  var box=document.getElementById('dupg-'+gi);
+  box.querySelectorAll('label').forEach(function(l){ l.style.background = l.querySelector('input').checked?'#E8F5E9':''; });
+}
+function resolveDup(gi){
+  var g=window._dupGroups[gi];
+  var keep=document.querySelector('input[name="keep-'+gi+'"]:checked');
+  if(!keep){ Swal.fire('เลือกตัวที่เก็บก่อน','','warning'); return; }
+  var keepBc=keep.value;
+  var delBcs=g.map(function(it){return it.bc;}).filter(function(bc){return bc!==keepBc;});
+  Swal.fire({title:'ยืนยันลบตัวซ้ำ?',
+    html:'<div style="text-align:left;font-size:13.5px"><b>'+esc(g[0].name)+'</b><br>✅ เก็บ: <code>'+esc(keepBc)+'</code><br>🗑️ ลบ: <code>'+delBcs.map(esc).join('</code>, <code>')+'</code><br><span style="color:#888;font-size:12px">ราคาที่ตัวเก็บไม่มี จะเติมจากตัวที่ลบให้ · มี backup</span></div>',
+    icon:'warning',showCancelButton:true,confirmButtonText:'ลบเลย',cancelButtonText:'ยกเลิก',confirmButtonColor:'#D9512B'})
+  .then(function(a){ if(!a.isConfirmed) return;
+    showOv();
+    google.script.run.withSuccessHandler(function(r){ hideOv();
+      if(r&&r.ok){ document.getElementById('dupg-'+gi).style.display='none';
+        Swal.fire({icon:'success',title:'ลบแล้ว',html:esc(r.msg),timer:2500,showConfirmButton:false}); }
+      else Swal.fire('ไม่สำเร็จ',esc((r&&r.msg)||''),'error');
+    }).withFailureHandler(function(e){ hideOv(); Swal.fire('Error',esc(''+e),'error'); })
+    .pbResolveDup(keepBc, delBcs);
+  });
+}
+
 function resetLoad(){ _off=0; load(); }
 function load(){
   document.getElementById('list').innerHTML='<div class="loading">กำลังโหลด...</div>';
