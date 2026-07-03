@@ -811,21 +811,39 @@ function forgetRule(row) {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
-// จัดหมวดตามกฎที่จำไว้ (batch) — คืนจำนวนที่เปลี่ยน
+// จัดหมวดตามกฎที่จำไว้ (batch) — คืนจำนวนที่เปลี่ยน · กฎที่ผูกเจ้าหนี้ 🏷️ → ตัดบิล AP อัตโนมัติ (FIFO)
 function applyBankRules_() {
   var s = bankSheet_(); if (s.getLastRow()<2) return 0;
   var rs = bankRulesSheet_(); if (rs.getLastRow()<2) return 0;
-  var rules = rs.getRange(2,1,rs.getLastRow()-1,3).getValues().filter(function(x){ return String(x[0]); });
+  var rules = rs.getRange(2,1,rs.getLastRow()-1,6).getValues().filter(function(x){ return String(x[0]); });
   if (!rules.length) return 0;
   var byKey = {}; rules.forEach(function(x){ byKey[String(x[0])] = x; });
   var rng = s.getRange(2,1,s.getLastRow()-1,10); var rows = rng.getValues(); var changed=0;
+  var apJobs = [];
   for (var i=0;i<rows.length;i++){
     var rk = ruleKeyFromDesc_(rows[i][5]); if (!rk) continue;
     var rule = byKey[rk]; if (!rule) continue;
     if (String(rows[i][4])!==rule[1]){ rows[i][4]=rule[1]; changed++; }
     if (rule[2] && String(rows[i][9])!==rule[2]) rows[i][9]=rule[2];
+    // กฎผูกเจ้าหนี้ + เงินออก + ยังไม่เคยตัด (ดูจาก note) → เก็บไว้ตัด AP หลังเขียนหมวดเสร็จ
+    if (String(rule[5]||'') && String(rows[i][2])==='OUT' && String(rows[i][7]||'') && !/ตัด AP/.test(String(rows[i][8]||''))) {
+      var jd = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM-dd') : String(rows[i][0]).slice(0,10);
+      apJobs.push({ row:i, key:String(rows[i][7]), sup:String(rule[5]), amt:Number(rows[i][3])||0, date:jd, bank:String(rows[i][1]||'') });
+    }
   }
-  rng.setValues(rows); return changed;
+  rng.setValues(rows);
+  // ตัด AP อัตโนมัติ (apPayFromBank กันซ้ำด้วย bankKey ใน REF — รันซ้ำปลอดภัย)
+  var apMsgs = [];
+  apJobs.forEach(function(j){
+    var r = apPayFromBank(j.key, j.sup, j.amt, j.date, j.bank);
+    if (r && r.ok) {
+      var old = String(rows[j.row][8]||'');
+      s.getRange(j.row+2, 9).setValue((old ? old+' · ' : '') + 'ตัด AP '+j.sup+' '+r.cut+' บิล'+(r.leftover>0.004?' (เกิน ฿'+r.leftover.toLocaleString()+')':''));
+      apMsgs.push('💳 ตัดเจ้าหนี้ '+j.sup+' ฿'+j.amt.toLocaleString()+' ('+j.date+') → '+r.msg);
+    }
+  });
+  if (apMsgs.length) { try { sendWmsLine_('🏷️ ตัดบิลเจ้าหนี้อัตโนมัติ:\n' + apMsgs.slice(0,8).join('\n――――\n') + (apMsgs.length>8 ? '\n…อีก '+(apMsgs.length-8)+' รายการ' : '')); } catch(eL){} }
+  return changed;
 }
 function applyBankRules() { return 'จัดหมวดตามกฎที่จำไว้ ' + applyBankRules_() + ' รายการ'; }
 

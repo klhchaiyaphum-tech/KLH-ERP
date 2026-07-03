@@ -90,6 +90,53 @@ function apPay(apId, amount, bank, account, ref, note, payDate) {
   } catch(e){ return { ok:false, msg:String(e) }; }
 }
 
+// ── ตัด AP อัตโนมัติจากรายการธนาคาร (ผูกเจ้าหนี้ผ่าน BANK_RULES 🧠🏷️) ──
+//  จัดสรรยอดจ่ายเข้าบิลค้างแบบ FIFO (ครบกำหนดเก่าสุดก่อน) · กันซ้ำด้วย bankKey ใน REF
+function apPayFromBank(bankKey, supCode, amount, payDate, bankCode) {
+  try {
+    var amt = Number(amount)||0;
+    if (amt<=0 || !supCode || !bankKey) return { ok:false, msg:'ข้อมูลไม่ครบ' };
+    if (String(payDate||'') && String(payDate) < apStartDate_()) return { ok:false, msg:'ก่อนวันเริ่มระบบ AP' };
+    var pay = apPaySheet_();
+    // กันซ้ำ: รายการธนาคารนี้เคยตัดแล้ว (REF = bankKey) → ข้าม (รันซ้ำได้ปลอดภัย)
+    if (pay.getLastRow()>1) {
+      var refs = pay.getRange(2,9,pay.getLastRow()-1,1).getValues();
+      for (var i=0;i<refs.length;i++){ if (String(refs[i][0])===String(bankKey)) return { ok:false, dup:true, msg:'ตัดไปแล้ว' }; }
+    }
+    var s = SpreadsheetApp.openById(SHEET_ID).getSheetByName(AP_SHEET);
+    if (!s || s.getLastRow()<=1) return { ok:false, msg:'ไม่มีบิลใน AP_LEDGER' };
+    var cutover = apStartDate_();
+    var rows = s.getDataRange().getValues();
+    var bills = [];
+    for (var r=1;r<rows.length;r++){
+      if (String(rows[r][2])!==String(supCode)) continue;
+      if ((Number(rows[r][9])||0)<=0) continue;
+      if (apDs_(rows[r][5]) < cutover) continue;
+      bills.push({ i:r, due:apDs_(rows[r][6])||apDs_(rows[r][5]), bal:Number(rows[r][9])||0 });
+    }
+    if (!bills.length) return { ok:false, msg:'ไม่มีบิลค้างของ '+supCode };
+    bills.sort(function(a,b){ return a.due<b.due?-1:1; });
+    var left = amt, cut = [];
+    var now = Utilities.formatDate(new Date(),'Asia/Bangkok','yyyyMMdd-HHmmss');
+    var dt = String(payDate||'') || Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd');
+    for (var b=0;b<bills.length && left>0.004;b++){
+      var take = Math.min(left, bills[b].bal), ri = bills[b].i;
+      var paid = (Number(rows[ri][8])||0) + take;
+      var bal  = Math.max(0, (Number(rows[ri][7])||0) - paid);
+      s.getRange(ri+1,9).setValue(paid);
+      s.getRange(ri+1,10).setValue(bal);
+      s.getRange(ri+1,11).setValue(bal<=0 ? 'PAID' : 'PARTIAL');
+      pay.appendRow(['APP-'+now+'-'+b, dt, String(supCode), String(rows[ri][3]||''), String(rows[ri][0]||''), take,
+        String(bankCode||''), '', String(bankKey), 'ตัดอัตโนมัติจากธนาคาร 🏷️']);
+      left = Math.round((left-take)*100)/100;
+      cut.push(String(rows[ri][0])+' ฿'+take.toLocaleString());
+    }
+    return { ok:true, cut:cut.length, bills:cut,
+      msg:'ตัด '+cut.length+' บิล ('+cut.join(', ')+')'+(left>0.004 ? ' ⚠️ ยอดเกินบิลค้าง ฿'+left.toLocaleString()+' (เช็คว่ามีบิลยังไม่สแกน OCR ไหม)' : ''),
+      leftover:left };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+
 // ประวัติจ่ายรายผู้ขาย (หรือทั้งหมดถ้า code ว่าง)
 function apPayHistory(code) {
   try {
