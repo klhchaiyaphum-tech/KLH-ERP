@@ -116,20 +116,24 @@ input:focus, select:focus, textarea:focus{border-color:#F6704C !important;box-sh
 
 <!-- Tab Nav -->
 <div class="tab-nav">
-  <button class="tab-btn active" onclick="switchTab('receive',this)"><i class="bi bi-box-arrow-in-down"></i> รับสินค้า</button>
-  <button class="tab-btn" onclick="switchTab('transfer',this)"><i class="bi bi-arrow-left-right"></i> โอนสินค้า</button>
-  <button class="tab-btn" onclick="switchTab('stock',this)"><i class="bi bi-bar-chart-line"></i> ดูสต็อก</button>
+  <button class="tab-btn active" onclick="switchTab('stock',this)"><i class="bi bi-bar-chart-line"></i> ดูสต็อก</button>
+  <button class="tab-btn" onclick="switchTab('transfer',this)"><i class="bi bi-arrow-left-right"></i> เติม/โอนสินค้า</button>
   <button class="tab-btn" onclick="switchTab('picklist',this)"><i class="bi bi-card-checklist"></i> Pick List</button>
+  <button class="tab-btn" onclick="switchTab('receive',this)"><i class="bi bi-box-arrow-in-down"></i> รับพิเศษ</button>
   <button class="tab-btn" onclick="switchTab('rop',this)"><i class="bi bi-sliders"></i> ตั้งค่า ROP</button>
 </div>
 
 <!-- ======================================================
      TAB 1: รับสินค้า
 ====================================================== -->
-<div id="panel-receive" class="tab-panel active">
+<div id="panel-receive" class="tab-panel">
   <div class="card mx-auto" style="max-width:600px">
-    <div class="card-header"><i class="bi bi-box-arrow-in-down me-2"></i>รับสินค้าเข้าคลัง</div>
+    <div class="card-header"><i class="bi bi-box-arrow-in-down me-2"></i>รับพิเศษ (ไม่มีใบกำกับ)</div>
     <div class="card-body">
+      <div class="alert alert-warning py-2 small mb-3">
+        ⚠️ ของเข้าปกติ <b>รับผ่านสแกนบิล (OCR)</b> — ระบบรับเข้าคลังให้อัตโนมัติแล้ว <b>ห้ามคีย์ซ้ำที่นี่</b><br>
+        หน้านี้ใช้เฉพาะ: ของแถมไม่มีบิล · ซื้อเงินสดไม่มีใบกำกับ · ของตัวอย่าง
+      </div>
       <div class="row g-3">
         <div class="col-12">
           <label class="form-label">รหัสสินค้า / บาร์โค้ด</label>
@@ -255,7 +259,7 @@ input:focus, select:focus, textarea:focus{border-color:#F6704C !important;box-sh
 <!-- ======================================================
      TAB 3: ดูสต็อก
 ====================================================== -->
-<div id="panel-stock" class="tab-panel">
+<div id="panel-stock" class="tab-panel active">
   <div class="card">
     <div class="card-header d-flex align-items-center gap-2 flex-wrap">
       <i class="bi bi-bar-chart-line"></i> สต็อกสินค้า

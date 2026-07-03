@@ -272,6 +272,8 @@ function consumeFifo_(sku, whId, needed) {
 
 // ── Batch Receive from Invoice OCR ────────────────────────────
 // เรียกจากหน้า OCR หลัง verify เสร็จ — รับสินค้าทีเดียวหลาย SKU
+// แปลงหน่วยใหญ่→ชิ้น อัตโนมัติจาก KLH DATA (E: MULTIPLIER · F: UNIT_BIG · AB: BARCODE_BIG)
+//  แปลงเมื่อมั่นใจเท่านั้น (ไม่เดา): บาร์โค้ดในบิล=บาร์โค้ดลัง หรือ หน่วยในบิลตรง UNIT_BIG/คำว่าลังหีบแพ็คโหล
 function batchReceiveFromInvoice(payload) {
   // payload = { items:[{barcode,productName,buyQty,freeQty,unit,unitPrice,costPerUnit}],
   //             recvNo, entity, whId, supplierName }
@@ -282,24 +284,40 @@ function batchReceiveFromInvoice(payload) {
     var totalQty = (Number(it.buyQty)||0) + (Number(it.freeQty)||0);
     if (totalQty <= 0) return;
     var costPer = Number(it.costPerUnit) || Number(it.unitPrice) || 0;
+
+    // หาข้อมูลสินค้า → ได้ SKU ชิ้น (กันบิลใช้บาร์โค้ดลังแล้วสต๊อกไปคนละตัวกับ POS) + ตัวคูณ
+    var info = lookupSkuForWms(it.barcode);
+    var sku = it.barcode, convRate = 1, unitLabel = it.unit || 'ชิ้น', convWhy = '';
+    if (info) {
+      sku = String(info.sku || it.barcode);   // เก็บใต้บาร์โค้ดชิ้นเสมอ (ตัวเดียวกับที่ POS ตัด)
+      var mult = Number(info.convRate) || 1;
+      var uInv = String(it.unit||'').trim(), uBig = String(info.unit||'').trim();
+      var isBigBarcode = info.barcodeLarge && String(it.barcode) === String(info.barcodeLarge);
+      var isBigUnit = mult > 1 && uInv && (uInv === uBig || /ลัง|หีบ|แพ็[คก]|โหล|กล่อง|แผง|มัด/.test(uInv));
+      if (mult > 1 && (isBigBarcode || isBigUnit)) {
+        convRate = mult; unitLabel = uInv || uBig || 'ลัง';
+        convWhy = isBigBarcode ? 'บาร์โค้ดลัง' : ('หน่วย ' + unitLabel);
+      }
+    }
     var d = {
-      sku:      it.barcode,
+      sku:      sku,
       whId:     payload.whId,
-      qty:      totalQty,     // รับชิ้นรวม (ซื้อ+แถม)
-      convRate: 1,            // ส่งเป็น piece แล้ว
-      baseUnit: it.unit || 'ชิ้น',
-      cost:     costPer,
+      qty:      totalQty,                  // จำนวนตามหน่วยในบิล
+      convRate: convRate,                  // >1 → receiveGoods แปลงเป็นชิ้น + ต้นทุน/ชิ้น ให้เอง
+      baseUnit: 'ชิ้น',
+      cost:     costPer,                   // ต้นทุน/หน่วยตามบิล
       ref:      payload.recvNo || '',
       entity:   payload.entity || '',
-      pName:    it.productName || it.barcode,
-      unit:     it.unit || 'ชิ้น',
+      pName:    it.productName || sku,
+      unit:     unitLabel,
       note:     'OCR Invoice: ' + (payload.supplierName||'') + (it.freeQty > 0 ? ' | แถม '+it.freeQty : '')
+                + (convRate > 1 ? ' | แปลง '+convWhy+' ×'+convRate : '')
     };
     var res = receiveGoods(d);
     if (res.ok) {
-      results.push({ sku: it.barcode, name: it.productName, qty: totalQty, newQty: res.newQty });
+      results.push({ sku: sku, name: it.productName, qty: totalQty * convRate, newQty: res.newQty });
     } else {
-      errors.push({ sku: it.barcode, msg: res.msg });
+      errors.push({ sku: sku, msg: res.msg });
     }
   });
   return {
@@ -461,14 +479,36 @@ function updatePickItem(plId, sku, qtyPicked) {
   } catch(e) { return { ok: false, msg: e.message }; }
 }
 
+// ปิด Pick List → โอนสต๊อกตามยอดที่หยิบจริง (whFrom→whTo) อัตโนมัติ ไม่ต้องไปกดโอนซ้ำ
 function completePickList(plId) {
   try {
     const s = sh_(SH_PL);
     const d = s.getDataRange().getValues();
+    var whFrom = '', whTo = '', items = [], already = false;
     for (let i = 1; i < d.length; i++) {
-      if (d[i][0] === plId) s.getRange(i+1,9).setValue('DONE');
+      if (d[i][0] !== plId) continue;
+      if (String(d[i][8]) === 'DONE') { already = true; continue; }   // กันปิดซ้ำ = โอนเบิ้ล
+      whFrom = String(d[i][2]||''); whTo = String(d[i][3]||'');
+      var picked = Number(d[i][7]) || 0;
+      if (picked > 0) items.push({ sku:String(d[i][4]), name:String(d[i][5]||''), qty:picked });
+      s.getRange(i+1,9).setValue('DONE');
     }
-    return { ok: true };
+    if (already && !items.length) return { ok:true, msg:'ใบนี้ปิดไปแล้ว (ไม่โอนซ้ำ)' };
+    // โอนสต๊อกจริงตามที่หยิบ — เฉพาะเมื่อระบุคลังต้นทาง/ปลายทางครบ
+    var moved = 0, errs = [];
+    if (whFrom && whTo && whFrom !== whTo) {
+      items.forEach(function(it){
+        var r = transferGoods({ sku:it.sku, fromWH:whFrom, toWH:whTo, qty:it.qty,
+          ref:plId, pName:it.name, unit:'ชิ้น', note:'ปิด Pick List '+plId });
+        if (r.ok) moved++; else errs.push(it.sku+': '+r.msg);
+      });
+    }
+    var msg = 'ปิด '+plId+' แล้ว';
+    if (moved) msg += ' · โอนสต๊อก '+whFrom+'→'+whTo+' ให้ '+moved+' รายการ';
+    else if (items.length && (!whFrom || !whTo)) msg += ' · ไม่ได้โอนสต๊อก (ใบนี้ไม่ระบุคลังต้นทาง/ปลายทาง)';
+    else if (!items.length) msg += ' · ไม่มียอดหยิบ (qtyPicked=0) จึงไม่โอนสต๊อก';
+    if (errs.length) msg += ' · ⚠️ โอนไม่ได้: '+errs.join(' | ');
+    return { ok: errs.length===0, msg: msg, moved: moved };
   } catch(e) { return { ok: false, msg: e.message }; }
 }
 
