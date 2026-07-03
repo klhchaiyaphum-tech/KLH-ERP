@@ -1518,7 +1518,7 @@ function dailyBankJob() {
       + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString()
       + (ktb && ktb.added ? '\n(KTB อีเมลใหม่ ' + ktb.added + ' รายการ)' : '');
     if (miss.length) msg += '\n\n⚠️ เมื่อวาน (' + yest + ') ยังไม่มียอด:\n   • ' + miss.join('\n   • ') + '\n→ เรียก/นำเข้า statement ให้ครบ';
-    sendWmsLine_(msg);
+    sendWmsLine_(msg, true);   // รายงานหลัก 06:00 — ส่งเสมอแม้ LINE_MUTE
   }
   return { ok: true, ktb: ktb, sum: sum, missingYesterday: miss };
 }

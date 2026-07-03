@@ -777,9 +777,30 @@ function seedTestData() {
 }
 
 // ── LINE Notification ─────────────────────────────────────────
-// ใช้ getConfig() (trim+uppercase key) ให้เหมือน testLinePush/pushLineGroup_ ที่ส่งได้จริง
-function sendWmsLine_(text) {
+// ประหยัดโควตา: CONFIG.LINE_MUTE=1 → ส่งเฉพาะที่ force=true (สรุปธนาคาร 06:00 + ยอดขาย 08:00)
+// ข้อความที่ถูกงดส่ง → เก็บลง Sheet LINE_MUTED_LOG (list ไว้เปิดคืนตอนมี LINE Premium)
+function lineMuted_() {
+  try { return String(getConfig().LINE_MUTE||'') === '1'; } catch(e){ return false; }
+}
+function lineMuteLog_(src, text) {
   try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var s = ss.getSheetByName('LINE_MUTED_LOG');
+    if (!s) { s = ss.insertSheet('LINE_MUTED_LOG');
+      s.getRange(1,1,1,3).setValues([['DATE','SOURCE','MESSAGE']]).setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+      s.setFrozenRows(1); }
+    s.appendRow([Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm'), String(src||''), String(text||'').slice(0,500)]);
+  } catch(e){}
+}
+// เปิด/ปิดการงดส่ง — รันใน editor: setLineMute(true) / setLineMute(false)
+function setLineMute(on) {
+  setConfigValue_('LINE_MUTE', (on===false||on==='0') ? '0' : '1');
+  return (on===false||on==='0') ? 'เปิดส่ง LINE ทุกระบบตามปกติ' : 'งดส่ง LINE แล้ว (เหลือเฉพาะสรุปธนาคาร 06:00 + ยอดขาย 08:00) · ที่งดจะเก็บใน LINE_MUTED_LOG';
+}
+// ใช้ getConfig() (trim+uppercase key) ให้เหมือน testLinePush/pushLineGroup_ ที่ส่งได้จริง
+function sendWmsLine_(text, force) {
+  try {
+    if (!force && lineMuted_()) { lineMuteLog_('WMS/ระบบหลัก', text); return; }
     var cfg = getConfig();
     var token = cfg.LINE_CHANNEL_TOKEN;
     var gid   = cfg.LINE_GROUP_ID || 'C9936ac4af81efc524493fe83a0a7b328';

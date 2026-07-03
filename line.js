@@ -30,6 +30,7 @@ function getLineShopConfig() {
 // ── ส่งข้อความเข้ากลุ่ม LINE (ออเดอร์ใหม่ + อัปเดตสถานะ) ──
 function pushLineGroup_(text) {
   try {
+    if (lineMuted_()) { lineMuteLog_('LINE Shop/ออเดอร์', text); return; }
     var cfg = getConfig();
     var token = cfg.LINE_CHANNEL_TOKEN;
     var gid   = cfg.LINE_GROUP_ID || 'C9936ac4af81efc524493fe83a0a7b328';
@@ -352,38 +353,88 @@ function lineGetMyAr(custId) {
   } catch (e) { return { ok:false, msg:String(e) }; }
 }
 
-// สมาชิก LINE ชำระหนี้ออนไลน์ (แนบสลิป → ตรวจ Gemini → ถ้ายอดตรงตัดให้เลย ไม่ตรงแจ้งแอดมิน)
+// ── ด่านตรวจสลิปก่อนตัดเงินอัตโนมัติ (ต้องผ่านทุกข้อ ไม่งั้น "รอตรวจ" เสมอ) ──
+//  1 เป็นสลิปจริง (isSlip=true) · 2 ยอดตรง · 3 ผู้รับเป็นร้าน (KLH/เค แอล เอช)
+//  4 สลิปไม่เก่าเกิน 3 วัน/ไม่ล่วงหน้า · 5 เลขอ้างอิงไม่เคยใช้ (กันสลิปใบเดียวจ่ายหลายรอบ)
+function slipGuard_(verify, expectedAmount, refTag) {
+  var reasons = [];
+  if (!verify || verify.error) return { pass:false, isSlip:true, reasons:['ระบบตรวจสลิปไม่ทำงาน ('+((verify&&verify.error)||'ไม่มีผล')+')'] };
+  if (verify.isSlip !== true) return { pass:false, isSlip:false, reasons:['ไม่ใช่สลิปโอนเงิน'] };
+  var amt = Number(verify.amount)||0;
+  if (!(amt>0)) reasons.push('อ่านยอดเงินไม่ได้');
+  else if (Math.abs(amt - Number(expectedAmount)) >= 1) reasons.push('ยอดไม่ตรง (สลิป ฿'+amt+' / ต้องชำระ ฿'+expectedAmount+')');
+  // ผู้รับต้องเป็นร้านเรา
+  var rcv = String(verify.receiver||'').toUpperCase().replace(/\s+/g,'');
+  if (!/KLH|เคแอลเอช/.test(rcv)) reasons.push('ชื่อผู้รับไม่ใช่ร้าน ('+(verify.receiver||'อ่านไม่ได้')+')');
+  // วันที่สลิป (dd/mm/yyyy พ.ศ. หรือ ค.ศ.) — เก่าเกิน 3 วัน หรือล่วงหน้า = ผิดปกติ
+  var dm = String(verify.date||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (dm) {
+    var sy = Number(dm[3]); if (sy < 100) sy += 2500; if (sy > 2400) sy -= 543;
+    var sd = new Date(sy, Number(dm[2])-1, Number(dm[1]));
+    var diff = (new Date() - sd) / 86400000;
+    if (diff > 3) reasons.push('สลิปเก่า ('+verify.date+')');
+    if (diff < -1) reasons.push('วันที่สลิปล่วงหน้า ('+verify.date+')');
+  } else reasons.push('อ่านวันที่ในสลิปไม่ได้');
+  // เลขอ้างอิงซ้ำ = สลิปใบเดิมถูกใช้แล้ว
+  var ref = String(verify.refNo||'').replace(/\s+/g,'');
+  if (ref) {
+    if (slipRefUsed_(ref)) reasons.push('สลิปนี้เคยใช้แล้ว (เลขอ้างอิงซ้ำ)');
+  } else reasons.push('อ่านเลขอ้างอิงไม่ได้');
+  var pass = reasons.length === 0;
+  if (pass && ref) slipRefRecord_(ref, refTag, amt);
+  return { pass:pass, isSlip:true, reasons:reasons, amt:amt };
+}
+function slipRefSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('SLIP_REFS');
+  if (!s) { s = ss.insertSheet('SLIP_REFS');
+    s.getRange(1,1,1,4).setValues([['REF_NO','DATE','ORDER/AR','AMOUNT']]).setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    s.setFrozenRows(1); }
+  return s;
+}
+function slipRefUsed_(ref) {
+  var s = slipRefSheet_(); if (s.getLastRow()<2) return false;
+  var v = s.getRange(2,1,s.getLastRow()-1,1).getValues();
+  for (var i=0;i<v.length;i++){ if (String(v[i][0])===ref) return true; }
+  return false;
+}
+function slipRefRecord_(ref, tag, amt) {
+  try { slipRefSheet_().appendRow([ref, Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm'), String(tag||''), amt]); } catch(e){}
+}
+
+// สมาชิก LINE ชำระหนี้ออนไลน์ (แนบสลิป → ตรวจเข้ม → ผ่านทุกข้อค่อยตัด ไม่ผ่าน=รอแอดมินตรวจ)
 function linePayArSlip(custId, arId, amount, base64, mimeType) {
   try {
     var verify = verifySlipGemini(base64, mimeType, amount);
+    var g = slipGuard_(verify, amount, 'AR:'+arId);
+    if (!g.isSlip) return { ok:true, matched:false, isSlip:false, msg:'รูปนี้ไม่ใช่สลิปโอนเงิน กรุณาแนบสลิปจริง' };
     saveSlipToDrive(base64, mimeType, arId);
-    var amt = (verify && verify.amount) ? Number(verify.amount) : 0;
-    var matched = amt && Math.abs(amt - Number(amount)) < 1;
-    if (matched) {
+    if (g.pass) {
       payArEntry(arId, Number(amount));
-      pushLineGroup_('💰 ลูกค้าชำระหนี้ออนไลน์ (ยอดตรง ✅)\nAR: ' + arId + '\nลูกค้า: ' + custId
+      pushLineGroup_('💰 ลูกค้าชำระหนี้ออนไลน์ (ผ่านตรวจ ✅)\nAR: ' + arId + '\nลูกค้า: ' + custId
         + '\nยอด: ฿' + Number(amount).toLocaleString('th-TH') + '\nตัดยอดให้อัตโนมัติแล้ว');
-      return { ok:true, matched:true, msg:'ชำระสำเร็จ — ยอดตรง ตัดหนี้ให้แล้ว' };
+      return { ok:true, matched:true, msg:'ชำระสำเร็จ — ตรวจสลิปผ่าน ตัดหนี้ให้แล้ว' };
     }
-    pushLineGroup_('⚠️ ลูกค้าแนบสลิปชำระหนี้ (รอตรวจ)\nAR: ' + arId + '\nลูกค้า: ' + custId
-      + '\nต้องชำระ ฿' + Number(amount).toLocaleString('th-TH') + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH')) : '')
-      + '\nโปรดตรวจสอบและตัดยอดที่แคชเชียร์');
-    return { ok:true, matched:false, msg:'รับสลิปแล้ว แอดมินจะตรวจสอบและตัดยอดให้' };
+    pushLineGroup_('⚠️ สลิปชำระหนี้ไม่ผ่านตรวจ (รอแอดมิน)\nAR: ' + arId + '\nลูกค้า: ' + custId
+      + '\nต้องชำระ ฿' + Number(amount).toLocaleString('th-TH')
+      + '\nเหตุ: ' + g.reasons.join(' · ') + '\nโปรดตรวจสอบและตัดยอดที่แคชเชียร์');
+    return { ok:true, matched:false, msg:'รับสลิปแล้ว รอแอดมินตรวจสอบก่อนตัดยอด' };
   } catch (e) { return { ok:false, msg:String(e) }; }
 }
 
-// แนบสลิปกับออเดอร์ LINE (ตรวจ Gemini + เซฟ Drive — ใช้ของเดิม)
+// แนบสลิปกับออเดอร์ LINE (ตรวจเข้ม slipGuard_ — ผ่านทุกข้อค่อย PAID ไม่ผ่าน=PENDING รอแคชเชียร์)
 function lineAttachSlip(orderId, base64, mimeType, expectedAmount) {
   try {
     var verify = verifySlipGemini(base64, mimeType, expectedAmount) || {};
+    var g = slipGuard_(verify, expectedAmount, 'ORDER:'+orderId);
     // รูปนี้ไม่ใช่สลิปโอนเงิน → ปฏิเสธ ไม่บันทึก
-    if (verify.isSlip === false) {
+    if (!g.isSlip) {
       return { ok: true, isSlip: false, matched: false, msg: 'รูปนี้ไม่ใช่สลิปโอนเงิน' };
     }
     var saved   = saveSlipToDrive(base64, mimeType, orderId) || {};
     var slipUrl = saved.url || '';
-    var amt     = verify.amount ? Number(verify.amount) : 0;
-    var matched = amt && Math.abs(amt - Number(expectedAmount)) < 1;
+    var amt     = g.amt || 0;
+    var matched = g.pass;
     // อัปเดตออเดอร์ + เก็บลิงก์สลิป + แจ้งกลุ่ม (แคชเชียร์เปิดดูสลิป/ยอดได้)
     try {
       var s = _ordSheet_(), row = _ordRow_(s, orderId);
@@ -392,22 +443,23 @@ function lineAttachSlip(orderId, base64, mimeType, expectedAmount) {
         var note = String(s.getRange(row, 15).getValue() || '');
         var add  = ' | SLIP:' + slipUrl + (amt ? (' | สลิปยอด:' + amt) : '');
         if (matched) {
-          s.getRange(row, 13).setValue('PAID');                 // ยอดตรง → ชำระแล้วอัตโนมัติ
-          s.getRange(row, 15).setValue(note + add + ' (ยอดตรง)');
-          pushLineGroup_('💰 โอนออนไลน์ ยอดตรง ✅\n' + orderId + '\nลูกค้า: ' + cust
+          s.getRange(row, 13).setValue('PAID');                 // ผ่านตรวจครบทุกข้อ → ชำระแล้ว
+          s.getRange(row, 15).setValue(note + add + ' (ผ่านตรวจ)');
+          pushLineGroup_('💰 โอนออนไลน์ ผ่านตรวจ ✅\n' + orderId + '\nลูกค้า: ' + cust
             + '\nยอด ฿' + Number(expectedAmount).toLocaleString('th-TH')
             + (verify.bank ? ('\nธนาคาร: ' + verify.bank) : '')
             + '\nสลิป: ' + slipUrl + '\nสถานะ: ชำระแล้ว — เตรียมจัดของได้');
         } else {
-          s.getRange(row, 15).setValue(note + add + ' (รอตรวจ)');  // คงสถานะ PENDING
-          pushLineGroup_('⚠️ แนบสลิป รอแคชเชียร์ตรวจ\n' + orderId + '\nลูกค้า: ' + cust
+          s.getRange(row, 15).setValue(note + add + ' (รอตรวจ: ' + g.reasons.join('/') + ')');  // คงสถานะ PENDING
+          pushLineGroup_('⚠️ สลิปไม่ผ่านตรวจ รอแคชเชียร์\n' + orderId + '\nลูกค้า: ' + cust
             + '\nต้องชำระ ฿' + Number(expectedAmount).toLocaleString('th-TH')
-            + (amt ? ('\nยอดในสลิป ฿' + amt.toLocaleString('th-TH') + ' (ไม่ตรง)') : '\n(อ่านยอดในสลิปไม่ได้)')
+            + '\nเหตุ: ' + g.reasons.join(' · ')
             + '\nสลิป: ' + slipUrl + '\nกดดูสลิป + ยืนยันที่แคชเชียร์');
         }
       }
     } catch (eU) { Logger.log('lineAttachSlip update: ' + eU); }
-    return { ok: true, isSlip: true, matched: matched, amt: amt, slipUrl: slipUrl };
+    return { ok: true, isSlip: true, matched: matched, amt: amt, slipUrl: slipUrl,
+             msg: matched ? 'ผ่านตรวจ' : ('รอตรวจ: ' + g.reasons.join(' · ')) };
   } catch (e) {
     return { ok: false, msg: e.message };
   }
