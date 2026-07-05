@@ -71,10 +71,11 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);}
       </div>
       <div class="row">
         <div class="fld"><span>เลขเช็ค</span><input id="cNo" placeholder="เช่น 0057282580" style="width:150px"></div>
-        <div class="fld"><span>สั่งจ่ายใคร (เจ้าหนี้)</span>
-          <input id="cPayee" placeholder="พิมพ์ค้นชื่อเจ้าหนี้..." style="width:230px" oninput="supSearch(this.value)" autocomplete="off">
+        <div class="fld" style="position:relative"><span>สั่งจ่ายใคร (ค้นจาก Supplier Master)</span>
+          <input id="cPayee" placeholder="🔍 พิมพ์ค้นชื่อเจ้าหนี้..." style="width:240px" oninput="supSearch(this.value)" onfocus="supSearch(this.value)" autocomplete="off">
           <input type="hidden" id="cPayeeCode">
-          <div id="supDd" style="display:none;position:absolute;margin-top:52px;background:#fff;border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);max-height:220px;overflow:auto;z-index:60;min-width:260px"></div>
+          <div id="supDd" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:#fff;border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);max-height:240px;overflow:auto;z-index:60;min-width:290px"></div>
+          <span id="supStat" style="font-size:11px;color:var(--ink3)"></span>
         </div>
         <div class="fld"><span>จำนวนเงิน (฿)</span><input id="cAmt" type="number" step="0.01" min="0" style="width:120px"></div>
         <div class="fld"><span>วันที่สั่งจ่าย</span><input id="cIssue" type="date" style="width:140px"></div>
@@ -113,7 +114,7 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);}
 </div>
 
 <script>
-var _execUrl='', _sup=[], _supLoaded=false;
+var _execUrl='', _sup=[], _supLoaded=false, _supLoading=false;
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
 function go(p){ if(_execUrl) window.top.location.href=_execUrl+'?page='+p; else window.location.href='?page='+p; }
@@ -123,7 +124,8 @@ function msg(ok,t){ document.getElementById('msg').innerHTML='<div class="'+(ok?
   var d=new Date();
   document.getElementById('cIssue').value=d.toISOString().slice(0,10);
   google.script.run.withSuccessHandler(function(u){_execUrl=u||'';}).withFailureHandler(function(){}).getExecUrl();
-  google.script.run.withSuccessHandler(function(r){ _sup=(r&&r.items)||[]; _supLoaded=true; }).withFailureHandler(function(){}).bankSupplierList();
+  google.script.run.withSuccessHandler(function(r){ _sup=(r&&r.items)||[]; _supLoaded=true;
+    document.getElementById('supStat').textContent=_sup.length+' รายจาก SUPPLIER_MASTER'; }).withFailureHandler(function(){}).bankSupplierList();
   load();
 })();
 
@@ -164,8 +166,21 @@ function ocrChq(input){
 function supSearch(q){
   var dd=document.getElementById('supDd');
   q=(q||'').trim().toLowerCase();
-  if(!q||!_supLoaded){ dd.style.display='none'; return; }
-  var hits=_sup.filter(function(s){ return (s.name+s.code).toLowerCase().indexOf(q)>=0; }).slice(0,10);
+  if(!_supLoaded){
+    dd.innerHTML='<div style="padding:10px 12px;font-size:12.5px;color:#888">⏳ กำลังโหลดรายชื่อเจ้าหนี้จาก Supplier Master...</div>';
+    dd.style.display='block';
+    if(!_supLoading){ _supLoading=true;
+      google.script.run.withSuccessHandler(function(r){ _sup=(r&&r.items)||[]; _supLoaded=true; _supLoading=false;
+        document.getElementById('supStat').textContent=_sup.length+' รายจาก SUPPLIER_MASTER';
+        supSearch(document.getElementById('cPayee').value); })
+      .withFailureHandler(function(){ _supLoading=false; dd.innerHTML='<div style="padding:10px 12px;color:#D9512B;font-size:12.5px">โหลดรายชื่อไม่สำเร็จ — ลองใหม่</div>'; })
+      .bankSupplierList(); }
+    return;
+  }
+  // ช่องว่าง (แค่กดเข้ามา) → โชว์ 10 รายแรกให้เห็นว่าค้นได้
+  var hits = q
+    ? _sup.filter(function(s){ return (s.name+s.code).toLowerCase().indexOf(q)>=0; }).slice(0,10)
+    : _sup.slice(0,10);
   if(!hits.length){
     // ทั้งท่อนไม่เจอ (เช่นชื่อจาก OCR ลายมือ) → แตกคำ เจอคำไหนก็นับ
     var toks=q.split(/[\s\.\,\(\)\/]+/).filter(function(t){ return t.length>=3 && !/บริษัท|จำกัด|มหาชน|บจก|บมจ|หจก/.test(t); });
@@ -177,12 +192,17 @@ function supSearch(q){
         .sort(function(a,b){ return b.sc-a.sc; }).slice(0,10).map(function(x){ return x.s; });
     }
   }
-  if(!hits.length){ dd.style.display='none'; return; }
+  var foot='<div style="padding:7px 12px;border-top:1px solid #eee;font-size:12px"><a href="#" onclick="openSupMaster();return false" style="color:#3A37C9;text-decoration:none">🔍 เปิด Supplier Master (แท็บใหม่) — เพิ่ม/แก้เจ้าหนี้</a></div>';
+  if(!hits.length){
+    dd.innerHTML='<div style="padding:10px 12px;font-size:12.5px;color:#D9512B">ไม่พบ "'+esc(q)+'" ใน Supplier Master</div>'+foot;
+    dd.style.display='block'; return;
+  }
   dd.innerHTML=hits.map(function(s){
     return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f2ede2;font-size:13px" onclick="pickSup(\''+esc(s.code)+'\',\''+esc(s.name)+'\')"><b>'+esc(s.name)+'</b> <span class="muted" style="font-size:11px">'+esc(s.code)+'</span></div>';
-  }).join('');
+  }).join('')+foot;
   dd.style.display='block';
 }
+function openSupMaster(){ if(_execUrl) window.open(_execUrl+'?page=supplier','_blank'); else window.open('?page=supplier','_blank'); }
 function pickSup(code,name){
   document.getElementById('cPayee').value=name;
   document.getElementById('cPayeeCode').value=code;
