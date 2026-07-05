@@ -485,8 +485,10 @@ function saveInvoice(d) {
     writeApLedger_(ss, d);
 
     // ── รับเข้าคลัง WMS อัตโนมัติ (STOCK_LOG + FIFO + Cost_Avg + ROP) ──
+    // d.skipWms = true → บันทึกเฉพาะ AP/ราคา (ช่วงสำรวจที่สินค้ายังจับคู่ไม่ครบ สต๊อกค่อยตามทีหลัง)
     var wms = { ok: false, msg: 'skip' };
-    try {
+    if (d.skipWms) { wms = { ok: true, msg: 'AP อย่างเดียว — ไม่เข้าคลัง (ผู้ใช้เลือก)' }; }
+    else try {
       wms = batchReceiveFromInvoice({
         recvNo: d.recvNo, entity: d.entity || '', whId: d.whId || 'W1',
         supplierName: d.supplierName || '',
@@ -627,42 +629,159 @@ function initApSheets_() {
 }
 
 // ── Supplier Lookup from SUPPLIER_MASTER ──────────────────────
+// ── Normalize ชื่อบริษัท: ตัดคำนำหน้า/ท้าย + ช่องว่าง เพื่อเทียบกันได้ ──
+function ocrNormCompany_(s) {
+  return String(s||'').replace(/บริษัท|บจก\.?|บมจ\.?|หจก\.?|ห้างหุ้นส่วนจำกัด|จำกัด|\(มหาชน\)|มหาชน|จก\.?|ฯ/g, '')
+    .replace(/[\s\.\,\/\(\)]+/g, '').toLowerCase();
+}
 function lookupSupplierForOcr(nameFragment) {
   try {
     var ss    = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName('SUPPLIER_MASTER');
     if (!sheet || sheet.getLastRow() <= 1) return { exact: null, similar: [] };
     var rows = sheet.getDataRange().getValues().slice(1);
-    var q    = String(nameFragment || '').toLowerCase().trim();
-    if (!q) return { exact: null, similar: [] };
+    var raw  = String(nameFragment || '').trim();
+    if (!raw) return { exact: null, similar: [] };
+    var q  = raw.toLowerCase();
+    var qn = ocrNormCompany_(raw);
 
-    var exact = null, similar = [];
+    // 1) เคยจำไว้ (SUPPLIER_ALIAS จากการเลือกครั้งก่อน) → คืนทันที
+    try {
+      var aliases = apLoadAliases_();
+      var hit = aliases[raw] || aliases[q] || null;
+      if (hit) {
+        for (var a=0;a<rows.length;a++){
+          if (String(rows[a][0])===String(hit)) {
+            return { exact: { code:String(rows[a][0]), name:String(rows[a][1]), tel:String(rows[a][4]||''), aliasHit:true }, similar: [] };
+          }
+        }
+      }
+    } catch(eA) {}
+
+    // 2) ให้คะแนน: ชื่อ normalize ตรงกัน > ชื่อหนึ่งอยู่ในอีกชื่อ > โทเคนบางส่วนตรง
+    var scored = [];
     rows.forEach(function(r) {
-      var name = String(r[1] || '').toLowerCase();
-      var item = { code: String(r[0]||''), name: String(r[1]||''), contact: String(r[2]||''), tel: String(r[4]||'') };
-      if (!name) return;
-      if (name === q) { exact = item; }
-      else if (name.indexOf(q.substring(0,5)) >= 0 || q.indexOf(name.substring(0,5)) >= 0) { similar.push(item); }
+      var name = String(r[1] || ''); if (!name) return;
+      var nl = name.toLowerCase(), nn = ocrNormCompany_(name);
+      var sc = 0;
+      if (nl === q || (nn && nn === qn)) sc = 100;
+      else if (nn && qn && (qn.indexOf(nn) >= 0 || nn.indexOf(qn) >= 0)) sc = 60;
+      else if (nl.indexOf(q) >= 0 || q.indexOf(nl) >= 0) sc = 50;
+      else {
+        // โทเคนจากคำค้น (เช่น "เบนส์" ใน "บจก. เบนส์คอมเมอร์เชียลกรุ๊ป")
+        var toks = raw.split(/[\s\.\,\/\(\)]+/).filter(function(t){ return t.length >= 3 && !/บริษัท|จำกัด|มหาชน|บจก|บมจ|หจก/.test(t); });
+        toks.forEach(function(t){ var tl=t.toLowerCase();
+          if (nl.indexOf(tl) >= 0 || nn.indexOf(ocrNormCompany_(t)) >= 0) sc += 20;
+          else if (tl.length >= 4 && (nl.indexOf(tl.slice(0,4)) >= 0)) sc += 8;   // คำต้นเหมือน (เบนส์~เบน)
+        });
+      }
+      if (sc > 0) scored.push({ sc:sc, item:{ code:String(r[0]||''), name:name, contact:String(r[2]||''), tel:String(r[4]||'') } });
     });
-    return { exact: exact, similar: similar.slice(0, 5) };
+    scored.sort(function(a,b){ return b.sc - a.sc; });
+    var exact = (scored.length && scored[0].sc >= 100) ? scored[0].item : null;
+    var similar = scored.slice(exact?1:0, exact?9:8).map(function(x){ return x.item; });
+    return { exact: exact, similar: similar };
   } catch(e) { return { exact: null, similar: [] }; }
 }
 
-// ── Product Lookup from KLH DATA ─────────────────────────────
-function lookupProductsForOcr(code, name) {
+// ── PRODUCT_ALIAS: จำการจับคู่ (ผู้ขาย + ชื่อสินค้าในบิล) → บาร์โค้ด KLH ──
+function ocrAliasSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var s = ss.getSheetByName('PRODUCT_ALIAS');
+  if (!s) { s = ss.insertSheet('PRODUCT_ALIAS');
+    s.getRange(1,1,1,4).setValues([['SUP_CODE','OCR_NAME','BARCODE','CREATED']]).setFontWeight('bold').setBackground('#1A237E').setFontColor('#fff');
+    s.setFrozenRows(1); }
+  return s;
+}
+function ocrProdKey_(supCode, ocrName) {
+  return String(supCode||'').trim() + '|' + String(ocrName||'').replace(/\s+/g,'').toLowerCase();
+}
+// บันทึกการจับคู่ (เรียกตอนผู้ใช้เลือกสินค้าในหน้า OCR) — upsert
+function ocrSaveProductAlias(supCode, ocrName, barcode) {
   try {
-    var rows = searchProductsFromSheet(code && code.length > 2 ? code : (name || ''));
-    if (!rows.length && code && name) rows = searchProductsFromSheet(name.substring(0, 6));
-    return rows.slice(0, 5).map(function(p) {
-      return {
-        barcode: p.barcode, name: p.name,
-        packMult: p.packMult, packUnit: p.packUnit,
-        buyPrice: p.buy_price, costFinal: p.cost_final,
-        retailPrice: p.retail_price, wholesalePrice: p.wholesale_price,
-        buyQty: p.buy_qty, freeQty: p.free_qty, taxEntity: p.tax_entity
-      };
+    ocrName = String(ocrName||'').trim();
+    if (!ocrName || !barcode) return { ok:false };
+    var s = ocrAliasSheet_();
+    var key = ocrProdKey_(supCode, ocrName);
+    if (s.getLastRow() > 1) {
+      var v = s.getRange(2,1,s.getLastRow()-1,3).getValues();
+      for (var i=0;i<v.length;i++){
+        if (ocrProdKey_(v[i][0], v[i][1]) === key) { s.getRange(i+2,3).setValue(String(barcode)); return { ok:true, updated:true }; }
+      }
+    }
+    s.appendRow([String(supCode||''), ocrName, String(barcode), Utilities.formatDate(new Date(),'Asia/Bangkok','yyyy-MM-dd HH:mm')]);
+    return { ok:true };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
+// จับคู่จากที่จำไว้ทีเดียวหลายรายการ (เรียกตอนเลือกผู้ขายเสร็จ) → { ocrName: {barcode,name,...} }
+function ocrAliasMatchBatch(supCode, names) {
+  try {
+    var s = ocrAliasSheet_(); if (s.getLastRow() < 2) return { ok:true, matches:{} };
+    var v = s.getRange(2,1,s.getLastRow()-1,3).getValues();
+    var map = {};
+    v.forEach(function(r){ map[ocrProdKey_(r[0], r[1])] = String(r[2]); });
+    var out = {};
+    (names||[]).forEach(function(nm){
+      var bc = map[ocrProdKey_(supCode, nm)] || map[ocrProdKey_('', nm)];
+      if (!bc) return;
+      var rows = searchProductsFromSheet(bc);
+      if (rows.length) {
+        var p = rows[0];
+        out[nm] = { barcode:p.barcode, name:p.name, packMult:p.packMult, packUnit:p.packUnit,
+                    buyPrice:p.buy_price, costFinal:p.cost_final };
+      }
+    });
+    return { ok:true, matches:out };
+  } catch(e){ return { ok:false, matches:{}, msg:String(e) }; }
+}
+
+// ── Product Lookup from KLH DATA (token search — ชื่อบิลไม่ตรงทั้งท่อนก็เจอ) ──
+var OCR_STOPWORDS_ = /^(กล่อง|ลัง|ซอง|แพ็ค|แพ็ก|แพค|โหล|ชิ้น|ขวด|ถุง|แผง|กระปุก|กระป๋อง|ห่อ|มัด|อัน|ใบ|ก|กรัม|กก|มล|ลิตร|cc|ml|g|kg|x)$/i;
+function lookupProductsForOcr(code, name, supCode) {
+  try {
+    // 0) เคยจำคู่นี้ไว้ → คืนตัวเดียวพร้อมธง aliasHit (🧠)
+    if (name && String(name).trim()) {
+      var am = ocrAliasMatchBatch(supCode||'', [String(name).trim()]);
+      var hit = am && am.matches && am.matches[String(name).trim()];
+      if (hit) { hit.aliasHit = true; return [hit]; }
+    }
+    // 1) มีรหัส/บาร์โค้ด → ค้นตรง
+    if (code && code.length > 2) {
+      var byCode = searchProductsFromSheet(code);
+      if (byCode.length) return byCode.slice(0,8).map(ocrMapProd_);
+    }
+    // 2) ค้นทั้งท่อนก่อน (เผื่อชื่อตรง)
+    var whole = name ? searchProductsFromSheet(name) : [];
+    if (whole.length) return whole.slice(0,8).map(ocrMapProd_);
+    // 3) token search: แตกชื่อบิลเป็นคำ ตัดคำบรรจุ/ตัวเลข → ให้คะแนนตามจำนวนคำที่พบในชื่อ KLH
+    var toks = String(name||'').split(/[\s\/\-\(\)\.\,\*x×0-9]+/)
+      .filter(function(t){ return t.length >= 2 && !OCR_STOPWORDS_.test(t); });
+    if (!toks.length) return [];
+    var klh = klhDataSheet_(); var data = klh.getDataRange().getValues();
+    var scored = [];
+    for (var i=1;i<data.length;i++){
+      var nm = String(data[i][1]||''); if (!nm) continue;
+      var nl = nm.toLowerCase(), sc = 0;
+      toks.forEach(function(t){ if (nl.indexOf(t.toLowerCase()) >= 0) sc++; });
+      if (sc > 0) scored.push({ sc:sc, i:i });
+    }
+    scored.sort(function(a,b){ return b.sc - a.sc; });
+    return scored.slice(0,8).map(function(x){
+      var r = data[x.i];
+      var sn = function(v){ var n=parseFloat(v); return isFinite(n)?n:0; };
+      return { barcode:String(r[0]||''), name:String(r[1]||''), size:String(r[3]||''),
+               packMult:sn(r[4])||1, packUnit:String(r[5]||''),
+               buyPrice:sn(r[8]), costFinal:sn(r[17]),
+               retailPrice:sn(r[23]), wholesalePrice:sn(r[21]), taxEntity:String(r[29]||'') };
     });
   } catch(e) { return []; }
+}
+function ocrMapProd_(p) {
+  return { barcode:p.barcode, name:p.name, size:p.size||'',
+           packMult:p.packMult, packUnit:p.packUnit,
+           buyPrice:p.buy_price, costFinal:p.cost_final,
+           retailPrice:p.retail_price, wholesalePrice:p.wholesale_price,
+           buyQty:p.buy_qty, freeQty:p.free_qty, taxEntity:p.tax_entity };
 }
 
 // ── Calculate FOC Landed Cost ─────────────────────────────────

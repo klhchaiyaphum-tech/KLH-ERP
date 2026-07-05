@@ -781,6 +781,34 @@ function getPriceListItems(catName) {
   }
 }
 
+// ค้นหาสินค้าทั้ง KLH DATA (ทุกหมวด) — ให้ผลเหมือนหน้า Survey · ใช้ในหน้า Price List
+function priceListSearchAll(q) {
+  try {
+    q = String(q || '').trim().toLowerCase();
+    if (!q) return { ok: true, items: [] };
+    var klh = klhDataSheet_();
+    if (!klh) return { ok: false, msg: 'ไม่พบ Sheet KLH DATA' };
+    var data = klh.getDataRange().getValues();
+    var safeN = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    var items = [];
+    for (var i = 1; i < data.length && items.length < 200; i++) {
+      var r = data[i];
+      var barcode = String(r[0] || '').trim();
+      if (!barcode) continue;
+      var name = String(r[1] || '');
+      if (barcode.toLowerCase().indexOf(q) < 0 && name.toLowerCase().indexOf(q) < 0
+          && String(r[27]||'').toLowerCase().indexOf(q) < 0) continue;
+      items.push({
+        barcode: barcode, name: name,
+        size: String(r[3] || ''), mult: safeN(r[4]) || 1, unit: String(r[5] || ''),
+        cost: safeN(r[17]), retail: safeN(r[23]), wholesale: safeN(r[21]),
+        dozenBarcode: String(r[33] || ''), dozenPrice: safeN(r[34])
+      });
+    }
+    return { ok: true, items: items };
+  } catch(e) { return { ok: false, msg: e.message || String(e) }; }
+}
+
 // Customer (Member) functions
 function searchCustomers(query) {
   try {

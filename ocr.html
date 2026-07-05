@@ -370,6 +370,13 @@ input:focus, select:focus, textarea:focus{border-color:#F6704C !important;box-sh
       </div>
 
       <!-- Action buttons -->
+      <div style="padding:6px 16px 0">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.83rem;cursor:pointer;color:#6D4C41">
+          <input type="checkbox" id="fSkipWms" checked>
+          บันทึกเข้า <b>เจ้าหนี้ (AP) อย่างเดียว</b> — ยังไม่เข้าคลัง WMS
+          <span style="color:#999;font-size:.72rem">(ช่วงสำรวจ สินค้ายังจับคู่ไม่ครบ · เอาติ๊กออกเมื่อพร้อมเข้าคลังจริง)</span>
+        </label>
+      </div>
       <div style="padding:14px 16px;display:flex;gap:10px">
         <button class="btn btn-secondary" onclick="backToUpload()">
           <i class="bi bi-arrow-left"></i> กลับ
@@ -757,7 +764,8 @@ function applyOcrSuggestions(parsed) {
   chipsEl.innerHTML = '';
 
   // Auto-fill fields directly if confident
-  if (sg.supplier)    document.getElementById('fSupplier').value = sg.supplier;
+  if (sg.supplier)    { document.getElementById('fSupplier').value = sg.supplier; _ocrSupName = sg.supplier;
+                        searchSupplier(sg.supplier); }   // ค้น/จับ alias อัตโนมัติทันที
   if (sg.invoiceNo)   document.getElementById('fInvNo').value    = sg.invoiceNo;
   if (sg.invoiceDate) document.getElementById('fInvDate').value  = sg.invoiceDate;
 
@@ -834,6 +842,7 @@ function applyOcrSuggestions(parsed) {
 
 // ── Supplier Search ────────────────────────────────────────────
 var _supplierTimer = null;
+var _ocrSupName = '';   // ชื่อผู้ขายตามที่ OCR อ่านได้ (ไว้จำ alias ตอนผู้ใช้เลือกตัวจริง)
 function searchSupplier(val) {
   var q = val.trim();
   if (!q || q.length < 2) { closeSupplierDd(); return; }
@@ -847,37 +856,99 @@ function searchSupplier(val) {
 }
 function showSupplierDd(res) {
   var dd = document.getElementById('supplierDropdown');
-  var all = [];
-  if (res.exact) all.push({item: res.exact, isExact: true});
-  (res.similar || []).forEach(function(s) { all.push({item: s, isExact: false}); });
-  if (!all.length) { dd.style.display='none'; document.getElementById('supplierStatus').textContent='ไม่พบใน SUPPLIER_MASTER'; return; }
+  // จำได้จากครั้งก่อน (🧠 alias) หรือชื่อตรงเป๊ะ → เลือกให้เลย
+  if (res.exact) { selectSupplier(res.exact.code, res.exact.name, !!res.exact.aliasHit); return; }
+  var all = (res.similar || []).map(function(s) { return {item: s}; });
+  if (!all.length) {
+    dd.innerHTML = '<div style="padding:10px 12px;font-size:.82rem;color:#c62828">ไม่พบใน SUPPLIER_MASTER</div>'
+      + '<div style="padding:0 12px 10px;display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button type="button" class="btn-find-prod" style="background:#2E7D32;color:#fff" onclick="createSupplierInline()">➕ สร้างเจ้าหนี้ใหม่จากชื่อนี้</button>'
+      + '<button type="button" class="btn-find-prod" onclick="openSupplierMaster()">🔍 เปิด Supplier Master (แท็บใหม่)</button></div>';
+    dd.style.display = 'block';
+    document.getElementById('supplierStatus').textContent = 'ไม่พบใน SUPPLIER_MASTER — พิมพ์คำสั้นๆ เช่น ชื่อย่อ หรือสร้างใหม่';
+    return;
+  }
   dd.innerHTML = all.map(function(a) {
-    var bg = a.isExact ? '#E8F5E9' : '#fff';
-    var lbl = a.isExact ? ' ✅' : '';
-    return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:' + bg + ';font-size:.83rem" '
+    return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;font-size:.83rem" '
       + 'onclick="selectSupplier(\'' + a.item.code + '\',\'' + a.item.name.replace(/'/g,"\\'") + '\')">'
-      + '<b>' + a.item.name + '</b>' + lbl + '<br>'
+      + '<b>' + a.item.name + '</b><br>'
       + '<small style="color:#888">' + a.item.code + (a.item.tel ? ' | ' + a.item.tel : '') + '</small>'
       + '</div>';
-  }).join('');
+  }).join('')
+  + '<div style="padding:8px 12px;border-top:1px solid #eee;display:flex;gap:8px;flex-wrap:wrap">'
+  + '<button type="button" class="btn-find-prod" style="background:#2E7D32;color:#fff" onclick="createSupplierInline()">➕ ไม่ใช่สักตัว — สร้างใหม่</button>'
+  + '<button type="button" class="btn-find-prod" onclick="openSupplierMaster()">🔍 เปิด Supplier Master</button></div>';
   dd.style.display = 'block';
 }
-function selectSupplier(code, name) {
+function selectSupplier(code, name, fromAlias) {
   document.getElementById('fSupplier').value     = name;
   document.getElementById('fSupplierCode').value = code;
   document.getElementById('supplierStatus').innerHTML =
     '<span style="background:#E8F5E9;color:#2E7D32;padding:2px 10px;border-radius:12px;font-weight:600">'
-    + '✅ ' + code + ' — ' + name + '</span>'
-    + ' <button type="button" style="font-size:.72rem;color:#1565C0;background:none;border:none;cursor:pointer" onclick="openEditSupplierModal(\'' + code + '\',\'' + name.replace(/'/g,"\\'") + '\')">✏️ แก้ไข</button>';
+    + '✅ ' + code + ' — ' + name + (fromAlias ? ' 🧠' : '') + '</span>'
+    + ' <button type="button" style="font-size:.72rem;color:#1565C0;background:none;border:none;cursor:pointer" onclick="openSupplierMaster()">✏️ แก้ไข</button>';
   closeSupplierDd();
+  // จำชื่อ OCR → เจ้าหนี้ตัวนี้ (ครั้งหน้าจับให้อัตโนมัติ)
+  if (!fromAlias && _ocrSupName && _ocrSupName !== name) {
+    google.script.run.withFailureHandler(function(){}).apSaveAlias(_ocrSupName, code);
+  }
+  // เลือกผู้ขายแล้ว → ลองจับคู่สินค้าที่จำไว้ของเจ้านี้ทันที
+  aliasMatchRows(code);
 }
-
-// ── Edit Supplier Modal ───────────────────────────────────────
-function openEditSupplierModal(code, name) {
-  // เปิดหน้า Supplier Master พร้อม from=ocr เพื่อให้กดย้อนกลับมา OCR ได้
-  if (_execUrl) window.top.location.href = _execUrl + '?page=supplier&from=ocr';
-  else window.location.href = '?page=supplier&from=ocr';
+// จับคู่สินค้าจากที่จำไว้ (PRODUCT_ALIAS) กับทุกแถวที่ยังไม่มีบาร์โค้ด
+function aliasMatchRows(supCode) {
+  var rows = document.getElementById('itemsTbody').rows;
+  var names = [];
+  for (var i = 0; i < rows.length; i++) {
+    var n = rows[i].id.replace('row-','');
+    var codeEl = document.getElementById('pcode-'+n);
+    var nameEl = document.querySelector('#row-'+n+' .item-input');
+    if (codeEl && nameEl && !codeEl.value.trim() && nameEl.value.trim()) names.push(nameEl.value.trim());
+  }
+  if (!names.length) return;
+  google.script.run.withSuccessHandler(function(r){
+    if (!r || !r.ok || !r.matches) return;
+    var hit = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var n = rows[i].id.replace('row-','');
+      var nameEl = document.querySelector('#row-'+n+' .item-input');
+      var codeEl = document.getElementById('pcode-'+n);
+      if (!nameEl || !codeEl || codeEl.value.trim()) continue;
+      var m = r.matches[nameEl.value.trim()];
+      if (m) { _ocrNameByRow[n] = nameEl.value.trim();
+        applyProductToRow(n, m, true); hit++; }
+    }
+    if (hit) document.getElementById('supplierStatus').innerHTML += ' <span style="color:#00897B;font-size:.75rem">🧠 จับคู่สินค้าให้ ' + hit + ' รายการ</span>';
+  }).withFailureHandler(function(){}).ocrAliasMatchBatch(supCode, names);
 }
+function createSupplierInline() {
+  var raw = document.getElementById('fSupplier').value.trim() || _ocrSupName;
+  Swal.fire({
+    title: 'สร้างเจ้าหนี้ใหม่',
+    html: '<input id="ns-name" class="swal2-input" style="width:90%" placeholder="ชื่อเจ้าหนี้" value="' + raw.replace(/"/g,'&quot;') + '">'
+      + '<input id="ns-tel" class="swal2-input" style="width:90%" placeholder="เบอร์โทร (ไม่บังคับ)">',
+    showCancelButton: true, confirmButtonText: 'สร้าง', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#2E7D32',
+    preConfirm: function(){ var nm = document.getElementById('ns-name').value.trim();
+      if (!nm) { Swal.showValidationMessage('ใส่ชื่อเจ้าหนี้'); return false; }
+      return { name: nm, tel: document.getElementById('ns-tel').value.trim() }; }
+  }).then(function(a){
+    if (!a.isConfirmed) return;
+    showLoading('กำลังสร้าง...');
+    google.script.run.withSuccessHandler(function(r){
+      hideLoading();
+      if (r && r.status === 'success') { selectSupplier(r.code, a.value.name); Swal.fire({icon:'success',title:'สร้างแล้ว '+r.code,timer:1500,showConfirmButton:false}); }
+      else Swal.fire('ไม่สำเร็จ', (r && r.message) || '', 'error');
+    }).withFailureHandler(function(e){ hideLoading(); Swal.fire('Error', ''+e, 'error'); })
+    .addNewSupplier({ name: a.value.name, tel: a.value.tel });
+  });
+}
+// เปิดหน้า Supplier Master ในแท็บใหม่ — บิลที่กำลังคีย์อยู่ไม่หาย
+function openSupplierMaster() {
+  if (_execUrl) window.open(_execUrl + '?page=supplier', '_blank');
+  else window.open('?page=supplier', '_blank');
+}
+// เก็บชื่อเดิมของหน้าเก่าไว้ (โค้ดอื่นอาจเรียก)
+function openEditSupplierModal(code, name) { openSupplierMaster(); }
 function closeSupplierDd() { document.getElementById('supplierDropdown').style.display='none'; }
 document.addEventListener('click', function(e) { if (!e.target.closest('#fSupplier') && !e.target.closest('#supplierDropdown')) closeSupplierDd(); });
 
@@ -971,11 +1042,13 @@ function recalcTotals() {
 function delRow(btn) { btn.closest('tr').remove(); calcTotals(); }
 
 // ── Product Search per row ─────────────────────────────────────
+var _ocrNameByRow = {};   // n → ชื่อสินค้าตามบิล (ไว้จำ alias ตอนเลือกตัวจริง)
 function findProduct(n) {
   var nameEl = document.querySelector('#row-' + n + ' .item-input');
   var code   = document.getElementById('pcode-' + n).value.trim();
   var name   = nameEl ? nameEl.value.trim() : '';
   if (!code && !name) { alert('กรุณาใส่ชื่อหรือรหัสสินค้าก่อน'); return; }
+  if (name && !_ocrNameByRow[n]) _ocrNameByRow[n] = name;   // เก็บชื่อบิลครั้งแรกก่อนถูกทับ
   showLoading('กำลังค้นหา...');
   google.script.run
     .withSuccessHandler(function(results) {
@@ -983,7 +1056,7 @@ function findProduct(n) {
       showProductPicker(n, results, code, name);
     })
     .withFailureHandler(function(e) { hideLoading(); alert('Error: '+e); })
-    .lookupProductsForOcr(code, name);
+    .lookupProductsForOcr(code, name, document.getElementById('fSupplierCode').value || '');
 }
 
 function showProductPicker(n, results, ocrCode, ocrName) {
@@ -994,14 +1067,18 @@ function showProductPicker(n, results, ocrCode, ocrName) {
       + '<button type="button" class="btn-find-prod" style="background:#2E7D32;color:#fff" onclick="createProd(' + n + ')"><i class="bi bi-plus-circle"></i> สร้างสินค้าใหม่</button>';
     return;
   }
+  // จำได้จากบิลครั้งก่อน (🧠) → ใส่ให้เลย
+  if (results.length === 1 && results[0].aliasHit) { applyProductToRow(n, results[0], true); return; }
   var html = '<div style="border:1px solid #ddd;border-radius:6px;margin-top:4px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;position:relative">';
   results.forEach(function(p) {
     html += '<div style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f5f5f5;font-size:.78rem" '
       + 'onclick="selectProduct(' + n + ',\'' + p.barcode + '\',\'' + p.name.replace(/'/g,"\\'") + '\',' + p.packMult + ',\'' + (p.packUnit||'') + '\',' + (p.buyPrice||0) + ',' + (p.costFinal||0) + ')">'
-      + '<b>' + p.barcode + '</b> — ' + p.name + '<br>'
+      + '<b>' + p.barcode + '</b> — ' + p.name
+      + (p.size ? ' <span style="background:#FFF3E0;border-radius:6px;padding:0 6px;color:#B26A00">' + p.size + '</span>' : '') + '<br>'
       + '<small style="color:#888">'
       + 'ทุนปัจจุบัน: ' + (p.costFinal||0).toFixed(2)
       + ' | ขายส่ง: ' + (p.wholesalePrice||0)
+      + (p.packMult > 1 ? ' | ' + p.packMult + ' ชิ้น/' + (p.packUnit||'ลัง') : '')
       + ' | ' + (p.taxEntity||'')
       + '</small></div>';
   });
@@ -1009,20 +1086,31 @@ function showProductPicker(n, results, ocrCode, ocrName) {
   box.innerHTML = html;
 }
 
-function selectProduct(n, barcode, name, mult, unit, buyPrice, costFinal) {
-  document.getElementById('pcode-' + n).value = barcode;
-  document.getElementById('punit-' + n).value = unit;
+// ใส่สินค้าลงแถว (ใช้ทั้งกดเลือกเอง และ 🧠 จับให้อัตโนมัติ)
+function applyProductToRow(n, p, fromAlias) {
+  document.getElementById('pcode-' + n).value = p.barcode;
+  if (p.packUnit) document.getElementById('punit-' + n).value = p.packUnit;
   var nameInput = document.querySelector('#row-' + n + ' .item-input');
-  if (nameInput) nameInput.value = name;
-  if (buyPrice > 0 && !(parseFloat(document.getElementById('pprice-'+n).value) > 0)) {
-    document.getElementById('pprice-'+n).value = buyPrice;
+  if (nameInput) nameInput.value = p.name;
+  if ((p.buyPrice||0) > 0 && !(parseFloat(document.getElementById('pprice-'+n).value) > 0)) {
+    document.getElementById('pprice-'+n).value = p.buyPrice;
   }
   var box = document.getElementById('pmatch-'+n);
-  box.innerHTML = '<span class="prod-matched">✅ ' + barcode + ' — ' + name + '</span>'
-    + ' <small style="color:#888">ทุนเดิม: ' + costFinal.toFixed(2) + '</small>'
+  box.innerHTML = '<span class="prod-matched">' + (fromAlias ? '🧠' : '✅') + ' ' + p.barcode + ' — ' + p.name + '</span>'
+    + ' <small style="color:#888">ทุนเดิม: ' + (p.costFinal||0).toFixed(2) + '</small>'
     + ' <button type="button" class="btn-find-prod" style="font-size:.72rem" onclick="findProduct(' + n + ')">เปลี่ยน</button>'
     + ' <button type="button" class="btn" style="font-size:.72rem;padding:3px 10px;background:#6A1B9A;color:#fff;border-radius:4px" onclick="openPriceCompare(' + n + ')"><i class="bi bi-calculator"></i> เปรียบเทียบต้นทุน</button>';
   calcFocRow(n);
+}
+
+function selectProduct(n, barcode, name, mult, unit, buyPrice, costFinal) {
+  applyProductToRow(n, { barcode:barcode, name:name, packMult:mult, packUnit:unit, buyPrice:buyPrice, costFinal:costFinal }, false);
+  // จำการจับคู่: (ผู้ขาย + ชื่อในบิล) → บาร์โค้ดนี้ · บิลหน้าจับให้อัตโนมัติ
+  var ocrName = _ocrNameByRow[n] || '';
+  if (ocrName && ocrName !== name) {
+    google.script.run.withFailureHandler(function(){})
+      .ocrSaveProductAlias(document.getElementById('fSupplierCode').value || '', ocrName, barcode);
+  }
 }
 
 // ── สร้างสินค้าใหม่ → KLH DATA (เมื่อ match ไม่เจอ) ──
@@ -1131,7 +1219,8 @@ function doSave() {
     totalAmt:     grand,
     fileUrl:      _fileUrl,
     note:         note,
-    items:        items
+    items:        items,
+    skipWms:      document.getElementById('fSkipWms') ? document.getElementById('fSkipWms').checked : false
   };
 
   showLoading('กำลังบันทึก...');

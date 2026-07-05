@@ -297,33 +297,30 @@ function showErr(msg) {
     '<tr><td colspan="8" style="text-align:center;color:#c62828;padding:30px">' + msg + '</td></tr>';
 }
 
-// ── Search (ค้นข้ามหมวดจาก cache ที่โหลดมาแล้ว) ──────────────
+// ── Search (ค้นทั้ง KLH DATA ที่ server — ทุกหมวด ไม่ใช่แค่หมวดที่เคยเปิด) ──
+var _searchTimer = null, _searchSeq = 0;
 function onSearch(raw) {
   var q = raw.trim();
   if (!q) { clearSearch(); return; }
   _searchMode = true;
-  var ql = q.toLowerCase();
-  var results = [];
-  var cats = Object.keys(_cache);
-  for (var c = 0; c < cats.length; c++) {
-    var items = _cache[cats[c]];
-    for (var j = 0; j < items.length; j++) {
-      var it = items[j];
-      if (String(it.barcode).toLowerCase().indexOf(ql) >= 0 ||
-          String(it.name).toLowerCase().indexOf(ql) >= 0) {
-        results.push(it);
-      }
-    }
-  }
+  clearTimeout(_searchTimer);
   document.getElementById('infoCatName').textContent = 'ผลการค้นหา';
-  document.getElementById('infoCount').textContent   = '';
-  document.getElementById('infoSearch').textContent  = '"' + q + '" — พบ ' + results.length + ' รายการ';
+  document.getElementById('infoSearch').textContent  = '"' + q + '" — กำลังค้น...';
   document.getElementById('infoSearch').style.display     = 'inline';
   document.getElementById('btnClearSearch').style.display = 'inline-block';
-  document.getElementById('footerLeft').textContent = 'ค้นหา "' + q + '" ได้ ' + results.length + ' รายการ';
-  document.getElementById('btnPrev').disabled = true;
-  document.getElementById('btnNext').disabled = true;
-  renderRows(results, q);
+  _searchTimer = setTimeout(function() {
+    var seq = ++_searchSeq;
+    google.script.run.withSuccessHandler(function(res) {
+      if (seq !== _searchSeq || !_searchMode) return;   // มีคำค้นใหม่กว่า/ยกเลิกแล้ว
+      var results = (res && res.ok) ? (res.items || []) : [];
+      document.getElementById('infoCount').textContent   = '';
+      document.getElementById('infoSearch').textContent  = '"' + q + '" — พบ ' + results.length + ' รายการ';
+      document.getElementById('footerLeft').textContent = 'ค้นหา "' + q + '" ได้ ' + results.length + ' รายการ (ทุกหมวด)';
+      document.getElementById('btnPrev').disabled = true;
+      document.getElementById('btnNext').disabled = true;
+      renderRows(results, q);
+    }).withFailureHandler(function(){}).priceListSearchAll(q);
+  }, 350);
 }
 function clearSearch() {
   _searchMode = false;
