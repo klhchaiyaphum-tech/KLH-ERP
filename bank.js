@@ -1530,6 +1530,8 @@ function dailyBankJob() {
   try { fetchBayStatementEmails(3); } catch(eEm) {}
   // 1) ดูดไฟล์ statement ที่วางใน Drive ก่อน (กรุงศรี/กระแส/ฝากประจำ) — จะได้เข้าสรุปทัน + ยิง alert AR ในตัว
   try { importBayStatements(); } catch(eImp) {}
+  // 1.5) จับเช็คที่มาตัดบัญชี (เทียบเลขอ้างอิง = เลขเช็ค + เช็คยอดตรงไหม)
+  var chqLines = []; try { chqLines = chqSweep_(); } catch(eC) {}
   var ktb = fetchKtbDaily(2);
   var ym = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
   var yest = Utilities.formatDate(new Date(Date.now() - 86400000), 'Asia/Bangkok', 'yyyy-MM-dd');
@@ -1547,6 +1549,7 @@ function dailyBankJob() {
       + '💰 ฐานยอดขายภาษี: ฿' + Math.round(sum.salesBase).toLocaleString()
       + (ktb && ktb.added ? '\n(KTB อีเมลใหม่ ' + ktb.added + ' รายการ)' : '');
     if (miss.length) msg += '\n\n⚠️ เมื่อวาน (' + yest + ') ยังไม่มียอด:\n   • ' + miss.join('\n   • ') + '\n→ เรียก/นำเข้า statement ให้ครบ';
+    if (chqLines.length) msg += '\n\n🧾 เช็คสั่งจ่าย:\n' + chqLines.join('\n');
     sendWmsLine_(msg, true);   // รายงานหลัก 06:00 — ส่งเสมอแม้ LINE_MUTE
   }
   return { ok: true, ktb: ktb, sum: sum, missingYesterday: miss };

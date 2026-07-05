@@ -28,6 +28,7 @@ function doGet(e) {
     bank_m:      'bank_m',         // สมุดเงินธนาคาร — จอมือถือ (สรุปเร็ว)
     pricebook:   'pricebook_match',// เทียบราคา สมุดราคา → KLH DATA (staging)
     ap:          'ap',             // เจ้าหนี้การค้า (AP) — คงค้าง/ครบกำหนด/จ่าย/ประวัติ
+    cheque:      'cheque',         // เช็คสั่งจ่าย (BAYC) — ออกเช็ค/ตัด AP/เตือนครบกำหนด/จับตัดอัตโนมัติ
     promo:       'promo'           // จัดการโปรโมชั่น LINE OA (staff)
   };
   const tpl = pageMap[page] || 'main';
@@ -52,6 +53,7 @@ function doGet(e) {
     bank_m: 'KLH สรุปธนาคาร (มือถือ)',
     pricebook: 'KLH เทียบราคา',
     ap: 'KLH เจ้าหนี้การค้า',
+    cheque: 'KLH เช็คสั่งจ่าย',
     promo: 'KLH จัดการโปรโมชั่น'
   };
   const tmpl = HtmlService.createTemplateFromFile(tpl);

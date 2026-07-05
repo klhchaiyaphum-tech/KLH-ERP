@@ -496,6 +496,8 @@ function dailySalesReport() {
       + (lastYearAvg ? '      ปีก่อนเฉลี่ย ฿' + rnd(lastYearAvg) + '/เดือน · รับจริง ฿' + rnd(taxSale)
                      : '      (ยังไม่ตั้งยอดปีก่อนในหน้า ภพ.30)') + '\n'
       + '5️⃣ ชำระเจ้าหนี้การค้า:  ฿' + rnd(payment);
+    // เตือนเช็คครบกำหนด (ก่อน 7 วัน / วันครบ / เกินกำหนด) — พ่วงรายงาน 08:00 ไม่กินโควตาเพิ่ม
+    try { var chq = chqDueLines_(); if (chq.length) msg += '\n\n' + chq.join('\n'); } catch(eQ) {}
     sendWmsLine_(msg, true);   // รายงานหลัก 08:00 — ส่งเสมอแม้ LINE_MUTE
     return msg;
   } catch(e) { Logger.log('dailySalesReport: ' + e); return 'error: ' + e; }

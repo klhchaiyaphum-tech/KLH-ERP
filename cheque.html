@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KLH เช็คสั่งจ่าย</title>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style>
+:root{--coral:#F6704C;--coral2:#E2502B;--blue:#3A37C9;--green:#2E9E55;--green-soft:#E6F5EC;--red:#D9512B;--red-soft:#FBE5DD;
+  --paper2:#F8F4EC;--ink:#2A2521;--ink2:#6B6258;--ink3:#A89E90;--line:#ECE6DA;--line2:#E0D8C7;
+  --ff:"IBM Plex Sans Thai","IBM Plex Sans",'Segoe UI',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--ff);color:var(--ink);min-height:100vh;padding:18px 14px 40px;
+  background:radial-gradient(900px 600px at 8% 2%,#FBDAC6 0,transparent 55%),linear-gradient(160deg,#F1EBDE,#ECE4D5);}
+.num{font-variant-numeric:tabular-nums;}
+button{font-family:inherit;cursor:pointer;border:none;}
+input,select{font-family:inherit;font-size:13.5px;border:1.5px solid var(--line2);border-radius:10px;padding:8px 10px;outline:none;background:#fff;}
+input:focus,select:focus{border-color:var(--coral);box-shadow:0 0 0 3px #FCE6DC;}
+.win{max-width:1020px;margin:0 auto;background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 30px 70px -30px rgba(60,40,25,.5);}
+.phead{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:var(--paper2);}
+.pic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:#fff;font-size:21px;background:linear-gradient(135deg,#C2410C,#E2502B);}
+.phead h1{font-size:18px;} .phead p{font-size:12px;color:var(--ink2);margin-top:2px;}
+.actions{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:11px;font-size:13.5px;font-weight:600;border:1px solid var(--line2);background:#fff;color:var(--ink);}
+.btn.primary{background:var(--coral);border-color:var(--coral);color:#fff;}
+.btn.sm{padding:6px 11px;font-size:12.5px;border-radius:9px;}
+.body{padding:18px 20px 24px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:16px;}
+.card h2{font-size:15px;margin-bottom:4px;} .card .sub{font-size:12px;color:var(--ink3);margin-bottom:11px;}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2);}
+table{border-collapse:collapse;width:100%;font-size:13px;}
+th{background:var(--paper2);text-align:left;padding:8px 10px;font-size:12px;color:var(--ink2);border-bottom:1px solid var(--line2);}
+td{padding:8px 10px;border-bottom:1px solid var(--line);}
+.r{text-align:right;}
+.pill{border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;display:inline-block;}
+.p-out{background:#FFF3E0;color:#B26A00;} .p-clr{background:var(--green-soft);color:var(--green);}
+.p-diff{background:var(--red-soft);color:var(--red);} .p-void{background:#EEE;color:#888;}
+.kpi{background:var(--paper2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;flex:1;min-width:140px;}
+.kpi .kk{font-size:11.5px;color:var(--ink3);} .kpi .kv{font-size:18px;font-weight:800;}
+.okmsg{background:var(--green-soft);color:var(--green);padding:10px 13px;border-radius:11px;font-size:13px;margin-bottom:10px;}
+.err{background:var(--red-soft);color:var(--red);padding:10px 13px;border-radius:11px;font-size:13px;margin-bottom:10px;}
+.muted{color:var(--ink3);}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="phead">
+    <div class="pic">🧾</div>
+    <div><h1>เช็คสั่งจ่าย — กรุงศรีกระแสรายวัน</h1>
+      <p>ออกเช็ค · ตัดเจ้าหนี้ · เตือนครบกำหนด (รายงาน 08:00) · ตัดสถานะอัตโนมัติเมื่อเช็คขึ้นเงิน</p></div>
+    <div class="actions">
+      <button class="btn" onclick="go('bank')">🏦 สมุดธนาคาร</button>
+      <button class="btn" onclick="go('ap')">💳 เจ้าหนี้ AP</button>
+      <button class="btn" onclick="go('index')">หลัก</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="msg"></div>
+
+    <div class="card">
+      <h2>➕ ออกเช็คใหม่</h2>
+      <div class="sub">สั่งจ่ายเจ้าหนี้ → ติ๊ก "ตัดบิลเจ้าหนี้" ระบบตัดบิลค้างเก่าสุดก่อน (FIFO) ให้ทันที · เมื่อเช็คมาตัดบัญชี ระบบจับจาก statement เองทุกเช้า</div>
+      <div class="row">
+        <div class="fld"><span>เลขเช็ค</span><input id="cNo" placeholder="เช่น 0057282580" style="width:150px"></div>
+        <div class="fld"><span>สั่งจ่ายใคร (เจ้าหนี้)</span>
+          <input id="cPayee" placeholder="พิมพ์ค้นชื่อเจ้าหนี้..." style="width:230px" oninput="supSearch(this.value)" autocomplete="off">
+          <input type="hidden" id="cPayeeCode">
+          <div id="supDd" style="display:none;position:absolute;margin-top:52px;background:#fff;border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);max-height:220px;overflow:auto;z-index:60;min-width:260px"></div>
+        </div>
+        <div class="fld"><span>จำนวนเงิน (฿)</span><input id="cAmt" type="number" step="0.01" min="0" style="width:120px"></div>
+        <div class="fld"><span>วันที่สั่งจ่าย</span><input id="cIssue" type="date" style="width:140px"></div>
+        <div class="fld"><span>วันครบกำหนด (ลงวันที่หน้าเช็ค)</span><input id="cDue" type="date" style="width:140px"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="cCutAp" checked> ตัดบิลเจ้าหนี้ (FIFO บิลเก่าสุดก่อน)
+        </label>
+        <input id="cNote" placeholder="หมายเหตุ (ถ้ามี)" style="flex:1;min-width:160px">
+        <button class="btn primary" onclick="saveChq()">💾 บันทึกเช็ค</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-bottom:14px">
+      <div class="kpi"><div class="kk">🕐 เช็คค้าง (ยังไม่มาตัด)</div><div class="kv num" id="kOutN">—</div></div>
+      <div class="kpi"><div class="kk">ยอดเช็คค้างรวม</div><div class="kv num" id="kOutAmt" style="color:var(--red)">—</div></div>
+      <div class="kpi"><div class="kk">ครบกำหนดใน 7 วัน</div><div class="kv num" id="kDue7" style="color:#B26A00">—</div></div>
+    </div>
+
+    <div class="card">
+      <h2>🕐 เช็คยังไม่มาตัดชำระ</h2>
+      <div class="sub">ระบบตรวจ statement ทุกเช้า 06:00 — เช็คขึ้นเงินแล้วย้ายไปประวัติอัตโนมัติ · ยอดหักบัญชีไม่ตรงยอดสั่งจ่าย = ⚠️ แจ้งทันที</div>
+      <div style="overflow-x:auto"><table id="tblOut"><thead><tr>
+        <th>เลขเช็ค</th><th>สั่งจ่าย</th><th class="r">จำนวนเงิน</th><th>วันที่สั่งจ่าย</th><th>ครบกำหนด</th><th>เหลือ(วัน)</th><th>AP</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2>📜 ประวัติเช็ค (ตัดแล้ว/ยกเลิก)</h2>
+      <div style="overflow-x:auto"><table id="tblHist"><thead><tr>
+        <th>เลขเช็ค</th><th>สั่งจ่าย</th><th class="r">สั่งจ่าย(฿)</th><th class="r">หักบัญชีจริง</th><th>วันที่ตัด</th><th>สถานะ</th><th>หมายเหตุ</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var _execUrl='', _sup=[], _supLoaded=false;
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
+function go(p){ if(_execUrl) window.top.location.href=_execUrl+'?page='+p; else window.location.href='?page='+p; }
+function msg(ok,t){ document.getElementById('msg').innerHTML='<div class="'+(ok?'okmsg':'err')+'">'+esc(t)+'</div>'; }
+
+(function(){
+  var d=new Date();
+  document.getElementById('cIssue').value=d.toISOString().slice(0,10);
+  google.script.run.withSuccessHandler(function(u){_execUrl=u||'';}).withFailureHandler(function(){}).getExecUrl();
+  google.script.run.withSuccessHandler(function(r){ _sup=(r&&r.items)||[]; _supLoaded=true; }).withFailureHandler(function(){}).bankSupplierList();
+  load();
+})();
+
+function supSearch(q){
+  var dd=document.getElementById('supDd');
+  q=(q||'').trim().toLowerCase();
+  if(!q||!_supLoaded){ dd.style.display='none'; return; }
+  var hits=_sup.filter(function(s){ return (s.name+s.code).toLowerCase().indexOf(q)>=0; }).slice(0,10);
+  if(!hits.length){ dd.style.display='none'; return; }
+  dd.innerHTML=hits.map(function(s){
+    return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f2ede2;font-size:13px" onclick="pickSup(\''+esc(s.code)+'\',\''+esc(s.name)+'\')"><b>'+esc(s.name)+'</b> <span class="muted" style="font-size:11px">'+esc(s.code)+'</span></div>';
+  }).join('');
+  dd.style.display='block';
+}
+function pickSup(code,name){
+  document.getElementById('cPayee').value=name;
+  document.getElementById('cPayeeCode').value=code;
+  document.getElementById('supDd').style.display='none';
+}
+document.addEventListener('click',function(e){ if(!e.target.closest('#cPayee')&&!e.target.closest('#supDd')) document.getElementById('supDd').style.display='none'; });
+
+function saveChq(){
+  var d={ chqNo:document.getElementById('cNo').value.trim(),
+    payeeCode:document.getElementById('cPayeeCode').value,
+    payeeName:document.getElementById('cPayee').value.trim(),
+    amount:Number(document.getElementById('cAmt').value)||0,
+    issueDate:document.getElementById('cIssue').value,
+    dueDate:document.getElementById('cDue').value,
+    cutAp:document.getElementById('cCutAp').checked,
+    note:document.getElementById('cNote').value.trim() };
+  if(!d.chqNo||d.amount<=0){ msg(false,'ใส่เลขเช็ค + จำนวนเงินก่อน'); return; }
+  if(!d.dueDate){ msg(false,'ใส่วันครบกำหนด (วันที่หน้าเช็ค)'); return; }
+  if(d.cutAp&&!d.payeeCode){ msg(false,'เลือกเจ้าหนี้จากรายการก่อน (พิมพ์ค้นแล้วกดเลือก) หรือเอาติ๊ก "ตัดบิล" ออก'); return; }
+  Swal.fire({title:'ยืนยันออกเช็ค?',
+    html:'เช็ค <b>'+esc(d.chqNo)+'</b> ฿'+nf(d.amount)+'<br>จ่าย: '+esc(d.payeeName||'-')+'<br>ครบกำหนด '+esc(d.dueDate)+(d.cutAp?'<br><span style="color:#2E9E55">จะตัดบิลเจ้าหนี้ให้ทันที (FIFO)</span>':''),
+    icon:'question',showCancelButton:true,confirmButtonText:'บันทึก',cancelButtonText:'ยกเลิก',confirmButtonColor:'#2E9E55'})
+  .then(function(a){ if(!a.isConfirmed) return;
+    Swal.fire({title:'กำลังบันทึก...',didOpen:function(){Swal.showLoading();},allowOutsideClick:false});
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'บันทึกแล้ว',html:esc(r.msg),timer:2600,showConfirmButton:false});
+        ['cNo','cAmt','cNote','cPayee','cPayeeCode','cDue'].forEach(function(id){document.getElementById(id).value='';});
+        load(); }
+      else Swal.fire({icon:'error',title:'ไม่สำเร็จ',html:esc((r&&r.msg)||'')});
+    }).withFailureHandler(function(e){ Swal.fire({icon:'error',title:'Error',html:esc(''+e)}); }).addCheque(d);
+  });
+}
+
+function load(){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.ok){ msg(false,(r&&r.msg)||'โหลดไม่ได้'); return; }
+    render(r.items||[]);
+  }).withFailureHandler(function(e){ msg(false,''+e); }).getCheques();
+}
+function pill(st){
+  if(st==='OUTSTANDING') return '<span class="pill p-out">รอตัด</span>';
+  if(st==='CLEARED') return '<span class="pill p-clr">ตัดแล้ว ✓</span>';
+  if(st==='CLEARED_DIFF') return '<span class="pill p-diff">ตัดแล้ว ⚠️ ยอดไม่ตรง</span>';
+  if(st==='VOID') return '<span class="pill p-void">ยกเลิก</span>';
+  return esc(st);
+}
+function render(items){
+  var out=items.filter(function(c){return c.status==='OUTSTANDING';});
+  var hist=items.filter(function(c){return c.status!=='OUTSTANDING';}).sort(function(a,b){return (a.clearedDate||'')<(b.clearedDate||'')?1:-1;});
+  document.getElementById('kOutN').textContent=out.length+' ใบ';
+  document.getElementById('kOutAmt').textContent='฿'+nf(out.reduce(function(t,c){return t+c.amount;},0));
+  document.getElementById('kDue7').textContent=out.filter(function(c){return c.daysLeft!==null&&c.daysLeft>=0&&c.daysLeft<=7;}).length+' ใบ';
+  var ob=document.querySelector('#tblOut tbody');
+  ob.innerHTML=out.length?out.map(function(c){
+    var dl=c.daysLeft===null?'—':(c.daysLeft<0?'<b style="color:var(--red)">เกิน '+(-c.daysLeft)+' วัน</b>':(c.daysLeft<=7?'<b style="color:#B26A00">'+c.daysLeft+'</b>':c.daysLeft));
+    return '<tr><td class="num"><b>'+esc(c.chqNo)+'</b></td><td>'+esc(c.payeeName||c.payeeCode||'—')+'</td>'
+      +'<td class="r num" style="font-weight:700">'+nf(c.amount)+'</td>'
+      +'<td class="num">'+esc(c.issueDate)+'</td><td class="num">'+esc(c.dueDate)+'</td><td>'+dl+'</td>'
+      +'<td class="muted" style="font-size:11.5px;max-width:190px">'+esc(c.apNote)+'</td>'
+      +'<td><button class="btn sm" style="color:var(--red)" onclick="doVoid('+c.row+',\''+esc(c.chqNo)+'\')">ยกเลิก</button></td></tr>';
+  }).join(''):'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">ไม่มีเช็คค้าง 🎉</td></tr>';
+  var hb=document.querySelector('#tblHist tbody');
+  hb.innerHTML=hist.length?hist.map(function(c){
+    return '<tr><td class="num">'+esc(c.chqNo)+'</td><td>'+esc(c.payeeName||c.payeeCode||'—')+'</td>'
+      +'<td class="r num">'+nf(c.amount)+'</td>'
+      +'<td class="r num" style="font-weight:700;color:'+(c.status==='CLEARED_DIFF'?'var(--red)':'var(--ink)')+'">'+(c.clearedAmt?nf(c.clearedAmt):'—')+'</td>'
+      +'<td class="num">'+esc(c.clearedDate||'—')+'</td><td>'+pill(c.status)+'</td>'
+      +'<td class="muted" style="font-size:11.5px">'+esc(c.apNote)+' '+esc(c.note)+'</td></tr>';
+  }).join(''):'<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">ยังไม่มีประวัติ</td></tr>';
+}
+function doVoid(row,no){
+  Swal.fire({title:'ยกเลิกเช็ค '+no+'?',input:'text',inputPlaceholder:'เหตุผล',showCancelButton:true,confirmButtonText:'ยกเลิกเช็ค',cancelButtonText:'ปิด',confirmButtonColor:'#D9512B'})
+  .then(function(a){ if(!a.isConfirmed) return;
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.ok){ Swal.fire({icon:'success',title:'ยกเลิกแล้ว',html:esc(r.msg),timer:2200,showConfirmButton:false}); load(); }
+      else Swal.fire('ไม่สำเร็จ',esc((r&&r.msg)||''),'error');
+    }).voidCheque(row, a.value||'');
+  });
+}
+</script>
+</body>
+</html>

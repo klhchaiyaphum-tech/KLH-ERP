@@ -54,7 +54,7 @@ body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","
 <body>
 
 <div class="top">
-  <h1>📱 สรุปธนาคาร <button class="home" onclick="goHome()">หลัก</button></h1>
+  <h1>📱 สรุปธนาคาร <button class="home" onclick="goCheque()" style="margin-right:6px">🧾 เช็ค</button><button class="home" onclick="goHome()">หลัก</button></h1>
   <div class="mrow">
     <input type="month" id="month">
     <button onclick="load()">โหลดเดือนนี้</button>
@@ -70,6 +70,7 @@ body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai","
 var _execUrl='';
 function nf(n){ return (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2}); }
 function goHome(){ if(_execUrl) window.top.location.href=_execUrl+'?page=index'; else window.location.href='?page=index'; }
+function goCheque(){ if(_execUrl) window.top.location.href=_execUrl+'?page=cheque'; else window.location.href='?page=cheque'; }
 
 (function(){
   var d=new Date();
