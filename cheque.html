@@ -61,7 +61,14 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);}
 
     <div class="card">
       <h2>➕ ออกเช็คใหม่</h2>
-      <div class="sub">สั่งจ่ายเจ้าหนี้ → ติ๊ก "ตัดบิลเจ้าหนี้" ระบบตัดบิลค้างเก่าสุดก่อน (FIFO) ให้ทันที · เมื่อเช็คมาตัดบัญชี ระบบจับจาก statement เองทุกเช้า</div>
+      <div class="sub">กรอกเอง หรือ 📷 ถ่ายรูปเช็คให้ระบบอ่านเติมให้ · ติ๊ก "ตัดบิลเจ้าหนี้" = ตัดบิลค้างเก่าสุดก่อน (FIFO) ทันที · เช็คมาตัดบัญชีระบบจับจาก statement เองทุกเช้า</div>
+      <div class="row" style="margin-bottom:12px">
+        <label class="btn" style="background:#6A1B9A;border-color:#6A1B9A;color:#fff;cursor:pointer">
+          📷 ถ่ายรูปเช็ค / เลือกรูป — OCR เติมให้
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="ocrChq(this)">
+        </label>
+        <span id="ocrStat" class="muted" style="font-size:12.5px"></span>
+      </div>
       <div class="row">
         <div class="fld"><span>เลขเช็ค</span><input id="cNo" placeholder="เช่น 0057282580" style="width:150px"></div>
         <div class="fld"><span>สั่งจ่ายใคร (เจ้าหนี้)</span>
@@ -120,11 +127,56 @@ function msg(ok,t){ document.getElementById('msg').innerHTML='<div class="'+(ok?
   load();
 })();
 
+// 📷 OCR เช็ค: ย่อรูปก่อนส่ง (มือถือถ่ายมาไฟล์ใหญ่) → Gemini อ่าน → เติมฟอร์ม
+function ocrChq(input){
+  var f = input.files[0]; if (!f) return;
+  var st = document.getElementById('ocrStat');
+  st.textContent = '⏳ กำลังอ่านเช็ค...';
+  var r = new FileReader();
+  r.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var MAX = 1600, w = img.width, h = img.height;
+      if (w > MAX || h > MAX) { var k = Math.min(MAX/w, MAX/h); w = Math.round(w*k); h = Math.round(h*k); }
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      var b64 = cv.toDataURL('image/jpeg', 0.85).split(',')[1];
+      google.script.run.withSuccessHandler(function(res){
+        input.value = '';
+        if (!res || !res.ok) { st.textContent = '❌ ' + ((res && res.msg) || 'อ่านไม่ได้'); return; }
+        var got = [];
+        if (res.chqNo)  { document.getElementById('cNo').value = res.chqNo; got.push('เลขเช็ค ' + res.chqNo); }
+        if (res.amount) { document.getElementById('cAmt').value = res.amount; got.push('฿' + nf(res.amount)); }
+        if (res.dueDate){ document.getElementById('cDue').value = res.dueDate; got.push('ครบกำหนด ' + res.dueDate); }
+        if (res.payee)  { document.getElementById('cPayee').value = res.payee; supSearch(res.payee); got.push('จ่าย "' + res.payee + '"'); }
+        st.innerHTML = got.length
+          ? '✅ อ่านได้: ' + got.join(' · ') + ' <b style="color:#B26A00">— ตรวจกับตัวเช็คก่อนบันทึก</b>'
+            + (res.payee ? '<br><span style="color:#888">เลือกเจ้าหนี้จากรายการที่เด้งขึ้น (ชื่อลายมืออาจอ่านเพี้ยน — พิมพ์ค้นเองได้)</span>' : '')
+          : '⚠️ อ่านไม่ได้สักช่อง — ลองถ่ายใหม่ให้ชัดขึ้น';
+      }).withFailureHandler(function(e2){ input.value=''; st.textContent = '❌ ' + e2; })
+      .ocrCheque(b64, 'image/jpeg');
+    };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(f);
+}
+
 function supSearch(q){
   var dd=document.getElementById('supDd');
   q=(q||'').trim().toLowerCase();
   if(!q||!_supLoaded){ dd.style.display='none'; return; }
   var hits=_sup.filter(function(s){ return (s.name+s.code).toLowerCase().indexOf(q)>=0; }).slice(0,10);
+  if(!hits.length){
+    // ทั้งท่อนไม่เจอ (เช่นชื่อจาก OCR ลายมือ) → แตกคำ เจอคำไหนก็นับ
+    var toks=q.split(/[\s\.\,\(\)\/]+/).filter(function(t){ return t.length>=3 && !/บริษัท|จำกัด|มหาชน|บจก|บมจ|หจก/.test(t); });
+    if(toks.length){
+      hits=_sup.map(function(s){ var nl=(s.name||'').toLowerCase(), sc=0;
+        toks.forEach(function(t){ if(nl.indexOf(t)>=0) sc+=2; else if(t.length>=4&&nl.indexOf(t.slice(0,4))>=0) sc++; });
+        return {s:s,sc:sc};
+      }).filter(function(x){ return x.sc>0; })
+        .sort(function(a,b){ return b.sc-a.sc; }).slice(0,10).map(function(x){ return x.s; });
+    }
+  }
   if(!hits.length){ dd.style.display='none'; return; }
   dd.innerHTML=hits.map(function(s){
     return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f2ede2;font-size:13px" onclick="pickSup(\''+esc(s.code)+'\',\''+esc(s.name)+'\')"><b>'+esc(s.name)+'</b> <span class="muted" style="font-size:11px">'+esc(s.code)+'</span></div>';

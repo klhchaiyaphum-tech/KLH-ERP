@@ -149,3 +149,53 @@ function chqDueLines_() {
   } catch(e){}
   return lines;
 }
+
+// ── OCR เช็คจากรูปถ่าย (Gemini — คีย์เดียวกับสลิป) → เติมฟอร์มให้ ──
+//  อ่าน: เลขเช็ค (แถบเหลือง/MICR) · วันที่หน้าเช็ค (พ.ศ.→ค.ศ.) · จำนวนเงิน · ผู้รับ (ลายมือ)
+function ocrCheque(base64, mimeType) {
+  try {
+    var cfg = getConfig();
+    var apiKey = cfg.GEMINI_API_KEY || '';
+    if (!apiKey) return { ok:false, msg:'ไม่พบ GEMINI_API_KEY ใน CONFIG' };
+    var prompt = 'นี่คือรูปเช็คธนาคารไทย (กรุงศรี) กรุณาอ่านและตอบเป็น JSON เท่านั้น:\n'
+      + '{\n'
+      + ' "chqNo": "<เลขที่เช็ค Cheque No. — ดูจากแถบตัวเลขด้านล่าง (MICR) หรือช่อง เช็คเลขที่ ปกติ 8 หลัก>",\n'
+      + ' "date": "<วันที่หน้าเช็ค รูปแบบ dd/mm/yyyy ปีอาจเป็น พ.ศ. เช่น 28/02/2569>",\n'
+      + ' "amount": <จำนวนเงินตัวเลข เช่น 72301.00>,\n'
+      + ' "payee": "<ชื่อผู้รับเงินในช่อง จ่าย/Pay (ลายมือ อ่านเท่าที่ได้)>",\n'
+      + ' "isCheque": <true ถ้าเป็นเช็คจริง, false ถ้าไม่ใช่>\n'
+      + '}\n'
+      + 'ถ้าอ่านค่าใดไม่ได้ให้ใส่ null · เลขเช็คเอาเฉพาะตัวเลข';
+    var models = ['gemini-2.0-flash-lite','gemini-1.5-flash'];
+    var parsed = null;
+    for (var m = 0; m < models.length; m++) {
+      try {
+        var resp = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':generateContent?key=' + apiKey, {
+          method:'post', contentType:'application/json', muteHttpExceptions:true,
+          payload: JSON.stringify({
+            contents:[{ parts:[ {text:prompt}, {inlineData:{ mimeType:mimeType||'image/jpeg', data:base64 }} ] }],
+            generationConfig:{ temperature:0, maxOutputTokens:512 }
+          })
+        });
+        if (resp.getResponseCode() !== 200) continue;
+        var raw = JSON.parse(resp.getContentText()).candidates[0].content.parts[0].text;
+        var match = raw.match(/\{[\s\S]*\}/);
+        if (match) { parsed = JSON.parse(match[0]); break; }
+      } catch(e2) { continue; }
+    }
+    if (!parsed) return { ok:false, msg:'OCR อ่านไม่ได้ — ลองถ่ายใหม่ให้ชัด/แสงพอ' };
+    if (parsed.isCheque === false) return { ok:false, msg:'รูปนี้ไม่ใช่เช็ค' };
+    // แปลงวันที่ พ.ศ. → ค.ศ. → yyyy-MM-dd
+    var iso = '';
+    var dm = String(parsed.date||'').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (dm) {
+      var y = Number(dm[3]); if (y < 100) y += 2500; if (y > 2400) y -= 543;
+      iso = y + '-' + ('0'+dm[2]).slice(-2) + '-' + ('0'+dm[1]).slice(-2);
+    }
+    return { ok:true,
+      chqNo: String(parsed.chqNo||'').replace(/\D/g,''),
+      dueDate: iso,
+      amount: Number(parsed.amount)||0,
+      payee: String(parsed.payee||'') };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
