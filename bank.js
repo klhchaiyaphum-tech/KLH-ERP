@@ -1933,3 +1933,34 @@ function setupBankDaily() {
   ScriptApp.newTrigger('dailyBankJob').timeBased().everyDays(1).atHour(6).create();
   return 'ตั้ง trigger ธนาคารรวมแล้ว: dailyBankJob 06:00 (ดูดไฟล์→สรุป→alert AR) · ลบตัวซ้ำ '+removed+' ตัว';
 }
+
+// ── DIAG ชั่วคราว: ยอด KTB เข้า รายวัน ก.ค. + แยกที่มา (email/statement) + หายอดซ้ำ ──
+function diagKtbDaily_() {
+  try {
+    var s = bankSheet_(); if (s.getLastRow()<2) return { ok:false, msg:'no data' };
+    var rows = s.getDataRange().getValues();
+    var days = {};
+    for (var i=1;i<rows.length;i++){
+      if (String(rows[i][1])!=='KTB' || String(rows[i][2])!=='IN') continue;
+      var d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0],'Asia/Bangkok','yyyy-MM-dd') : String(rows[i][0]).slice(0,10);
+      if (d.slice(0,7)!=='2026-07') continue;
+      var key = String(rows[i][7]||'');
+      var src = key.indexOf('STMT-')===0 ? 'stmt' : 'email';
+      var cat = String(rows[i][4]||'');
+      var o = days[d] || (days[d]={ total:0, n:0, email:0, stmt:0, bySrcAmt:{email:0,stmt:0}, byCat:{}, amounts:{} });
+      var amt = Number(rows[i][3])||0;
+      o.total += amt; o.n++;
+      o[src]++; o.bySrcAmt[src]+=amt;
+      o.byCat[cat] = (o.byCat[cat]||0) + amt;
+      // จับยอดซ้ำ (จำนวนเงินเดียวกันหลายรายการในวันเดียว = ปกติได้ แต่นับไว้ดู)
+      var ak = String(amt); o.amounts[ak] = (o.amounts[ak]||0)+1;
+    }
+    // สรุป: ยอดซ้ำที่น่าสงสัย (amount เดิม >3 ครั้ง/วัน)
+    Object.keys(days).forEach(function(d){
+      var rep = {};
+      Object.keys(days[d].amounts).forEach(function(a){ if (days[d].amounts[a]>3) rep[a]=days[d].amounts[a]; });
+      days[d].repeatAmounts = rep; delete days[d].amounts;
+    });
+    return { ok:true, days:days };
+  } catch(e){ return { ok:false, msg:String(e) }; }
+}
