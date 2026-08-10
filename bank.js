@@ -390,6 +390,24 @@ function setupMonthlyReportTrigger() {
   ScriptApp.newTrigger('monthlyBankReportJob').timeBased().onMonthDay(2).atHour(7).create();
   return 'ตั้ง trigger ส่งรายงานธนาคาร วันที่ 2 ของเดือน ~07:00 แล้ว';
 }
+// ปิด trigger ส่งอัตโนมัติ (กันส่งข้อมูลที่ยังไม่พร้อม)
+function removeMonthlyReportTrigger() {
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t){ if (t.getHandlerFunction()==='monthlyBankReportJob'){ ScriptApp.deleteTrigger(t); n++; } });
+  return n ? ('ปิด trigger ส่งรายงานอัตโนมัติแล้ว (' + n + ' ตัว) — จะไม่ส่งเองจนกว่าจะตั้งใหม่') : 'ไม่มี trigger ส่งรายงานอยู่ (ยังไม่ได้ตั้ง)';
+}
+// เช็คสถานะรายงานเมล — ผู้รับ/CC/ตั้ง trigger ส่งอัตโนมัติหรือยัง (รันใน editor)
+function checkReportStatus() {
+  var cfg = getConfig();
+  var trg = ScriptApp.getProjectTriggers().filter(function(t){ return t.getHandlerFunction()==='monthlyBankReportJob'; });
+  var msg = '📧 สถานะรายงานเมลธนาคาร\n'
+    + '• ผู้รับ ACCT_EMAIL: ' + (cfg.ACCT_EMAIL || '(ยังไม่ตั้ง)') + '\n'
+    + '• CC OWNER_EMAIL: ' + (cfg.OWNER_EMAIL || '(ยังไม่ตั้ง → CC ไปเจ้าของสคริปต์ klh.chaiyaphum ไม่ใช่คุณ)') + '\n'
+    + '• Trigger ส่งอัตโนมัติ (วันที่ 2): ' + (trg.length ? ('✅ ติดตั้งแล้ว = ส่งเองทุกเดือน') : '❌ ยังไม่ติดตั้ง = ยังไม่เคยส่งอัตโนมัติ') + '\n'
+    + '→ ถ้าเคยส่ง: ดูอีเมลใน Sent ของ klh.chaiyaphum หรือ Executions ของ monthlyBankReportJob';
+  Logger.log(msg);
+  return msg;
+}
 
 // ── แจ้งเตือนหน้า Dashboard (รวมศูนย์ — เพิ่มรายการอื่นได้ภายหลัง) ──
 function getDashboardReminders() {
