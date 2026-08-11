@@ -390,6 +390,13 @@ function setupMonthlyReportTrigger() {
   ScriptApp.newTrigger('monthlyBankReportJob').timeBased().onMonthDay(2).atHour(7).create();
   return 'ตั้ง trigger ส่งรายงานธนาคาร วันที่ 2 ของเดือน ~07:00 แล้ว';
 }
+// ส่งรายงาน "เดือนที่แล้ว" แบบเลือกแล้วกด Run ได้เลย (ไม่ต้องพิมพ์พารามิเตอร์) + โชว์ผลใน log
+//  ตอนนี้เป็น ส.ค. → เดือนที่แล้ว = ก.ค. 2026
+function sendReportNow() {
+  var r = emailMonthlyBankReport();   // ไม่ใส่ค่า = เดือนก่อนหน้าอัตโนมัติ
+  Logger.log((r && r.ok) ? ('✅ ' + r.msg) : ('❌ ' + (r && r.msg)));
+  return r;
+}
 // ปิด trigger ส่งอัตโนมัติ (กันส่งข้อมูลที่ยังไม่พร้อม)
 function removeMonthlyReportTrigger() {
   var n = 0;
