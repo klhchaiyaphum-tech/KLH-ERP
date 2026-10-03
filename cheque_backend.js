@@ -166,7 +166,7 @@ function ocrCheque(base64, mimeType) {
       + ' "isCheque": <true ถ้าเป็นเช็คจริง, false ถ้าไม่ใช่>\n'
       + '}\n'
       + 'ถ้าอ่านค่าใดไม่ได้ให้ใส่ null · เลขเช็คเอาเฉพาะตัวเลข';
-    var models = ['gemini-2.0-flash-lite','gemini-1.5-flash'];
+    var models = gemModels_();
     var parsed = null;
     for (var m = 0; m < models.length; m++) {
       try {

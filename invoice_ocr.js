@@ -132,7 +132,7 @@ function ocrWithGemini_(base64Data, mimeType, apiKey) {
   };
 
   // ── ลอง models ตามลำดับ — fallback อัตโนมัติ ──────────────────
-  var _models = ['gemini-3-flash-preview', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+  var _models = gemModels_();
   var code = 0, body = '';
   for (var _mi = 0; _mi < _models.length; _mi++) {
     var _url = 'https://generativelanguage.googleapis.com/v1beta/models/' + _models[_mi] + ':generateContent?key=' + apiKey;
@@ -141,8 +141,9 @@ function ocrWithGemini_(base64Data, mimeType, apiKey) {
     body = _r.getContentText();
     Logger.log('Gemini [' + _models[_mi] + '] HTTP ' + code);
     if (code === 200) { break; }
-    if (code === 503 || code === 429) { Utilities.sleep(1500); } // รอ 1.5 วิแล้ว ลอง model ถัดไป
-    else { break; } // error อื่น (400, 404 ฯลฯ) หยุดเลย
+    if (code === 503 || code === 429) { Utilities.sleep(1500); } // คิว/โหลดเต็ม — รอ 1.5 วิแล้วลองตัวถัดไป
+    else if (code === 404) { /* รุ่นถูกปลด — ข้ามไปตัวถัดไปทันที */ }
+    else { break; } // error อื่น (400 payload ผิด ฯลฯ) หยุดเลย ลองตัวอื่นก็ไม่ช่วย
   }
 
   if (code !== 200) return { ok:false, msg:'Gemini HTTP ' + code + ': ' + body.substring(0,200) };
@@ -899,4 +900,201 @@ function applyPriceUpdate(data) {
   } catch(e) {
     return { ok: false, msg: e.message || String(e) };
   }
+}
+
+// ── ทดสอบ OCR 1 บิล วัดเวลา + โทเคน (รันใน GAS Editor) ──────────
+// อ่านไฟล์ _ocr_test_p1.jpg จาก Drive → ยิง Gemini → log เวลา+โทเคน
+function ocrBenchOnePage() {
+  var t0 = Date.now();
+  // หา config key
+  var cfg = getConfig();
+  var apiKey = cfg && cfg.GEMINI_API_KEY;
+  if (!apiKey) { Logger.log('❌ ไม่พบ GEMINI_API_KEY ใน CONFIG'); return; }
+
+  // หาไฟล์รูปทดสอบใน Drive
+  var it = DriveApp.getFilesByName('_ocr_test_p1.jpg');
+  if (!it.hasNext()) { Logger.log('❌ ไม่พบไฟล์ _ocr_test_p1.jpg ใน Drive (รอ sync สักครู่)'); return; }
+  var file = it.next();
+  var blob = file.getBlob();
+  var sizeKB = Math.round(blob.getBytes().length / 1024);
+  var base64 = Utilities.base64Encode(blob.getBytes());
+  var tPrep = Date.now();
+
+  // ยิง Gemini ตรง (copy prompt สั้นจาก ocrWithGemini_) เพื่อดึง usageMetadata
+  var prompt = 'คุณเป็นผู้ช่วยอ่านใบกำกับภาษี/ใบส่งสินค้าภาษาไทย โปรดอ่านข้อมูลจากภาพนี้และตอบกลับเป็น JSON เท่านั้น '
+    + '{"supplierName":..,"supplierTaxId":..,"invoiceNo":..,"invoiceDate":"YYYY-MM-DD","subtotal":n,"vatAmount":n,"totalAmount":n,"dueDate":"YYYY-MM-DD",'
+    + '"items":[{"productCode":..,"description":..,"quantity":n,"unit":..,"unitPrice":n,"amount":n,"isFoc":false}]}';
+  var payload = {
+    contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } } ] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+  };
+  var models = gemModels_();
+  var used = '', code = 0, body = '';
+  var tCall0 = Date.now();
+  for (var i = 0; i < models.length; i++) {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[i] + ':generateContent?key=' + apiKey;
+    var r = UrlFetchApp.fetch(url, { method:'POST', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true });
+    code = r.getResponseCode(); body = r.getContentText(); used = models[i];
+    if (code === 200) break;
+    if (code === 503 || code === 429) { Utilities.sleep(1500); } else break;
+  }
+  var tCall1 = Date.now();
+
+  var out = ['════════ OCR BENCH (1 หน้า) ════════'];
+  out.push('ไฟล์: _ocr_test_p1.jpg  ขนาด: ' + sizeKB + ' KB');
+  out.push('Model ที่ใช้: ' + used + '  HTTP: ' + code);
+  out.push('เวลาเตรียมไฟล์ (อ่าน+base64): ' + (tPrep - t0) + ' ms');
+  out.push('เวลาเรียก Gemini: ' + (tCall1 - tCall0) + ' ms  (' + ((tCall1 - tCall0)/1000).toFixed(1) + ' วิ)');
+  out.push('รวมทั้งหมด: ' + (tCall1 - t0) + ' ms');
+
+  if (code === 200) {
+    var res = JSON.parse(body);
+    var u = res.usageMetadata || {};
+    out.push('── โทเคน ──');
+    out.push('prompt (รูป+ข้อความ): ' + (u.promptTokenCount || '?'));
+    out.push('output (คำตอบ): ' + (u.candidatesTokenCount || '?'));
+    out.push('รวม: ' + (u.totalTokenCount || '?'));
+    // ประมาณค่าใช้จ่าย (gemini flash ~$0.10/1M in, $0.40/1M out)
+    if (u.totalTokenCount) {
+      var costIn = (u.promptTokenCount||0)/1e6 * 0.10;
+      var costOut = (u.candidatesTokenCount||0)/1e6 * 0.40;
+      out.push('ประมาณค่าใช้จ่าย/บิล: $' + (costIn+costOut).toFixed(5) + '  (~฿' + ((costIn+costOut)*36).toFixed(4) + ')');
+      out.push('ประมาณ 110 บิล: $' + ((costIn+costOut)*110).toFixed(3) + '  (~฿' + ((costIn+costOut)*110*36).toFixed(1) + ')');
+    }
+    try {
+      var txt = res.candidates[0].content.parts[0].text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+      var d = JSON.parse(txt);
+      out.push('── อ่านได้ ──');
+      out.push('ผู้ขาย: ' + (d.supplierName||'?'));
+      out.push('เลขที่บิล: ' + (d.invoiceNo||'?') + '  วันที่: ' + (d.invoiceDate||'?') + '  ครบกำหนด: ' + (d.dueDate||'?'));
+      out.push('ยอดรวม: ' + (d.totalAmount||'?') + '  รายการ: ' + ((d.items||[]).length) + ' บรรทัด');
+    } catch(pe) { out.push('parse บิลไม่ได้: ' + pe); }
+  } else {
+    out.push('❌ error: ' + body.substring(0, 300));
+  }
+  Logger.log(out.join('\n'));
+  return out.join('\n');
+}
+
+// ── BENCH v2: เทียบ model + thinking on/off ──────────────────────
+function ocrBenchPrompt_() {
+  return 'คุณเป็นผู้ช่วยอ่านใบกำกับภาษี/ใบส่งสินค้าภาษาไทย โปรดอ่านข้อมูลจากภาพนี้และตอบกลับเป็น JSON เท่านั้น '
+    + '{"supplierName":..,"supplierTaxId":..,"invoiceNo":..,"invoiceDate":"YYYY-MM-DD","subtotal":n,"vatAmount":n,"totalAmount":n,"dueDate":"YYYY-MM-DD",'
+    + '"items":[{"productCode":..,"description":..,"quantity":n,"unit":..,"unitPrice":n,"amount":n,"isFoc":false}]}';
+}
+
+function ocrBenchB64_(name) {
+  var it = DriveApp.getFilesByName(name);
+  if (!it.hasNext()) return null;
+  return Utilities.base64Encode(it.next().getBlob().getBytes());
+}
+
+function ocrBenchPayload_(b64, thinkLevel) {
+  var gc = { temperature: 0.1, maxOutputTokens: 8192 };
+  if (thinkLevel) { gc.thinkingConfig = { thinkingLevel: thinkLevel }; }
+  return {
+    contents: [{ parts: [ { text: ocrBenchPrompt_() }, { inline_data: { mime_type:'image/jpeg', data: b64 } } ] }],
+    generationConfig: gc
+  };
+}
+
+function ocrBenchSummarize_(body) {
+  var res = JSON.parse(body);
+  var u = res.usageMetadata || {};
+  var p = u.promptTokenCount || 0, c = u.candidatesTokenCount || 0, t = u.totalTokenCount || 0;
+  var think = t - p - c;
+  var line = 'โทเคน in=' + p + ' out=' + c + ' คิด=' + (think > 0 ? think : 0) + ' รวม=' + t;
+  try {
+    var txt = res.candidates[0].content.parts[0].text.trim()
+      .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+    var d = JSON.parse(txt);
+    line += '\n    → ' + (d.supplierName||'?') + ' | บิล ' + (d.invoiceNo||'?')
+         + ' | ยอด ' + (d.totalAmount||'?') + ' | ครบ ' + (d.dueDate||'?')
+         + ' | ' + ((d.items||[]).length) + ' รายการ';
+  } catch(e) { line += '\n    → parse ไม่ได้: ' + e; }
+  return line;
+}
+
+// เทียบ 3 แบบ บนรูปเดียวกัน
+function ocrBenchModels() {
+  var cfg = getConfig();
+  var apiKey = cfg && cfg.GEMINI_API_KEY;
+  if (!apiKey) { Logger.log('❌ ไม่พบ GEMINI_API_KEY'); return; }
+  var b64 = ocrBenchB64_('_ocr_test_p1.jpg');
+  if (!b64) { Logger.log('❌ ไม่พบ _ocr_test_p1.jpg'); return; }
+
+  var tests = [
+    { name:'gemini-3.5-flash-lite (ค่าเริ่มต้น)', model:'gemini-3.5-flash-lite', think:null      },
+    { name:'gemini-3.5-flash-lite (คิดน้อยสุด)',  model:'gemini-3.5-flash-lite', think:'minimal' },
+    { name:'gemini-3.6-flash (ค่าเริ่มต้น)',      model:'gemini-3.6-flash',      think:null      },
+    { name:'gemini-3.6-flash (คิดน้อยสุด)',       model:'gemini-3.6-flash',      think:'minimal' }
+  ];
+
+  var out = ['════════ BENCH v2 — เทียบ model (รูปเดียวกัน หน้า 1 ยูนิลีเวอร์) ════════',
+             'ค่าอ้างอิงเดิม: gemini-3-flash-preview = 58.7–61.9 วิ/บิล', ''];
+  for (var i = 0; i < tests.length; i++) {
+    var tc = tests[i];
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + tc.model + ':generateContent?key=' + apiKey;
+    var t0 = Date.now();
+    var r = UrlFetchApp.fetch(url, { method:'POST', contentType:'application/json',
+              payload:JSON.stringify(ocrBenchPayload_(b64, tc.think)), muteHttpExceptions:true });
+    var ms = Date.now() - t0;
+    var code = r.getResponseCode();
+    out.push('▸ ' + tc.name);
+    out.push('  HTTP ' + code + '  เวลา ' + ms + ' ms (' + (ms/1000).toFixed(1) + ' วิ)');
+    if (code === 200) { out.push('  ' + ocrBenchSummarize_(r.getContentText())); }
+    else { out.push('  ❌ ' + r.getContentText().substring(0,200)); }
+    out.push('');
+  }
+  Logger.log(out.join('\n'));
+  return out.join('\n');
+}
+
+// ยิงขนาน 4 รูปพร้อมกัน ด้วย fetchAll
+function ocrBenchParallel() {
+  var cfg = getConfig();
+  var apiKey = cfg && cfg.GEMINI_API_KEY;
+  if (!apiKey) { Logger.log('❌ ไม่พบ GEMINI_API_KEY'); return; }
+
+  var MODEL = 'gemini-3.5-flash-lite';   // เปลี่ยนได้ตามผล bench v2
+  var THINK = 'minimal';
+  var names = ['_ocr_test_p1.jpg','_ocr_test_p2.jpg','_ocr_test_p3.jpg','_ocr_test_p4.jpg'];
+
+  var tPrep0 = Date.now();
+  var reqs = [];
+  for (var i = 0; i < names.length; i++) {
+    var b64 = ocrBenchB64_(names[i]);
+    if (!b64) { Logger.log('❌ ไม่พบ ' + names[i]); return; }
+    reqs.push({
+      url: 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent?key=' + apiKey,
+      method:'POST', contentType:'application/json',
+      payload: JSON.stringify(ocrBenchPayload_(b64, THINK)), muteHttpExceptions:true
+    });
+  }
+  var tPrep = Date.now() - tPrep0;
+
+  var t0 = Date.now();
+  var resArr = UrlFetchApp.fetchAll(reqs);
+  var ms = Date.now() - t0;
+
+  var out = ['════════ BENCH ขนาน — ' + names.length + ' บิลพร้อมกัน (fetchAll) ════════',
+             'Model: ' + MODEL,
+             'เตรียมไฟล์ (อ่าน Drive + base64) ' + names.length + ' รูป: ' + tPrep + ' ms',
+             'ยิงขนานทั้งหมด: ' + ms + ' ms (' + (ms/1000).toFixed(1) + ' วิ)',
+             'เฉลี่ย/บิล: ' + Math.round(ms/names.length) + ' ms', ''];
+  var okCount = 0;
+  for (var j = 0; j < resArr.length; j++) {
+    var code = resArr[j].getResponseCode();
+    out.push('▸ ' + names[j] + ' HTTP ' + code);
+    if (code === 200) { okCount++; out.push('  ' + ocrBenchSummarize_(resArr[j].getContentText())); }
+    else { out.push('  ❌ ' + resArr[j].getContentText().substring(0,200)); }
+  }
+  out.push('');
+  out.push('สำเร็จ ' + okCount + '/' + names.length);
+  var perBill = ms / names.length;
+  out.push('── คาดการณ์ 110 บิล (ยิงขนานชุดละ ' + names.length + ') ──');
+  out.push('เวลารวม ≈ ' + Math.round(110 * perBill / 1000) + ' วิ (' + (110*perBill/60000).toFixed(1) + ' นาที)');
+  out.push('ต่อรอบ GAS 6 นาที ทำได้ ≈ ' + Math.floor(330000 / perBill) + ' บิล');
+  Logger.log(out.join('\n'));
+  return out.join('\n');
 }

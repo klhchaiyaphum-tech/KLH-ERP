@@ -119,7 +119,7 @@ function verifySlipGemini(base64, mimeType, expectedAmount) {
       + '}\n'
       + 'ถ้าอ่านค่าใดไม่ได้ให้ใส่ null';
 
-    var models = ['gemini-2.0-flash-lite','gemini-1.5-flash'];
+    var models = gemModels_();
     var parsed = null;
     for (var m = 0; m < models.length; m++) {
       try {
@@ -1184,4 +1184,12 @@ function getBillingNoteDetail(noteId) {
     }
     return { ok:false, msg:'ไม่พบใบวางบิล' };
   } catch(e) { return { ok:false, msg:String(e) }; }
+}
+
+// ── รายชื่อ Gemini model กลาง (ใช้ร่วมทุกจุดที่เรียก OCR) ──────────
+// แก้ที่เดียว มีผลทั้ง สลิป / เช็ค / ใบกำกับ
+// ลำดับ = ตัวแรกคือตัวหลัก ถ้าล่ม/ไม่มี ค่อยไล่ตัวถัดไป
+// ปรับล่าสุด 2026-10-03: gemini-2.0-* และ 1.5-flash ถูก Google ปลดแล้ว (404)
+function gemModels_() {
+  return ['gemini-3-flash-preview', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 }
