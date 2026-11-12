@@ -322,12 +322,13 @@ function getPP30(yyyymm) {
     });
     coName = String(cfg.COMPANY_NAME || '');
 
-    // 1) ภาษีซื้อ: INVOICE_HEADER (4 TAX_ENTITY, 2 INVOICE_DATE, 5 SUBTOTAL, 6 VAT_AMT, 7 TOTAL)
+    // 1) ภาษีซื้อ: INVOICE_HEADER (4 TAX_ENTITY, 2 INVOICE_DATE, 5 SUBTOTAL, 6 VAT_AMT, 7 TOTAL, 13 TAX_PERIOD)
+    //    TAX_PERIOD = งวดที่ยื่นจริง (บิลนำเข้าจากชุด ภพ.30 ขอคืนข้ามเดือนได้) · ว่าง → ใช้เดือนของวันที่บิล
     var inputVat = 0, inputBase = 0, inputCount = 0, purchaseAll = 0;
     var inv = ss.getSheetByName('INVOICE_HEADER');
     if (inv && inv.getLastRow() > 1) {
       inv.getDataRange().getValues().slice(1).forEach(function(r) {
-        if (ymOf_(r[2]) !== ym) return;
+        if ((r.length > 13 && r[13] ? ymOf_(r[13]) : ymOf_(r[2])) !== ym) return;
         purchaseAll += Number(r[7]) || 0;                 // ยอดซื้อทุกนิติ (เจ้าหนี้)
         if (isKlhEntity_(r[4]) && (Number(r[6])||0) > 0) { // เฉพาะบิลชื่อ KLH ที่มี VAT
           inputVat  += Number(r[6]) || 0;
