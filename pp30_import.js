@@ -885,3 +885,42 @@ function pp30Commit_() {
     return log.join('\n');
   } finally { lock.releaseLock(); }
 }
+
+// ───── ส่งออก CSV ให้ตรวจนอกชีต (Claude อ่านผ่าน Drive ที่ซิงก์ลงเครื่อง) ─────
+// เขียนเฉพาะไฟล์ในโฟลเดอร์ KLH DATA/PP30_REVIEW · ไม่แก้ชีตใดๆ · รันซ้ำได้ (ทับไฟล์ CSV เดิม)
+var PP30_REVIEW_FOLDER = 'PP30_REVIEW';
+function pp30ExportCsv() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var inbox = DriveApp.getFoldersByName(AP_OCR_FOLDER);
+  if (!inbox.hasNext()) { Logger.log('ไม่พบโฟลเดอร์ ' + AP_OCR_FOLDER); return 'ไม่พบโฟลเดอร์ ' + AP_OCR_FOLDER; }
+  var parents = inbox.next().getParents();
+  var base = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+  var it = base.getFoldersByName(PP30_REVIEW_FOLDER);
+  var dir = it.hasNext() ? it.next() : base.createFolder(PP30_REVIEW_FOLDER);
+  var tz = Session.getScriptTimeZone();
+  var names = [AP_OCR_QUEUE, AP_OCR_STAGING, PP30_LIST, PP30_SUM, PP30_SUPS, PP30_ITEMS,
+               PP30_PAYCHK, PP30_APST, PP30_APSUM, OCR_TEST];
+  var out = ['═══════ ส่งออก CSV → ' + base.getName() + '/' + PP30_REVIEW_FOLDER + ' ═══════'];
+  for (var i = 0; i < names.length; i++) {
+    var s = ss.getSheetByName(names[i]);
+    if (!s || s.getLastRow() < 2) { out.push(names[i] + ': ยังไม่มีข้อมูล'); continue; }
+    var v = s.getDataRange().getValues(), lines = [];
+    for (var r = 0; r < v.length; r++) {
+      var cells = [];
+      for (var c = 0; c < v[r].length; c++) {
+        var x = v[r][c];
+        if (Object.prototype.toString.call(x) === '[object Date]') { x = Utilities.formatDate(x, tz, 'yyyy-MM-dd'); }
+        x = (x === null || x === undefined) ? '' : String(x);
+        if (/[",\n\r]/.test(x)) { x = '"' + x.replace(/"/g, '""') + '"'; }
+        cells.push(x);
+      }
+      lines.push(cells.join(','));
+    }
+    var fname = names[i] + '.csv', body = '﻿' + lines.join('\n');
+    var f = dir.getFilesByName(fname);
+    if (f.hasNext()) { f.next().setContent(body); } else { dir.createFile(fname, body, MimeType.CSV); }
+    out.push(names[i] + ': ' + (v.length - 1) + ' แถว');
+  }
+  Logger.log(out.join('\n'));
+  return out.join('\n');
+}
